@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>gitnebula — visual reference mockup</title>
+    <style>
+      :root {
+        --void: #060911;
+        --deep: #0b1120;
+        --panel: #101827;
+        --line: #1e2a3e;
+        --line-hi: #2e3e58;
+        --ink: #d6deec;
+        --ink-dim: #8592ab;
+        --ink-mute: #5a6779;
+        --backend: #3fcfa0;
+        --frontend: #9b8cff;
+        --infra: #7c8598;
+        --test: #a8cf52;
+        --hot: #ff7a3d;
+        --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+        --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+      }
+      body {
+        background: var(--void);
+        color: var(--ink);
+        font-family: var(--sans);
+        font-size: 14px;
+        overflow: hidden;
+      }
+      #app {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+      }
+
+      header {
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line);
+        background: var(--deep);
+        flex-wrap: wrap;
+      }
+      .brand {
+        font-family: var(--mono);
+        font-size: 13px;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--ink-dim);
+      }
+      .brand b {
+        color: var(--ink);
+        font-weight: 500;
+      }
+      .repo {
+        font-family: var(--mono);
+        font-size: 13px;
+        color: var(--ink);
+      }
+      .stats {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink-mute);
+        display: flex;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .spacer {
+        flex: 1;
+      }
+      .modes {
+        display: flex;
+        border: 1px solid var(--line-hi);
+        border-radius: 6px;
+        overflow: hidden;
+      }
+      .modes button {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: transparent;
+        color: var(--ink-dim);
+        border: 0;
+        padding: 7px 14px;
+        cursor: pointer;
+      }
+      .modes button + button {
+        border-left: 1px solid var(--line-hi);
+      }
+      .modes button[aria-pressed="true"] {
+        background: var(--line);
+        color: var(--ink);
+      }
+      .iconbtn {
+        font-family: var(--mono);
+        font-size: 12px;
+        background: transparent;
+        color: var(--ink-dim);
+        border: 1px solid var(--line-hi);
+        border-radius: 6px;
+        padding: 7px 12px;
+        cursor: pointer;
+      }
+      .iconbtn:hover {
+        color: var(--ink);
+        border-color: var(--ink-mute);
+      }
+      button:focus-visible,
+      input:focus-visible {
+        outline: 2px solid var(--frontend);
+        outline-offset: 2px;
+      }
+
+      main {
+        position: relative;
+        flex: 1;
+        min-height: 0;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        cursor: grab;
+      }
+      canvas.dragging {
+        cursor: grabbing;
+      }
+
+      .legend {
+        position: absolute;
+        left: 18px;
+        bottom: 18px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        pointer-events: none;
+      }
+      .legend span {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+      }
+
+      .hint {
+        position: absolute;
+        right: 18px;
+        bottom: 18px;
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        text-align: right;
+        line-height: 1.7;
+        pointer-events: none;
+      }
+
+      #tooltip {
+        position: absolute;
+        pointer-events: none;
+        display: none;
+        background: rgba(11, 17, 32, 0.94);
+        border: 1px solid var(--line-hi);
+        border-radius: 6px;
+        padding: 7px 11px;
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--ink);
+        white-space: nowrap;
+      }
+
+      #panel {
+        position: absolute;
+        top: 18px;
+        right: 18px;
+        width: 290px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 16px 18px;
+        display: none;
+      }
+      #panel.open {
+        display: block;
+      }
+      .p-head {
+        display: flex;
+        align-items: baseline;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .p-name {
+        font-family: var(--mono);
+        font-size: 15px;
+      }
+      .p-badge {
+        font-family: var(--mono);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--hot);
+        border: 1px solid var(--hot);
+        border-radius: 4px;
+        padding: 1px 6px;
+      }
+      .p-kind {
+        font-family: var(--mono);
+        font-size: 11px;
+        color: var(--ink-mute);
+        margin-bottom: 14px;
+      }
+      .p-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 5px 0;
+        border-top: 1px solid var(--line);
+      }
+      .p-row span:first-child {
+        color: var(--ink-mute);
+      }
+      .p-bar {
+        height: 3px;
+        background: var(--line);
+        border-radius: 2px;
+        margin-top: 10px;
+        overflow: hidden;
+      }
+      .p-bar i {
+        display: block;
+        height: 100%;
+        background: var(--hot);
+      }
+      .p-actions {
+        display: flex;
+        gap: 8px;
+        margin-top: 14px;
+      }
+      .p-actions button {
+        flex: 1;
+      }
+      .p-close {
+        position: absolute;
+        top: 12px;
+        right: 12px;
+        background: transparent;
+        border: 0;
+        color: var(--ink-mute);
+        font-size: 16px;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      #search {
+        position: absolute;
+        top: 18px;
+        left: 18px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 8px 12px;
+        width: 250px;
+        display: flex;
+        align-items: center;
+        gap: 9px;
+      }
+      #search input {
+        flex: 1;
+        background: transparent;
+        border: 0;
+        color: var(--ink);
+        font-family: var(--mono);
+        font-size: 13px;
+      }
+      #search input::placeholder {
+        color: var(--ink-mute);
+      }
+      #search kbd {
+        font-family: var(--mono);
+        font-size: 10px;
+        color: var(--ink-mute);
+        border: 1px solid var(--line-hi);
+        border-radius: 3px;
+        padding: 1px 5px;
+      }
+      #results {
+        position: absolute;
+        top: 62px;
+        left: 18px;
+        width: 250px;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+        display: none;
+      }
+      #results div {
+        font-family: var(--mono);
+        font-size: 12px;
+        padding: 8px 12px;
+        cursor: pointer;
+        color: var(--ink-dim);
+      }
+      #results div:hover,
+      #results div.sel {
+        background: var(--line);
+        color: var(--ink);
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .pulse {
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <header>
+        <span class="brand"><b>gitnebula</b> · visual reference</span>
+        <span class="repo" id="repo-name">job-finder</span>
+        <span class="stats">
+          <span>312 files</span><span>41.2k loc</span><span>9 modules</span><span>1,847 commits</span
+          ><span>py 61% · ts 39%</span>
+        </span>
+        <span class="spacer"></span>
+        <div class="modes" role="group" aria-label="View mode">
+          <button id="mode-structure" aria-pressed="true">structure</button>
+          <button id="mode-heat" aria-pressed="false">change heatmap</button>
+        </div>
+        <button class="iconbtn" id="replay" title="Replay layout animation">↻ replay</button>
+        <button class="iconbtn" id="export" title="Export PNG">↓ png</button>
+      </header>
+
+      <main>
+        <canvas id="stage"></canvas>
+
+        <div id="search">
+          <span style="color: var(--ink-mute); font-family: var(--mono); font-size: 12px">/</span>
+          <input id="q" type="text" placeholder="find module or file" aria-label="Search" />
+          <kbd>⌘K</kbd>
+        </div>
+        <div id="results" role="listbox"></div>
+
+        <div id="tooltip" role="status"></div>
+
+        <div id="panel" aria-live="polite">
+          <button class="p-close" id="p-close" aria-label="Close panel">×</button>
+          <div class="p-head">
+            <span class="p-name" id="p-name">core/</span>
+            <span class="p-badge" id="p-badge">hot spot</span>
+          </div>
+          <div class="p-kind" id="p-kind">module · backend</div>
+          <div class="p-row"><span>files</span><span id="p-files">23</span></div>
+          <div class="p-row"><span>loc</span><span id="p-loc">6,140</span></div>
+          <div class="p-row"><span>churn 90d</span><span id="p-churn">61%</span></div>
+          <div class="p-row"><span>authors</span><span id="p-authors">4</span></div>
+          <div class="p-row"><span>last change</span><span id="p-last">2 days ago</span></div>
+          <div class="p-row"><span>co-changes with</span><span id="p-cochange">tasks/</span></div>
+          <div class="p-bar"><i id="p-bar" style="width: 61%"></i></div>
+          <div class="p-actions">
+            <button class="iconbtn" id="p-isolate">isolate</button>
+            <button class="iconbtn" id="p-github">open on github</button>
+          </div>
+        </div>
+
+        <div class="legend">
+          <span><i class="dot" style="background: var(--backend)"></i>backend</span>
+          <span><i class="dot" style="background: var(--frontend)"></i>frontend</span>
+          <span><i class="dot" style="background: var(--infra)"></i>infra</span>
+          <span><i class="dot" style="background: var(--test)"></i>test</span>
+          <span><i class="dot" style="background: var(--hot)"></i>hot spot</span>
+        </div>
+
+        <div class="hint">
+          drag to pan · scroll to zoom<br />
+          zoom in past 1.8× to unfold files<br />
+          hover for dependency chain · click for detail
+        </div>
+      </main>
+    </div>
+
+    <script>
+      "use strict"
+
+      const MODULES = [
+        {
+          id: "core/",
+          layer: "backend",
+          loc: 6140,
+          churn: 0.61,
+          files: 23,
+          authors: 4,
+          last: "2 days ago",
+          co: "tasks/",
+        },
+        {
+          id: "api/",
+          layer: "backend",
+          loc: 2810,
+          churn: 0.22,
+          files: 12,
+          authors: 2,
+          last: "9 days ago",
+          co: "core/",
+        },
+        {
+          id: "auth/",
+          layer: "backend",
+          loc: 1190,
+          churn: 0.03,
+          files: 6,
+          authors: 1,
+          last: "4 months ago",
+          co: "models/",
+        },
+        {
+          id: "tasks/",
+          layer: "backend",
+          loc: 2090,
+          churn: 0.34,
+          files: 9,
+          authors: 3,
+          last: "5 days ago",
+          co: "core/",
+        },
+        {
+          id: "models/",
+          layer: "backend",
+          loc: 3260,
+          churn: 0.11,
+          files: 15,
+          authors: 2,
+          last: "3 weeks ago",
+          co: "core/",
+        },
+        {
+          id: "components/",
+          layer: "frontend",
+          loc: 5180,
+          churn: 0.42,
+          files: 34,
+          authors: 2,
+          last: "1 day ago",
+          co: "state/",
+        },
+        {
+          id: "state/",
+          layer: "frontend",
+          loc: 1930,
+          churn: 0.28,
+          files: 11,
+          authors: 2,
+          last: "6 days ago",
+          co: "api/",
+        },
+        { id: "infra/", layer: "infra", loc: 880, churn: 0.07, files: 7, authors: 1, last: "2 months ago", co: "—" },
+        { id: "tests/", layer: "test", loc: 4120, churn: 0.3, files: 28, authors: 3, last: "1 day ago", co: "core/" },
+      ]
+      const MODULE_EDGES = [
+        [1, 0],
+        [3, 0],
+        [0, 4],
+        [2, 4],
+        [3, 4],
+        [5, 6],
+        [6, 1],
+        [8, 0],
+        [8, 1],
+        [8, 5],
+        [7, 4],
+      ]
+      const FILE_STEMS = [
+        "index",
+        "utils",
+        "service",
+        "handler",
+        "parser",
+        "client",
+        "types",
+        "config",
+        "helpers",
+        "adapter",
+        "registry",
+        "runner",
+        "schema",
+        "mapper",
+        "store",
+        "view",
+        "hooks",
+        "query",
+        "format",
+        "guard",
+      ]
+
+      const LAYER_COLOR = { backend: "#3FCFA0", frontend: "#9B8CFF", infra: "#7C8598", test: "#A8CF52" }
+      const HOT = "#FF7A3D"
+      const HOT_THRESHOLD = 0.5
+      const UNFOLD_ZOOM = 1.8
+
+      const canvas = document.getElementById("stage")
+      const ctx = canvas.getContext("2d")
+      const tooltip = document.getElementById("tooltip")
+      const panel = document.getElementById("panel")
+
+      let W = 0,
+        H = 0,
+        dpr = 1
+      let nodes = [],
+        edges = [],
+        stars = []
+      let view = { x: 0, y: 0, k: 1 }
+      let alpha = 1,
+        mode = "structure",
+        hoverIdx = -1,
+        selectedIdx = -1,
+        isolateIdx = -1
+      let dragging = false,
+        dragStart = null,
+        moved = false
+      const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+
+      function resize() {
+        const r = canvas.getBoundingClientRect()
+        dpr = window.devicePixelRatio || 1
+        W = r.width
+        H = r.height
+        canvas.width = Math.round(W * dpr)
+        canvas.height = Math.round(H * dpr)
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      }
+
+      function seedStars() {
+        stars = []
+        for (let i = 0; i < 220; i++) {
+          stars.push({
+            x: Math.random(),
+            y: Math.random(),
+            a: 0.03 + Math.random() * 0.12,
+            r: Math.random() < 0.85 ? 0.6 : 1.1,
+          })
+        }
+      }
+
+      function build() {
+        nodes = []
+        edges = []
+        MODULES.forEach((m, i) => {
+          const a = (i / MODULES.length) * Math.PI * 2
+          nodes.push({
+            ...m,
+            kind: "module",
+            index: i,
+            r: 7 + Math.sqrt(m.loc) / 11,
+            x: W / 2 + Math.cos(a) * 40 + (Math.random() * 30 - 15),
+            y: H / 2 + Math.sin(a) * 40 + (Math.random() * 30 - 15),
+            vx: 0,
+            vy: 0,
+          })
+        })
+        MODULES.forEach((m, mi) => {
+          const ext = m.layer === "frontend" ? "tsx" : m.layer === "test" ? "py" : m.layer === "infra" ? "yml" : "py"
+          for (let f = 0; f < Math.min(m.files, 14); f++) {
+            const stem = FILE_STEMS[(mi * 7 + f * 3) % FILE_STEMS.length]
+            const churn = Math.max(0, Math.min(1, m.churn + (Math.random() * 0.34 - 0.17)))
+            nodes.push({
+              id: m.id + stem + "." + ext,
+              kind: "file",
+              layer: m.layer,
+              parent: mi,
+              churn,
+              loc: Math.round(m.loc / m.files),
+              authors: Math.max(1, m.authors - 1),
+              last: m.last,
+              co: m.co,
+              r: 1.5 + Math.random() * 1.6,
+              x: nodes[mi].x + (Math.random() * 70 - 35),
+              y: nodes[mi].y + (Math.random() * 70 - 35),
+              vx: 0,
+              vy: 0,
+            })
+            edges.push({ s: mi, t: nodes.length - 1, kind: "member" })
+          }
+        })
+        MODULE_EDGES.forEach(([s, t]) => edges.push({ s, t, kind: "import" }))
+        alpha = reduceMotion ? 0.02 : 1
+        view = { x: 0, y: 0, k: 1 }
+        selectedIdx = -1
+        isolateIdx = -1
+        panel.classList.remove("open")
+      }
+
+      function simulate() {
+        if (alpha <= 0.004) return
+        const n = nodes.length
+        for (let i = 0; i < n; i++) {
+          const a = nodes[i]
+          for (let j = i + 1; j < n; j++) {
+            const b = nodes[j]
+            let dx = a.x - b.x,
+              dy = a.y - b.y
+            const d2 = dx * dx + dy * dy + 0.01
+            if (d2 > 14000) continue
+            const strength = a.kind === "module" && b.kind === "module" ? 1400 : 150
+            const f = (strength / d2) * alpha
+            dx *= f
+            dy *= f
+            a.vx += dx
+            a.vy += dy
+            b.vx -= dx
+            b.vy -= dy
+          }
+          a.vx += (W / 2 - a.x) * 0.0022 * alpha
+          a.vy += (H / 2 - a.y) * 0.0022 * alpha
+        }
+        for (const e of edges) {
+          const s = nodes[e.s],
+            t = nodes[e.t]
+          const rest = e.kind === "import" ? 150 : 26 + s.r * 1.6
+          let dx = t.x - s.x,
+            dy = t.y - s.y
+          const d = Math.hypot(dx, dy) || 1
+          const f = ((d - rest) / d) * (e.kind === "import" ? 0.045 : 0.07) * alpha
+          dx *= f
+          dy *= f
+          s.vx += dx
+          s.vy += dy
+          t.vx -= dx
+          t.vy -= dy
+        }
+        for (const p of nodes) {
+          p.vx *= 0.85
+          p.vy *= 0.85
+          p.x += p.vx
+          p.y += p.vy
+        }
+        alpha *= 0.993
+      }
+
+      function nodeColor(p) {
+        if (mode === "heat") {
+          const c = Math.min(1, p.churn / 0.7)
+          const r = Math.round(58 + c * 197),
+            g = Math.round(111 + c * 11),
+            b = Math.round(216 - c * 155)
+          return `rgb(${r},${g},${b})`
+        }
+        return p.churn >= HOT_THRESHOLD ? HOT : LAYER_COLOR[p.layer]
+      }
+
+      function neighbourhood(i) {
+        const set = new Set([i])
+        for (const e of edges) {
+          if (e.kind !== "import") continue
+          if (e.s === i) set.add(e.t)
+          if (e.t === i) set.add(e.s)
+        }
+        if (nodes[i] && nodes[i].kind === "module") {
+          for (const e of edges) if (e.kind === "member" && e.s === i) set.add(e.t)
+        }
+        return set
+      }
+
+      function toScreen(p) {
+        return { x: (p.x - W / 2) * view.k + W / 2 + view.x, y: (p.y - H / 2) * view.k + H / 2 + view.y }
+      }
+      function toWorld(sx, sy) {
+        return { x: (sx - W / 2 - view.x) / view.k + W / 2, y: (sy - H / 2 - view.y) / view.k + H / 2 }
+      }
+
+      function draw(now) {
+        simulate()
+        const filesVisible = view.k >= UNFOLD_ZOOM
+
+        ctx.fillStyle = "#060911"
+        ctx.fillRect(0, 0, W, H)
+        for (const s of stars) {
+          ctx.fillStyle = `rgba(190,205,235,${s.a})`
+          ctx.fillRect(s.x * W, s.y * H, s.r, s.r)
+        }
+
+        const focus = isolateIdx >= 0 ? isolateIdx : hoverIdx
+        const chain = focus >= 0 ? neighbourhood(focus) : null
+
+        for (const e of edges) {
+          const isMember = e.kind === "member"
+          if (isMember && !filesVisible) continue
+          const s = toScreen(nodes[e.s]),
+            t = toScreen(nodes[e.t])
+          let o = isMember ? 0.08 : 0.2
+          if (chain) o = chain.has(e.s) && chain.has(e.t) ? 0.62 : 0.03
+          ctx.strokeStyle = `rgba(150,170,215,${o})`
+          ctx.lineWidth = isMember ? 0.5 : 1
+          const mx = (s.x + t.x) / 2 + (s.y - t.y) * 0.13
+          const my = (s.y + t.y) / 2 + (t.x - s.x) * 0.13
+          ctx.beginPath()
+          ctx.moveTo(s.x, s.y)
+          ctx.quadraticCurveTo(mx, my, t.x, t.y)
+          ctx.stroke()
+        }
+
+        const pulse = reduceMotion ? 1 : 0.62 + 0.38 * Math.sin(now / 380)
+        nodes.forEach((p, i) => {
+          if (p.kind === "file" && !filesVisible) return
+          const s = toScreen(p)
+          if (s.x < -60 || s.x > W + 60 || s.y < -60 || s.y > H + 60) return
+          const dim = chain && !chain.has(i)
+          const col = nodeColor(p)
+          const rr = p.r * view.k
+          const hotFactor = p.churn >= HOT_THRESHOLD ? pulse : 1
+          const glow = rr * (p.kind === "module" ? 2.4 + p.churn * 2.4 * hotFactor : 3)
+
+          ctx.globalAlpha = dim ? 0.1 : 1
+          const g = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, Math.max(glow, 1))
+          g.addColorStop(0, col)
+          g.addColorStop(0.32, "rgba(255,255,255,0.045)")
+          g.addColorStop(1, "rgba(0,0,0,0)")
+          ctx.fillStyle = g
+          ctx.beginPath()
+          ctx.arc(s.x, s.y, Math.max(glow, 1), 0, 6.2832)
+          ctx.fill()
+
+          ctx.fillStyle = col
+          ctx.beginPath()
+          ctx.arc(s.x, s.y, Math.max(rr, 0.8), 0, 6.2832)
+          ctx.fill()
+
+          if (i === selectedIdx) {
+            ctx.strokeStyle = "rgba(230,238,252,0.85)"
+            ctx.lineWidth = 1
+            ctx.beginPath()
+            ctx.arc(s.x, s.y, rr + 5, 0, 6.2832)
+            ctx.stroke()
+          }
+
+          if (p.kind === "module") {
+            ctx.font = "12px ui-monospace, Menlo, monospace"
+            ctx.textAlign = "center"
+            ctx.fillStyle = dim ? "rgba(214,222,236,0.16)" : "rgba(214,222,236,0.88)"
+            ctx.fillText(p.id, s.x, s.y - rr - 8)
+          } else if (filesVisible && view.k >= 3 && !dim) {
+            ctx.font = "10px ui-monospace, Menlo, monospace"
+            ctx.textAlign = "center"
+            ctx.fillStyle = "rgba(133,146,171,0.75)"
+            ctx.fillText(p.id.split("/").pop(), s.x, s.y - rr - 5)
+          }
+          ctx.globalAlpha = 1
+        })
+
+        requestAnimationFrame(draw)
+      }
+
+      function pick(clientX, clientY) {
+        const r = canvas.getBoundingClientRect()
+        const sx = clientX - r.left,
+          sy = clientY - r.top
+        const filesVisible = view.k >= UNFOLD_ZOOM
+        let best = -1,
+          bestD = Infinity
+        nodes.forEach((p, i) => {
+          if (p.kind === "file" && !filesVisible) return
+          const s = toScreen(p)
+          const d = (s.x - sx) ** 2 + (s.y - sy) ** 2
+          const hit = (Math.max(p.r * view.k, 3) + 7) ** 2
+          if (d < hit && d < bestD) {
+            bestD = d
+            best = i
+          }
+        })
+        return { index: best, sx, sy }
+      }
+
+      canvas.addEventListener("mousemove", (ev) => {
+        if (dragging) {
+          moved = true
+          view.x += ev.clientX - dragStart.x
+          view.y += ev.clientY - dragStart.y
+          dragStart = { x: ev.clientX, y: ev.clientY }
+          return
+        }
+        const { index, sx, sy } = pick(ev.clientX, ev.clientY)
+        hoverIdx = index
+        if (index >= 0) {
+          const p = nodes[index]
+          tooltip.style.display = "block"
+          tooltip.style.left = Math.min(sx + 14, W - 230) + "px"
+          tooltip.style.top = sy + 14 + "px"
+          tooltip.textContent = `${p.id} · churn ${Math.round(p.churn * 100)}%`
+        } else {
+          tooltip.style.display = "none"
+        }
+      })
+      canvas.addEventListener("mouseleave", () => {
+        hoverIdx = -1
+        tooltip.style.display = "none"
+      })
+      canvas.addEventListener("mousedown", (ev) => {
+        dragging = true
+        moved = false
+        dragStart = { x: ev.clientX, y: ev.clientY }
+        canvas.classList.add("dragging")
+      })
+      window.addEventListener("mouseup", (ev) => {
+        if (dragging && !moved) {
+          const { index } = pick(ev.clientX, ev.clientY)
+          if (index >= 0) openPanel(index)
+          else {
+            panel.classList.remove("open")
+            selectedIdx = -1
+            isolateIdx = -1
+          }
+        }
+        dragging = false
+        canvas.classList.remove("dragging")
+      })
+      canvas.addEventListener(
+        "wheel",
+        (ev) => {
+          ev.preventDefault()
+          const r = canvas.getBoundingClientRect()
+          const before = toWorld(ev.clientX - r.left, ev.clientY - r.top)
+          view.k = Math.max(0.4, Math.min(6, view.k * (ev.deltaY < 0 ? 1.12 : 0.89)))
+          const after = toWorld(ev.clientX - r.left, ev.clientY - r.top)
+          view.x += (after.x - before.x) * view.k
+          view.y += (after.y - before.y) * view.k
+        },
+        { passive: false },
+      )
+
+      function openPanel(i) {
+        const p = nodes[i]
+        selectedIdx = i
+        document.getElementById("p-name").textContent = p.id
+        document.getElementById("p-kind").textContent = `${p.kind} · ${p.layer}`
+        document.getElementById("p-files").textContent = p.kind === "module" ? p.files : "—"
+        document.getElementById("p-loc").textContent = p.loc.toLocaleString()
+        document.getElementById("p-churn").textContent = Math.round(p.churn * 100) + "%"
+        document.getElementById("p-authors").textContent = p.authors
+        document.getElementById("p-last").textContent = p.last
+        document.getElementById("p-cochange").textContent = p.co
+        document.getElementById("p-bar").style.width = Math.round(p.churn * 100) + "%"
+        document.getElementById("p-badge").style.display = p.churn >= HOT_THRESHOLD ? "inline" : "none"
+        panel.classList.add("open")
+      }
+      document.getElementById("p-close").onclick = () => {
+        panel.classList.remove("open")
+        selectedIdx = -1
+        isolateIdx = -1
+      }
+      document.getElementById("p-isolate").onclick = () => {
+        isolateIdx = isolateIdx === selectedIdx ? -1 : selectedIdx
+      }
+      document.getElementById("p-github").onclick = () => {}
+
+      const modeStructure = document.getElementById("mode-structure")
+      const modeHeat = document.getElementById("mode-heat")
+      function setMode(m) {
+        mode = m
+        modeStructure.setAttribute("aria-pressed", String(m === "structure"))
+        modeHeat.setAttribute("aria-pressed", String(m === "heat"))
+      }
+      modeStructure.onclick = () => setMode("structure")
+      modeHeat.onclick = () => setMode("heat")
+
+      document.getElementById("replay").onclick = () => {
+        build()
+      }
+      document.getElementById("export").onclick = () => {
+        const a = document.createElement("a")
+        a.download = "gitnebula-job-finder.png"
+        a.href = canvas.toDataURL("image/png")
+        a.click()
+      }
+
+      const q = document.getElementById("q")
+      const results = document.getElementById("results")
+      function runSearch() {
+        const term = q.value.trim().toLowerCase()
+        results.innerHTML = ""
+        if (!term) {
+          results.style.display = "none"
+          return
+        }
+        const hits = nodes
+          .map((p, i) => ({ p, i }))
+          .filter(({ p }) => p.id.toLowerCase().includes(term))
+          .slice(0, 7)
+        if (!hits.length) {
+          results.style.display = "none"
+          return
+        }
+        hits.forEach(({ p, i }) => {
+          const row = document.createElement("div")
+          row.textContent = p.id
+          row.setAttribute("role", "option")
+          row.onclick = () => flyTo(i)
+          results.appendChild(row)
+        })
+        results.style.display = "block"
+      }
+      q.addEventListener("input", runSearch)
+      window.addEventListener("keydown", (ev) => {
+        if ((ev.metaKey || ev.ctrlKey) && ev.key.toLowerCase() === "k") {
+          ev.preventDefault()
+          q.focus()
+        }
+        if (ev.key === "Escape") {
+          results.style.display = "none"
+          q.blur()
+        }
+      })
+
+      function flyTo(i) {
+        const p = nodes[i]
+        const targetK = p.kind === "file" ? 3 : 2
+        const startK = view.k,
+          startX = view.x,
+          startY = view.y
+        const endX = -(p.x - W / 2) * targetK,
+          endY = -(p.y - H / 2) * targetK
+        const t0 = performance.now(),
+          dur = reduceMotion ? 1 : 620
+        results.style.display = "none"
+        ;(function anim(t) {
+          const u = Math.min(1, (t - t0) / dur)
+          const e = 1 - Math.pow(1 - u, 3)
+          view.k = startK + (targetK - startK) * e
+          view.x = startX + (endX - startX) * e
+          view.y = startY + (endY - startY) * e
+          if (u < 1) requestAnimationFrame(anim)
+          else openPanel(i)
+        })(performance.now())
+      }
+
+      window.addEventListener("resize", () => {
+        resize()
+        seedStars()
+      })
+      resize()
+      seedStars()
+      build()
+      requestAnimationFrame(draw)
+    </script>
+  </body>
+</html>
