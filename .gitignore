@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# BMAD personal settings (per-developer, not shared)
+_bmad/config.user.toml
+_bmad/custom/config.user.toml
+
+# OS / editor
+.DS_Store
+*.log
