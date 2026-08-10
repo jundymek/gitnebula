@@ -43,11 +43,17 @@ spec and this file disagree, the spec wins — and flag the divergence.
 ## Repo layout
 
 - `docs/GITNEBULA_PROJECT_BRIEF.md` — the brief. Scope source of truth.
-- `docs/process/` — planning artifacts (PRD, architecture, epics, stories).
-  **Append-only once frozen**: a frozen artifact is never edited in place;
-  changes land as a new versioned file.
+- `docs/planning-artifacts/` — PRD, architecture, epics.
+- `docs/implementation-artifacts/` — story specs and sprint status. This is the
+  `TASK_SOURCE_DIR` terminal-agents reads; a story file must be committed and
+  pushed to `origin/master` before its agent can be launched.
+- Both artifact directories are **append-only once frozen**: a frozen artifact is
+  never edited in place; changes land as a new versioned file.
 - `docs/adr/` — architectural decision records, format: context → decision →
   consequences. Every resolved open question gets one.
+- `_bmad/` and `.claude/skills/` — the BMAD v6 installation used for the planning
+  phase, committed deliberately so the process is reproducible. Not project
+  source; excluded from the map gitnebula draws of itself.
 - `reference/mockup.html` — the visual reference for the `viz` module. It defines
   palette, interaction behaviour and named constants (`HOT_THRESHOLD = 0.5`,
   `UNFOLD_ZOOM = 1.8`, dim opacity, settle duration). **It is not an
@@ -136,6 +142,19 @@ a squash.
 artifact is committed separately as it is produced. Trailer conventions are fixed
 before the first agent commit — adding them retroactively means rewriting history.
 
+## Planning toolchain
+
+The planning phase runs on [BMAD](https://github.com/bmad-code-org/BMAD-METHOD)
+v6.10.0 (`bmm` module), installed into this repo so the process is reproducible
+by anyone who clones it. Configuration lives in `_bmad/config.toml`; personal
+settings (`config.user.toml`) are gitignored. Artifact paths are already wired to
+`docs/planning-artifacts` and `docs/implementation-artifacts`.
+
+BMAD's defaults do not satisfy this project on their own. Story specs must carry
+the section 13 metadata (`owner`, `touches`, `depends_on`) and the fields the
+terminal-agents gates check — see below. Where a BMAD template and this file
+disagree, this file wins.
+
 ## Multi-agent execution
 
 Implementation is carried out by [terminal-agents](https://github.com/jundymek/terminal-agents):
@@ -186,6 +205,7 @@ description is understandable without reading the code.
 - **Do not implement the `describe`/LLM layer in MVP.** Reserve its boundary
   (nullable contract fields, a pipeline extension point) and stop there.
 - **Do not treat `reference/mockup.html` as code to build on.**
-- **Do not rewrite frozen artifacts in `docs/process/`.**
+- **Do not rewrite frozen artifacts** in `docs/planning-artifacts/` or
+  `docs/implementation-artifacts/`.
 - **Do not add features, files, dependencies or abstractions no story asks for.**
 - **Do not introduce a dependency from `viz` to the analyzer modules.**
