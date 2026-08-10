@@ -1,0 +1,36 @@
+# Sprint status — single source of truth for story lifecycle.
+# Keys are task ids (identical to spec filename, branch slug and Refs:
+# trailer — one identifier everywhere, deliberately unlike the job-finder
+# dual-string convention).
+# Statuses: backlog | ready-for-dev | in-progress | review | done
+# Editing discipline (agents): flip ONLY your own story's line; on rebase
+# conflict keep the union of completed rows from both sides.
+
+development_status:
+  # Epic 1 — Contract and Foundations (-> M1)
+  1.1-workspace-scaffold: ready-for-dev
+  1.2-contract-schema: ready-for-dev
+  1.3-contract-fixtures: ready-for-dev
+  1.4-perf-spike: ready-for-dev
+  # Epic 2 — Analysis Pipeline and Living Map (-> M2)
+  2.1-scanner-core: backlog
+  2.2-deps-ts-imports: backlog
+  2.3-githist-metrics: backlog
+  2.4-cli-pipeline: backlog
+  2.5-viz-engine-core: backlog
+  # Epic 3 — Full Exploration Experience
+  3.1-deps-python: backlog
+  3.2-cli-serve-url: backlog
+  3.3-viz-navigation: backlog
+  3.4-viz-panel-modes: backlog
+  3.5-viz-export-perf: backlog
+  # Epic 4 — Ship It (-> M3)
+  4.1-build-bundle: backlog
+  4.2-ci-pages-recipe: backlog
+  4.3-repo-quality: backlog
+  4.4-dod-validation: backlog
+
+milestones:
+  M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
+  M2: "Epic 2 merged: gitnebula run in the fixture repo emits a valid analysis.json and the viewer renders fixtures"
+  M3: "Epic 4 merged: MVP DoD executed and recorded on fastapi, excalidraw, streamlit"
