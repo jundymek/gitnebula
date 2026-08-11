@@ -87,6 +87,30 @@ commit collapses a chain `a → b → c` into direct lookups for both `a` and `b
 A commit's own changes are resolved *before* its renames are recorded, because
 within the renaming commit the file already carries its new name.
 
+### Known limitation: divergent renames across branches
+
+One path can be renamed to two different names on two branches that are both
+reachable from HEAD (or deleted, recreated and renamed again). Its pre-fork
+history then genuinely belongs to two present-day files at once, and a single
+flat alias map can attribute it to only one — giving it to both would
+double-count the same commits.
+
+The rule here is **the most recent rename wins**: git emits newest first, so
+the first rename observed for a path is the newest, and it is kept rather than
+overwritten. That is explainable ("a path resolves to the name it most recently
+acquired") and, crucially, deterministic — git's traversal order is fixed for a
+given repository, so AD-4 holds and snapshots stay stable.
+
+Resolving it *properly* means ancestry-aware state: a topological walk of the
+commit DAG carrying a separate alias map per parent. AD-13 prescribes the
+opposite — "one-pass `git log -M --name-status` with an old→new path mapping" —
+so changing this is an architecture decision, not an implementation detail, and
+would be its own story. Raised by Codex review and left documented rather than
+silently redesigned. The affected shape (two divergent renames of one path,
+both merged) is rare, and the error it produces is a misattribution of
+pre-fork commits between two files, never a lost or duplicated commit count
+repo-wide.
+
 ## Metrics
 
 - **`commits`** — commits in the window touching the node. For a **module** the
@@ -162,7 +186,7 @@ turned into an empty commit list.
 | `src/metrics.ts`        | NEW    | per-node activity, nearest-rank P95, churn                        |
 | `src/cochange.ts`       | NEW    | pair counting, ADR-0005 bounds, stable sort                       |
 | `src/index.ts`          | UPDATE | `analyze` + the pure `computeGitResult`; scaffold seam retired    |
-| `src/*.test.ts`         | NEW    | 70 tests; `index.test.ts` holds the fixture-repo snapshot         |
+| `src/*.test.ts`         | NEW    | 71 tests; `index.test.ts` holds the fixture-repo snapshot         |
 
 `analyze` takes `{ root, scan }` — `ScanResult` is the contract-typed part; the
 envelope is package-local because the contract exports result shapes, not input

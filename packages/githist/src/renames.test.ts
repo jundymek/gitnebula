@@ -35,6 +35,17 @@ describe("RenameChain", () => {
     expect(chain.resolve("b.ts")).toBe("c.ts");
   });
 
+  it("keeps the most recent rename when two branches rename one path", () => {
+    // Divergent renames of the same path on two reachable branches: the
+    // pre-fork history belongs to both present-day files and can be given to
+    // only one. Newest first means the newer rename is observed first and is
+    // the one kept — an explainable rule, and a deterministic one.
+    const chain = new RenameChain();
+    chain.observe(commit("newer", renamed("a.ts", "c.ts")));
+    chain.observe(commit("older", renamed("a.ts", "b.ts")));
+    expect(chain.resolve("a.ts")).toBe("c.ts");
+  });
+
   it("attributes the renaming commit itself to the new name", () => {
     const chain = new RenameChain();
     const renaming = commit("r", renamed("core/score.py", "core/scoring.py"));
