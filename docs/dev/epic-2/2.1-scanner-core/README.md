@@ -23,7 +23,9 @@ analyze(input: ScanInput, config: Config, onProgress?: ScanProgress): Promise<Sc
   pass starts.
 - Per-item failures never throw (AD-7). Warning codes emitted:
   `symlink-skipped`, `irregular-file-skipped`, `unreadable-directory`,
-  `unreadable-file`, `binary-file`.
+  `unreadable-file`, `binary-file`. Directory entries whose type the filesystem
+  will not report (`DT_UNKNOWN`, seen on FUSE and some network mounts) are
+  resolved with `lstat` rather than written off as irregular.
 
 `DEFAULT_EXCLUDES` and `LAYER_RULES` are exported as **data**, not behaviour —
 cli resolves configuration against them and tuning them never touches analyzer
@@ -207,6 +209,7 @@ test code.
 | `packages/scanner/src/modules.ts`         | NEW        | module derivation and the descent heuristic       |
 | `packages/scanner/src/warnings.ts`        | NEW        | AD-7 counted-drop collector                       |
 | `packages/scanner/src/analyze.test.ts`    | NEW        | end-to-end behaviour over crafted temp trees      |
+| `packages/scanner/src/walk.test.ts`       | NEW        | entry classification, including the `DT_UNKNOWN` path |
 | `packages/scanner/src/fixture-repo.test.ts`| NEW       | AC-4 snapshot + byte-identity on the fixture repo |
 | `packages/scanner/src/excludes.test.ts`   | NEW        | AC-1 exclusion coverage, both directions          |
 | `packages/scanner/src/layers.test.ts`     | NEW        | AC-2 ordering, overrides, dominance               |
@@ -222,7 +225,7 @@ calls `analyze` for real. It is marked as such in the source.
 ## Verification
 
 ```sh
-pnpm --filter @gitnebula/scanner test   # 118 tests
+pnpm --filter @gitnebula/scanner test   # 123 tests
 pnpm lint && pnpm test                  # both exit 0, whole workspace
 ```
 
