@@ -155,7 +155,13 @@ review, not assumed.
   before either landed and 1.2's AC-5 survives at the epic head.
 - **`sprint-status.yaml` did not collide.** The file that produced rebase storms in
   earlier waves was left alone by every agent and written once, at closure.
-- **Every codex finding was fixed; none was dismissed.** 14 for 14.
+- **Every codex finding was fixed; none was dismissed.** 14 for 14 across the
+  story PRs — and a fifteenth, a P1, landed on the supervisor's own closure
+  commit: it flipped `1.4-perf-spike` to `done` while that story's owner gate
+  was still open, which would have made the lifecycle source of truth say "go"
+  before the decision that releases 2.5 / 3.3 / 3.5. Corrected on the
+  maintainer's call; the row stays `review` until the verdict is accepted. The
+  review layer catching the reviewer is worth recording.
 - **Both owner gates were left unticked without being asked twice** — 1.4's verdict
   acceptance and its six manual-testing steps.
 - **An agent stopped at a gate and reported instead of routing around it.** pamela
