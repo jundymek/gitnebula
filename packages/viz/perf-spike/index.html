@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>gitnebula perf spike — 1.4</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #0a0e1a;
+        color: #c0caf5;
+        font:
+          13px/1.4 ui-monospace,
+          monospace;
+      }
+      #stage {
+        width: 100vw;
+        height: 88vh;
+        display: block;
+      }
+      #status {
+        padding: 6px 10px;
+      }
+      #results {
+        white-space: pre;
+        padding: 6px 10px;
+        overflow: auto;
+        height: 8vh;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage"></canvas>
+    <div id="status">loading…</div>
+    <div id="results"></div>
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
