@@ -15,15 +15,25 @@ Open the printed URL in Chrome (a Chromium-based browser is what the recorded
 numbers were taken on — record yours if it differs). The page runs the whole
 sequence by itself: no clicking, no dragging. Nothing to configure.
 
+**Keep the tab visible and in front for the whole run.** Chrome throttles
+`requestAnimationFrame` on a background tab, which turns a 4-second phase into
+a 90-second one and makes every fps figure a measurement of the throttle. The
+page detects this and says so, but the run is then wasted.
+
 The run takes roughly 30 s:
 
 1. phase (a) — active simulation of all 2,100 nodes until Settled,
 2. phase (b) — frozen layout, 10 s scripted pan/zoom sweep below 1.8×,
 3. phase (c) — 15 s scripted pan at 2.2× with viewport-scoped unfold.
 
-When `#status` reads `done`, the results JSON is in the page (`#results`) and
-in the console as a single `SPIKE_RESULTS {...}` line. Compare its
+When `#status` reads `done`, the results JSON is in the page (`#results`), in
+the console as a single `SPIKE_RESULTS {...}` line, and written to
+`packages/viz/perf-spike/results.json` by the dev server. Compare its
 `phases[].worst1sFps` against the verdict in `README.md`.
+
+If `#status` reads `done — INVALID RUN, see console`, the numbers are not
+evidence. Check `runValid`, `fixtureSource`, `settleTimedOut` and
+`hiddenFrames` in the results and the `SPIKE_INVALID` line in the console.
 
 ## What to look at while it runs
 

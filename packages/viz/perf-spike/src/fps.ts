@@ -75,6 +75,28 @@ export function aggregate(
   return { phase, frames, durationMs, avgFps, worst1sFps, ...workStats };
 }
 
+/**
+ * Guards the run against the one environmental failure that fakes good
+ * numbers: a background tab. Chrome throttles requestAnimationFrame to a
+ * crawl (and can suspend it entirely) whenever the document is hidden, so a
+ * run measured behind another window reports the throttle rather than the
+ * renderer — and reports it in exactly the shape of a real result. Any hidden
+ * frame at all invalidates the run.
+ */
+export class VisibilityWatch {
+  hiddenFrames = 0;
+
+  constructor(private readonly isHidden: () => boolean) {}
+
+  frame(): void {
+    if (this.isHidden()) this.hiddenFrames++;
+  }
+
+  get valid(): boolean {
+    return this.hiddenFrames === 0;
+  }
+}
+
 /** Collects rAF timestamps and per-frame work times per phase. */
 export class FpsRecorder {
   private timestamps: number[] | null = null;

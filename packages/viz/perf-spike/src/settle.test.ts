@@ -3,6 +3,7 @@ import {
   SETTLE_DISPLACEMENT_PX,
   SETTLE_FRAMES,
   SettleDetector,
+  SettleGate,
 } from "./settle.js";
 
 function nodesAt(offset: number) {
@@ -65,5 +66,38 @@ describe("SettleDetector", () => {
     d.frame([{ x: 0, y: 0 }]);
     d.frame([{ x: 3, y: 4 }]);
     expect(d.lastMaxDisplacement).toBeCloseTo(5); // hypot, not max(dx, dy)
+  });
+});
+
+describe("SettleGate", () => {
+  it("stops on Settled and reports no timeout", () => {
+    const gate = new SettleGate(1000);
+    let frames = 0;
+    while (!gate.frame(nodesAt(0))) frames++;
+    expect(gate.settled).toBe(true);
+    expect(gate.timedOut).toBe(false);
+    expect(gate.frames).toBe(frames + 1);
+  });
+
+  it("stops at the cap and reports a timeout instead of a false Settled", () => {
+    const gate = new SettleGate(50);
+    let i = 0;
+    // Never quiet: every frame moves far more than the Settled bound.
+    while (!gate.frame(nodesAt((i += 100)))) {
+      if (gate.frames > 200) throw new Error("gate never stopped");
+    }
+    expect(gate.frames).toBe(50);
+    expect(gate.settled).toBe(false);
+    expect(gate.timedOut).toBe(true);
+  });
+
+  it("keeps the cap out of the way of a genuine late settle", () => {
+    const gate = new SettleGate(SETTLE_FRAMES + 10);
+    for (let i = 0; i < 5; i++) gate.frame(nodesAt(i * 100)); // loud start
+    let done = false;
+    while (!done && gate.frames < SETTLE_FRAMES + 10)
+      done = gate.frame(nodesAt(500));
+    expect(done).toBe(true);
+    expect(gate.timedOut).toBe(false);
   });
 });

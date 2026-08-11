@@ -69,6 +69,35 @@ export function unfoldedModules(
   return out;
 }
 
+/** What changed between the previously unfolded set and the wanted one. */
+export interface UnfoldTransition {
+  /** Modules that just came into view and must unfold. */
+  entered: Set<string>;
+  /** Modules that just left view and must collapse (ADR-0006). */
+  left: Set<string>;
+  changed: boolean;
+}
+
+/**
+ * Diffs the unfolded set against what the current camera wants. Collapse is
+ * not an optimisation here: ADR-0006 makes "off-screen modules stay collapsed"
+ * the behaviour being measured, so a phase that only ever unfolds accumulates
+ * the whole graph and measures something the viewer will never do. Below
+ * UNFOLD_ZOOM `unfoldedModules` returns the empty set, and the same diff then
+ * collapses everything, which is the ADR's "zooming below the threshold
+ * collapses all".
+ */
+export function unfoldTransition(
+  unfolded: ReadonlySet<string>,
+  want: ReadonlySet<string>,
+): UnfoldTransition {
+  const entered = new Set<string>();
+  const left = new Set<string>();
+  for (const id of want) if (!unfolded.has(id)) entered.add(id);
+  for (const id of unfolded) if (!want.has(id)) left.add(id);
+  return { entered, left, changed: entered.size > 0 || left.size > 0 };
+}
+
 /**
  * AC-5 evidence: tracks displacement of nodes that are NOT members of the
  * unfolding module, so the report can show local wake stays local.

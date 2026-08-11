@@ -26,13 +26,18 @@ import {
   scriptDurationMs,
   type CameraKeyframe,
 } from "./camera-script.js";
-import { FpsRecorder } from "./fps.js";
+import { FpsRecorder, VisibilityWatch } from "./fps.js";
 import { loadFixture, type FixtureEdge } from "./fixture.js";
 import { seededRng } from "./prng.js";
-import { SETTLE_DISPLACEMENT_PX, SettleDetector } from "./settle.js";
+import {
+  SETTLE_DISPLACEMENT_PX,
+  SettleDetector,
+  SettleGate,
+} from "./settle.js";
 import {
   NonMemberDisplacementTracker,
   UNFOLD_ZOOM,
+  unfoldTransition,
   unfoldedModules,
   type Camera,
   type ModuleNode,
@@ -52,6 +57,8 @@ const INITIAL_SCATTER_RADIUS = 600;
 const MODULE_RADIUS = 14;
 const FILE_RADIUS = 3;
 const SEED_NAME = "gitnebula-spike";
+/** Frames phase (a) may run before the run is declared non-converging. */
+const SETTLE_FRAME_CAP = 3000;
 
 function makeSimulation(
   nodes: SimNode[],
@@ -152,6 +159,9 @@ async function run(): Promise<void> {
   );
 
   const recorder = new FpsRecorder();
+  // Every measured frame is checked: a hidden tab throttles rAF and would
+  // otherwise produce a normal-looking, entirely fictional result.
+  const visibility = new VisibilityWatch(() => document.hidden);
   const vp = { width: canvas.width, height: canvas.height };
 
   // ---- Phase (a): every node active until Settled --------------------------
@@ -171,27 +181,32 @@ async function run(): Promise<void> {
   }));
   const allLinks: SimLink[] = [...importLinks, ...memberLinks];
   const globalSim = makeSimulation(nodes, allLinks);
-  const settle = new SettleDetector();
-  let settleFrames = 0;
+  // The cap stops a non-converging layout from hanging the run. It is NOT a
+  // success path: phases (b) and (c) both assume a frozen, settled layout, so
+  // a capped run's numbers are not this story's evidence and the gate records
+  // that distinction (see settleTimedOut in the results).
+  const settleGate = new SettleGate(SETTLE_FRAME_CAP);
   recorder.start("a-active-all-nodes");
   await new Promise<void>((resolve) => {
     const frame = (t: number) => {
       const w0 = performance.now();
       globalSim.tick();
-      settleFrames++;
       draw(ctx, nodes, allLinks, { cx: 0, cy: 0, k: 0.4 }, () => true);
       recorder.tick(t, performance.now() - w0);
-      // Cap the phase so a non-converging layout cannot hang the run.
-      if (
-        settle.frame(nodes as { x: number; y: number }[]) ||
-        settleFrames > 3000
-      )
-        resolve();
+      visibility.frame();
+      if (settleGate.frame(nodes as { x: number; y: number }[])) resolve();
       else requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
   });
-  const settledInFrames = settleFrames;
+  const settledInFrames = settleGate.frames;
+  if (settleGate.timedOut) {
+    console.error(
+      `SPIKE_INVALID: global layout did not settle within ${SETTLE_FRAME_CAP} ` +
+        `frames (last max displacement ${settleGate.lastMaxDisplacement.toFixed(2)} px). ` +
+        "Phases b and c assume a settled layout — these numbers are not evidence.",
+    );
+  }
 
   // ---- Phase (b): frozen layout + scripted pan/zoom ------------------------
   status.textContent = "phase b — frozen, scripted pan/zoom";
@@ -222,6 +237,7 @@ async function run(): Promise<void> {
     // Frozen: the simulation is never ticked in this phase.
     draw(ctx, nodes, moduleLinks, cam, (n) => n.kind === "module");
     recorder.tick(t, performance.now() - w0);
+    visibility.frame();
   });
   const frozenDrift = Math.max(
     ...moduleSimNodes.map((n, i) =>
@@ -259,26 +275,33 @@ async function run(): Promise<void> {
    *    unfolded files are untouchable by construction.
    */
   interface Wake {
+    moduleId: string;
     sim: Simulation<SimNode, undefined>;
     members: SimNode[];
     detector: SettleDetector;
     links: SimLink[];
   }
 
-  function startWake(moduleIds: string[]): Wake {
+  /**
+   * One wake per module, not per batch of modules entering together: a module
+   * leaving the viewport must collapse on its own (ADR-0006), and a wake that
+   * spanned several modules could not be taken apart without re-seeding the
+   * survivors' positions. Simulated links are therefore the module's member
+   * links plus its intra-module imports; imports that cross to another
+   * unfolded module are still *drawn* (see shownLinks) but are not a force —
+   * which is also exactly what AC-5 claims, that unfolding a module wakes only
+   * its own members.
+   */
+  function startWake(moduleId: string): Wake {
+    const parent = nodeById.get(moduleId)!;
     const members: SimNode[] = [];
-    const anchors: SimNode[] = [];
-    for (const id of moduleIds) {
-      const parent = nodeById.get(id)!;
-      anchors.push(parent);
-      for (const f of filesByModule.get(id) ?? []) {
-        // Members spawn at their module's position (ADR-0006).
-        f.x = parent.x! + (rng() - 0.5) * 4;
-        f.y = parent.y! + (rng() - 0.5) * 4;
-        f.vx = 0;
-        f.vy = 0;
-        members.push(f);
-      }
+    for (const f of filesByModule.get(moduleId) ?? []) {
+      // Members spawn at their module's position (ADR-0006).
+      f.x = parent.x! + (rng() - 0.5) * 4;
+      f.y = parent.y! + (rng() - 0.5) * 4;
+      f.vx = 0;
+      f.vy = 0;
+      members.push(f);
     }
     const memberSet = new Set(members);
     const links: SimLink[] = [
@@ -290,7 +313,7 @@ async function run(): Promise<void> {
         }))
         .filter((l) => memberSet.has(l.source) && memberSet.has(l.target)),
     ];
-    const sim = forceSimulation([...anchors, ...members])
+    const sim = forceSimulation([parent, ...members])
       .force("charge", forceManyBody().strength(-30))
       .force(
         "link",
@@ -300,7 +323,7 @@ async function run(): Promise<void> {
       )
       .alphaDecay(0.02)
       .stop();
-    return { sim, members, detector: new SettleDetector(), links };
+    return { moduleId, sim, members, detector: new SettleDetector(), links };
   }
 
   const unfolded = new Set<string>();
@@ -321,23 +344,38 @@ async function run(): Promise<void> {
   let maxModulePerFrame = 0;
   const modulePerFrame = new SettleDetector();
   let unfoldEvents = 0;
+  let collapseEvents = 0;
   let peakShownFiles = 0;
   let peakSimulatedNodes = 0;
   let peakShownLinks = 0;
+  let peakUnfoldedModules = 0;
 
   recorder.start("c-viewport-unfold");
   await playScript(phaseCScript(layoutBounds), (cam, t) => {
     const w0 = performance.now();
 
     const want = unfoldedModules(moduleNodes, cam, vp);
-    const newly = [...want].filter((id) => !unfolded.has(id));
-    if (newly.length > 0) {
-      unfoldEvents++;
-      for (const id of newly) unfolded.add(id);
-      const wake = startWake(newly);
-      wakes.push(wake);
-      for (const f of wake.members) shownFiles.add(f);
+    const { entered, left, changed } = unfoldTransition(unfolded, want);
+    if (changed) {
+      for (const id of entered) {
+        unfoldEvents++;
+        unfolded.add(id);
+        const wake = startWake(id);
+        wakes.push(wake);
+        for (const f of wake.members) shownFiles.add(f);
+      }
+      for (const id of left) {
+        collapseEvents++;
+        unfolded.delete(id);
+        // Collapsing drops the module's wake outright — its members stop being
+        // simulated and stop being drawn, which is the whole point of the
+        // viewport scope. Their positions are left where they were; a module
+        // re-entering the viewport re-spawns its members at the module anyway.
+        for (const f of filesByModule.get(id) ?? []) shownFiles.delete(f);
+      }
+      if (left.size > 0) wakes = wakes.filter((w) => unfolded.has(w.moduleId));
       peakShownFiles = Math.max(peakShownFiles, shownFiles.size);
+      peakUnfoldedModules = Math.max(peakUnfoldedModules, unfolded.size);
       // Rendered links must describe everything currently unfolded, not just
       // what is still being simulated: a wake is dropped once it settles, so
       // deriving the rendered set from live wakes silently stops drawing the
@@ -406,6 +444,7 @@ async function run(): Promise<void> {
     const beforeDraw = performance.now();
     draw(ctx, nodes, shownLinks, cam, isVisibleAt(cam));
     recorder.tick(t, afterTicks - w0 + (performance.now() - beforeDraw));
+    visibility.frame();
   });
   recorder.finish();
 
@@ -414,7 +453,22 @@ async function run(): Promise<void> {
       n.kind === "module" || (cam.k >= UNFOLD_ZOOM && shownFiles.has(n));
   }
 
+  if (!visibility.valid) {
+    console.error(
+      `SPIKE_INVALID: ${visibility.hiddenFrames} frame(s) ran on a hidden tab. ` +
+        "Chrome throttles requestAnimationFrame in the background — re-run with " +
+        "the spike tab visible and in front.",
+    );
+  }
+  // The three ways a run can look normal and mean nothing. Recorded in the
+  // results, so a committed results file cannot quietly be one of them.
+  const runValid =
+    !settleGate.timedOut &&
+    visibility.valid &&
+    fixture.source === "contract-fixture";
+
   const results = {
+    runValid,
     fixtureSource: fixture.source,
     nodeCount: nodes.length,
     moduleCount: moduleNodes.length,
@@ -423,9 +477,19 @@ async function run(): Promise<void> {
     seed: SEED_NAME,
     phases: recorder.results,
     settledInFrames,
+    // True means phase (a) hit SETTLE_FRAME_CAP without ever going quiet. The
+    // whole run is then invalid as evidence, because (b) and (c) measure a
+    // layout that was frozen mid-motion rather than a settled one.
+    settleTimedOut: settleGate.timedOut,
+    settleFrameCap: SETTLE_FRAME_CAP,
+    // Non-zero means the tab was backgrounded mid-run: rAF was throttled and
+    // every fps number below describes the throttle, not the renderer.
+    hiddenFrames: visibility.hiddenFrames,
     layoutBounds,
     frozenDriftPx: frozenDrift,
     unfoldEvents,
+    collapseEvents,
+    peakUnfoldedModules,
     peakShownFiles,
     peakShownLinks,
     peakSimulatedNodes,
@@ -437,7 +501,7 @@ async function run(): Promise<void> {
     userAgent: navigator.userAgent,
   };
 
-  status.textContent = "done";
+  status.textContent = runValid ? "done" : "done — INVALID RUN, see console";
   document.getElementById("results")!.textContent = JSON.stringify(
     results,
     null,

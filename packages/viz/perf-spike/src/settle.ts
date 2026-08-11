@@ -58,3 +58,38 @@ export class SettleDetector {
     this.lastMaxDisplacement = 0;
   }
 }
+
+/**
+ * A SettleDetector with a frame cap, so a non-converging layout cannot hang a
+ * run — and, more importantly, cannot be mistaken for a settled one. The cap
+ * and Settled are different outcomes: a capped run's fps numbers describe a
+ * layout that never froze, which is not the evidence the story asks for, so
+ * `timedOut` is carried into the results rather than silently dropped.
+ */
+export class SettleGate {
+  private readonly detector = new SettleDetector();
+  /** Frames fed so far. */
+  frames = 0;
+  settled = false;
+  timedOut = false;
+
+  constructor(private readonly frameCap: number) {}
+
+  /** Feed one frame. Returns true when the phase must stop, for either reason. */
+  frame(nodes: readonly PositionedNode[]): boolean {
+    this.frames++;
+    if (this.detector.frame(nodes)) {
+      this.settled = true;
+      return true;
+    }
+    if (this.frames >= this.frameCap) {
+      this.timedOut = true;
+      return true;
+    }
+    return false;
+  }
+
+  get lastMaxDisplacement(): number {
+    return this.detector.lastMaxDisplacement;
+  }
+}

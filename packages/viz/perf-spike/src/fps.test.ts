@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FpsRecorder, aggregate } from "./fps.js";
+import { FpsRecorder, VisibilityWatch, aggregate } from "./fps.js";
 
 function steadyTimestamps(fps: number, seconds: number): number[] {
   const dt = 1000 / fps;
@@ -69,5 +69,28 @@ describe("FpsRecorder", () => {
     expect(r.results.map((p) => p.phase)).toEqual(["a", "b"]);
     expect(r.results[0]!.avgFps).toBeCloseTo(60, 0);
     expect(r.results[1]!.avgFps).toBeCloseTo(30, 0);
+  });
+});
+
+describe("VisibilityWatch", () => {
+  it("accepts a run whose tab stayed visible", () => {
+    const w = new VisibilityWatch(() => false);
+    for (let i = 0; i < 100; i++) w.frame();
+    expect(w.hiddenFrames).toBe(0);
+    expect(w.valid).toBe(true);
+  });
+
+  it("invalidates a run that spent any frame on a hidden tab", () => {
+    let hidden = false;
+    const w = new VisibilityWatch(() => hidden);
+    for (let i = 0; i < 50; i++) w.frame();
+    hidden = true;
+    w.frame();
+    hidden = false;
+    for (let i = 0; i < 50; i++) w.frame();
+    // One throttled frame is enough: rAF stops being a 60 Hz clock, so every
+    // fps number in the run is measuring the throttle, not the renderer.
+    expect(w.hiddenFrames).toBe(1);
+    expect(w.valid).toBe(false);
   });
 });

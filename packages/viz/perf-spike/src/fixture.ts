@@ -1,11 +1,13 @@
 /**
  * Fixture source for the spike.
  *
- * The story's yardstick is the committed synthetic 100-module/2,000-file
- * document from story 1.3. Until that lands the spike falls back to an
- * equivalent seeded generator so the harness is runnable and the numbers are
- * reproducible; which source produced a run is recorded in the results and
- * must be stated in the report — a fallback run is not the story's evidence.
+ * The story's yardstick is story 1.3's committed synthetic
+ * 100-module/2,000-file document, served at `/fixture.json` by the dev server
+ * (see vite.config.ts — it lives in the contract package, outside this Vite
+ * root). The seeded generator below is kept only as a last-resort fallback so
+ * the harness still runs if that wiring breaks; which source produced a run is
+ * recorded in the results and stated in the report, and a fallback run is not
+ * the story's evidence.
  */
 
 import type { Rng } from "./prng.js";
@@ -116,9 +118,10 @@ export async function loadFixture(rng: Rng): Promise<LoadedFixture> {
   } catch {
     // fall through to the generator
   }
-  console.warn(
-    "perf-spike: contract fixture not found, using the seeded generator fallback " +
-      "(story 1.3 not merged yet). Report must state fixtureSource.",
+  console.error(
+    "SPIKE_INVALID: /fixture.json did not load, falling back to the seeded " +
+      "generator. Story 1.3's committed document is the yardstick — check the " +
+      "contractFixture plugin in vite.config.ts. These numbers are not evidence.",
   );
   return { ...generateSyntheticFixture(rng), source: "generated-fallback" };
 }
