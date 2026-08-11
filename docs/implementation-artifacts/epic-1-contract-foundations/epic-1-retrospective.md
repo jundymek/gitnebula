@@ -180,14 +180,24 @@ review, not assumed.
 
 ## Next-epic readiness
 
-Epic 2 can launch. The contract is frozen and validated, the fixtures exist and
-are byte-reproducible, and 1.4's verdict — pending the maintainer's acceptance —
-means 2.5, 3.3 and 3.5 launch as written with no spec amendment. Three rules from
-the spike belong in the Epic 3 unfold story's context when it is written, each a
-real failure before it was a rule: no `forceCenter` inside a wake (the first
-version measured 129 px/frame of non-member displacement, 258× over the bound); a
-wake contains only newly-woken members plus their pinned module as anchor; one
-wake per module, so a collapse is a deletion rather than a re-seed.
+**The ungated part of Epic 2 can launch now**: 2.1 (scanner), 2.2 (deps), 2.3
+(githist) and 2.4 (cli pipeline). The contract is frozen and validated and the
+fixtures exist and are byte-reproducible, which is everything those four need.
+
+**2.5 (viz engine core) stays blocked, and so do 3.3 and 3.5**, until the
+maintainer accepts the 1.4 verdict. That acceptance is precisely what decides
+whether those three launch as written or get amended toward the cosmos.gl path,
+so launching 2.5 before it would be building against a spec the pending decision
+could still change. The measured evidence points at acceptance — 59 fps sustained
+in all three phases, 4.2 ms worst frame against a 16.7 ms budget — but the
+decision is the maintainer's and the readiness statement must not pre-empt it.
+
+When 2.5 and the Epic 3 unfold story are written, three rules from the spike
+belong in their context, each a real failure before it was a rule: no
+`forceCenter` inside a wake (the first version measured 129 px/frame of
+non-member displacement, 258× over the bound); a wake contains only newly-woken
+members plus their pinned module as anchor; one wake per module, so a collapse is
+a deletion rather than a re-seed.
 
 **Blocking Epic 2's launch:** nothing in the code. Two harness fixes (items 1 and
 2 above) should land first, because both will recur wave-for-wave otherwise.
