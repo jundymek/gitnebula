@@ -11,6 +11,7 @@
   },
   "scripts": {
     "build": "tsup",
+    "pretest": "sh ../../test-fixtures/build-fixture-repo.sh >/dev/null",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -18,7 +19,9 @@
     "@gitnebula/contract": "workspace:*",
     "@gitnebula/deps": "workspace:*",
     "@gitnebula/githist": "workspace:*",
-    "@gitnebula/scanner": "workspace:*"
+    "@gitnebula/scanner": "workspace:*",
+    "commander": "^15.0.0",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
