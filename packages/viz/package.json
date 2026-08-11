@@ -19,6 +19,8 @@
   },
   "devDependencies": {
     "@types/d3-force": "^3.0.10",
+    "@types/node": "catalog:",
+    "jsdom": "^30.0.1",
     "typescript": "catalog:",
     "vite": "^8.2.1",
     "vitest": "catalog:"

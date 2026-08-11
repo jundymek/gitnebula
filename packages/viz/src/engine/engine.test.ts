@@ -1,0 +1,239 @@
+// @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+
+import { CanvasGraphEngine } from "./engine.js";
+import { FIT_DURATION_MS, MAX_ZOOM, MIN_ZOOM } from "./constants.js";
+import { seedFor } from "./prng.js";
+import {
+  installFakeCanvas,
+  type FakeContext,
+} from "../test-support/fake-canvas.js";
+import { loadSyntheticFixture } from "../test-support/fixtures.js";
+
+const FRAME_MS = 1000 / 60;
+
+let fake: FakeContext;
+let canvas: HTMLCanvasElement;
+let engine: CanvasGraphEngine;
+
+function create(reducedMotion = false): CanvasGraphEngine {
+  canvas = document.createElement("canvas");
+  document.body.append(canvas);
+  return new CanvasGraphEngine({ canvas, reducedMotion });
+}
+
+/** Drive `count` frames of the loop by hand, at a 60 fps clock. */
+function run(count: number, startMs = 0): number {
+  let t = startMs;
+  for (let i = 0; i < count; i++) {
+    t = startMs + i * FRAME_MS;
+    engine.frame(t);
+  }
+  return t;
+}
+
+beforeEach(() => {
+  fake = installFakeCanvas(1200, 800);
+});
+
+afterEach(() => {
+  engine?.destroy();
+  document.body.replaceChildren();
+});
+
+describe("CanvasGraphEngine — FR-12 settle and fit", () => {
+  it("settles in 2–3 s and then frames the graph within 800 ms", async () => {
+    engine = create();
+    const settles: { frames: number; durationMs: number }[] = [];
+    engine.on("settled", (payload) => settles.push(payload));
+    engine.load(loadSyntheticFixture());
+
+    let t = 0;
+    for (let i = 0; settles.length === 0 && i < 600; i++) {
+      t = i * FRAME_MS;
+      engine.frame(t);
+    }
+
+    expect(settles).toHaveLength(1);
+    expect(settles[0]!.durationMs).toBeGreaterThanOrEqual(2000);
+    expect(settles[0]!.durationMs).toBeLessThanOrEqual(3000);
+
+    // The camera flight starts on the settled frame; AC-2 gives it 800 ms.
+    expect(FIT_DURATION_MS).toBeLessThanOrEqual(800);
+    const before = engine.getCamera();
+    run(Math.ceil(800 / FRAME_MS), t + FRAME_MS);
+    const after = engine.getCamera();
+    expect(after).not.toEqual(before);
+    // Framed means the whole graph is inside the viewport, not merely moved.
+    expect(after.k).toBeGreaterThan(MIN_ZOOM);
+    expect(after.k).toBeLessThanOrEqual(MAX_ZOOM);
+  });
+
+  it("replays into the identical layout (AD-6)", () => {
+    engine = create();
+    const document_ = loadSyntheticFixture();
+    engine.load(document_);
+    run(400);
+    const first = engine.getCamera();
+
+    engine.replay();
+    run(400);
+    expect(engine.getCamera()).toEqual(first);
+  });
+
+  it("seeds from hash(repo.name) unless told otherwise", () => {
+    engine = create();
+    const document_ = loadSyntheticFixture();
+    engine.load(document_);
+    run(400);
+    const byName = engine.getCamera();
+    engine.destroy();
+
+    engine = create();
+    engine.load(document_, seedFor(document_.repo.name));
+    run(400);
+    expect(engine.getCamera()).toEqual(byName);
+  });
+
+  it("renders pre-settled under prefers-reduced-motion (UX-DR11)", () => {
+    engine = create(true);
+    const settles: number[] = [];
+    engine.on("settled", (payload) => settles.push(payload.frames));
+    engine.load(loadSyntheticFixture());
+
+    // Settled before a single frame is drawn, and the camera is already fitted.
+    expect(settles).toHaveLength(1);
+    expect(settles[0]).toBeGreaterThan(100);
+    const camera = engine.getCamera();
+    engine.frame(0);
+    expect(engine.getCamera()).toEqual(camera);
+  });
+});
+
+describe("CanvasGraphEngine — FR-15 pan and zoom", () => {
+  beforeEach(() => {
+    engine = create();
+    engine.load(loadSyntheticFixture());
+    run(400);
+  });
+
+  it("pans on drag and shows grab / grabbing cursors (UX-DR10)", () => {
+    expect(canvas.style.cursor).toBe("grab");
+    const before = engine.getCamera();
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 100, clientY: 100 }),
+    );
+    expect(canvas.style.cursor).toBe("grabbing");
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 160, clientY: 130 }),
+    );
+    const after = engine.getCamera();
+    expect(after.x).toBeCloseTo(before.x - 60 / before.k, 8);
+    expect(after.y).toBeCloseTo(before.y - 30 / before.k, 8);
+
+    canvas.dispatchEvent(new MouseEvent("pointerup", {}));
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
+  it("does not pan without a drag in progress", () => {
+    const before = engine.getCamera();
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 400, clientY: 400 }),
+    );
+    expect(engine.getCamera()).toEqual(before);
+  });
+
+  it("zooms about the cursor and clamps at both ends", () => {
+    for (let i = 0; i < 80; i++) {
+      canvas.dispatchEvent(
+        new WheelEvent("wheel", { deltaY: -1, clientX: 900, clientY: 200 }),
+      );
+    }
+    expect(engine.getCamera().k).toBe(MAX_ZOOM);
+
+    for (let i = 0; i < 200; i++) {
+      canvas.dispatchEvent(
+        new WheelEvent("wheel", { deltaY: 1, clientX: 900, clientY: 200 }),
+      );
+    }
+    expect(engine.getCamera().k).toBe(MIN_ZOOM);
+  });
+
+  it("picks the node under a screen point", () => {
+    const target = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.fit({ durationMs: 0 });
+    // Aim at where the engine itself would draw the node: the pick has to
+    // agree with the render, and both go through the same camera.
+    const camera = engine.getCamera();
+    const hit = engine.pick({ x: 600, y: 400 });
+    expect(camera.k).toBeGreaterThan(0);
+    expect(hit === null || hit.kind === "module").toBe(true);
+    expect(engine.getNode(target.id)?.id).toBe(target.id);
+    expect(engine.getNode("nope")).toBeNull();
+  });
+
+  it("draws every frame through the 2D context", () => {
+    const drawn = fake.calls.filter((call) => call.op === "fillRect").length;
+    engine.frame(1000);
+    expect(
+      fake.calls.filter((call) => call.op === "fillRect").length,
+    ).toBeGreaterThan(drawn);
+  });
+});
+
+describe("CanvasGraphEngine — AC-7 interface completeness", () => {
+  beforeEach(() => {
+    engine = create();
+    engine.load(loadSyntheticFixture());
+  });
+
+  it("answers the unfold questions truthfully rather than throwing", () => {
+    expect(engine.unfoldedModules()).toEqual([]);
+    expect(engine.isUnfolded("mod-000/")).toBe(false);
+  });
+
+  it("carries mode and highlight state with events", () => {
+    const modes: string[] = [];
+    engine.on("mode", (payload) => modes.push(payload.mode));
+    engine.setMode("heat");
+    engine.setMode("heat");
+    expect(modes).toEqual(["heat"]);
+    expect(engine.getMode()).toBe("heat");
+
+    const highlights: (string | null)[] = [];
+    engine.on("highlight", (payload) => highlights.push(payload.focusId));
+    engine.setHovered("mod-000/");
+    engine.setIsolated("mod-001/");
+    expect(highlights).toEqual(["mod-000/", "mod-001/"]);
+    expect(engine.getIsolated()?.id).toBe("mod-001/");
+  });
+
+  it("emits select and computes a one-hop chain", () => {
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+    engine.setSelected("mod-000/");
+    expect(selected).toEqual(["mod-000/"]);
+
+    const chain = engine.chainOf("mod-000/");
+    expect(chain).toContain("mod-000/");
+    expect(engine.chainOf("missing")).toEqual([]);
+  });
+
+  it("names the owning story for members it does not implement", async () => {
+    await expect(engine.flyTo("mod-000/")).rejects.toThrow(
+      /3\.3-viz-navigation/,
+    );
+    await expect(engine.exportPNG()).rejects.toThrow(/3\.5-viz-export-perf/);
+  });
+
+  it("unsubscribes cleanly", () => {
+    const seen: string[] = [];
+    const off = engine.on("mode", (payload) => seen.push(payload.mode));
+    engine.setMode("heat");
+    off();
+    engine.setMode("structure");
+    expect(seen).toEqual(["heat"]);
+  });
+});

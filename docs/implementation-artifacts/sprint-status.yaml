@@ -19,7 +19,7 @@ development_status:
   2.2-deps-ts-imports: review
   2.3-githist-metrics: review
   2.4-cli-pipeline: backlog
-  2.5-viz-engine-core: backlog
+  2.5-viz-engine-core: review
   # Epic 3 — Full Exploration Experience
   3.1-deps-python: backlog
   3.2-cli-serve-url: backlog
