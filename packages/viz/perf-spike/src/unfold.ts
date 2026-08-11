@@ -29,6 +29,26 @@ export interface ModuleNode {
   r: number;
 }
 
+/**
+ * Viewport in CSS pixels, given a canvas sized in device pixels.
+ *
+ * The canvas backing store is `cssSize * devicePixelRatio` so the render is
+ * native-resolution, but every camera and viewport calculation must stay in
+ * CSS pixels. Feeding device pixels to `visibleWorldRect` divides the
+ * effective zoom by the DPR: the same camera script then covers DPR× more
+ * world, unfolds more modules and draws smaller nodes, so a Retina run is not
+ * comparable with a DPR-1 run.
+ */
+export function cssViewport(
+  canvas: { width: number; height: number },
+  devicePixelRatio: number,
+): Viewport {
+  return {
+    width: canvas.width / devicePixelRatio,
+    height: canvas.height / devicePixelRatio,
+  };
+}
+
 /** World-space rectangle currently visible, expanded by VIEWPORT_MARGIN. */
 export function visibleWorldRect(cam: Camera, vp: Viewport) {
   const halfW = (vp.width / cam.k) * (0.5 + VIEWPORT_MARGIN);

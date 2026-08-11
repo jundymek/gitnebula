@@ -37,10 +37,12 @@ import {
 import {
   NonMemberDisplacementTracker,
   UNFOLD_ZOOM,
+  cssViewport,
   unfoldTransition,
   unfoldedModules,
   type Camera,
   type ModuleNode,
+  type Viewport,
 } from "./unfold.js";
 
 interface SimNode extends SimulationNodeDatum {
@@ -87,11 +89,18 @@ function draw(
   links: readonly SimLink[],
   cam: Camera,
   visible: (n: SimNode) => boolean,
+  vp: Viewport,
 ): void {
-  const { width, height } = ctx.canvas;
+  // Everything below is in CSS pixels; the DPR transform is what turns them
+  // into the canvas's device pixels. Drawing in device pixels instead would
+  // divide the effective zoom by the DPR, so a Retina run would cover more
+  // world, unfold more modules and draw smaller nodes than a DPR-1 run —
+  // native rasterisation is wanted, a different camera is not.
+  const { width, height } = vp;
+  ctx.save();
+  ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   ctx.fillStyle = "#0a0e1a"; // mockup dark canvas
   ctx.fillRect(0, 0, width, height);
-  ctx.save();
   ctx.translate(width / 2, height / 2);
   ctx.scale(cam.k, cam.k);
   ctx.translate(-cam.cx, -cam.cy);
@@ -162,7 +171,8 @@ async function run(): Promise<void> {
   // Every measured frame is checked: a hidden tab throttles rAF and would
   // otherwise produce a normal-looking, entirely fictional result.
   const visibility = new VisibilityWatch(() => document.hidden);
-  const vp = { width: canvas.width, height: canvas.height };
+  // CSS pixels, not the canvas backing store — see cssViewport.
+  const vp = cssViewport(canvas, devicePixelRatio);
 
   // ---- Phase (a): every node active until Settled --------------------------
   // Deliberately the worst case ADR-0006 exists to avoid — measured to show
@@ -191,7 +201,7 @@ async function run(): Promise<void> {
     const frame = (t: number) => {
       const w0 = performance.now();
       globalSim.tick();
-      draw(ctx, nodes, allLinks, { cx: 0, cy: 0, k: 0.4 }, () => true);
+      draw(ctx, nodes, allLinks, { cx: 0, cy: 0, k: 0.4 }, () => true, vp);
       recorder.tick(t, performance.now() - w0);
       visibility.frame();
       if (settleGate.frame(nodes as { x: number; y: number }[])) resolve();
@@ -235,7 +245,7 @@ async function run(): Promise<void> {
   await playScript(phaseBScript(layoutBounds), (cam, t) => {
     const w0 = performance.now();
     // Frozen: the simulation is never ticked in this phase.
-    draw(ctx, nodes, moduleLinks, cam, (n) => n.kind === "module");
+    draw(ctx, nodes, moduleLinks, cam, (n) => n.kind === "module", vp);
     recorder.tick(t, performance.now() - w0);
     visibility.frame();
   });
@@ -442,7 +452,7 @@ async function run(): Promise<void> {
     // AC-5 instrumentation above is spike-only, so it is excluded from the
     // frame budget: work = wake handling + simulation ticks + render.
     const beforeDraw = performance.now();
-    draw(ctx, nodes, shownLinks, cam, isVisibleAt(cam));
+    draw(ctx, nodes, shownLinks, cam, isVisibleAt(cam), vp);
     recorder.tick(t, afterTicks - w0 + (performance.now() - beforeDraw));
     visibility.frame();
   });
@@ -497,7 +507,13 @@ async function run(): Promise<void> {
     nonMemberMaxCumulativeDisplacementPx: maxNonMemberCumulative,
     pinnedModuleMaxPerFrameDisplacementPx: maxModulePerFrame,
     settledBoundPx: SETTLE_DISPLACEMENT_PX,
-    canvas: { width: canvas.width, height: canvas.height, devicePixelRatio },
+    canvas: {
+      width: canvas.width,
+      height: canvas.height,
+      cssWidth: vp.width,
+      cssHeight: vp.height,
+      devicePixelRatio,
+    },
     userAgent: navigator.userAgent,
   };
 

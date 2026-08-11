@@ -97,9 +97,9 @@ across the three committed runs.
 
 | phase                             | sustained fps (worst 1 s) | mean frame work | p95            | worst frame     |
 | --------------------------------- | ------------------------- | --------------- | -------------- | --------------- |
-| (a) active simulation, all 2,100  | **59** (all runs)         | 4.76 – 5.27 ms  | 5.6 – 5.7 ms   | 15.6 – 17.6 ms  |
-| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.15 – 0.19 ms  | 0.3 ms         | 0.4 ms          |
-| (c) viewport unfold while panning | **59** (all runs)         | 0.44 – 0.55 ms  | 1.3 – 1.7 ms   | 2.6 – 3.6 ms    |
+| (a) active simulation, all 2,100  | **59** (all runs)         | 5.12 – 5.28 ms  | 5.5 – 5.8 ms   | 16.1 – 16.9 ms  |
+| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.20 – 0.22 ms  | 0.3 ms         | 0.4 – 0.6 ms    |
+| (c) viewport unfold while panning | **59** (all runs)         | 0.57 – 0.62 ms  | 1.7 – 1.8 ms   | 3.4 – 4.1 ms    |
 
 Average fps was 59.95 in every phase of every run.
 
@@ -114,13 +114,13 @@ Supporting numbers:
   of the 2,000**, with 521–577 links drawn. The graph never accumulates: what
   leaves the viewport collapses.
 - Frames are vsync-capped at 60, so 59 sustained is the ceiling, not a
-  shortfall. The headroom is in the work times: phase (c) uses **~0.5 ms of a
-  16.7 ms budget on average and 3.6 ms at its worst observed frame** — roughly
-  a 4.5× margin at the worst frame and 30× at the mean.
+  shortfall. The headroom is in the work times: phase (c) uses **~0.6 ms of a
+  16.7 ms budget on average and 4.1 ms at its worst observed frame** — roughly
+  a 4× margin at the worst frame and 28× at the mean.
 
 Phase (a) is deliberately the worst case ADR-0006 exists to avoid: every file
-node simulated at once. It still holds 59 fps, at ~5 ms mean frame work — about
-10× the cost of phase (c). That is the cost the viewport-scoped rule buys back,
+node simulated at once. It still holds 59 fps, at ~5.2 ms mean frame work —
+about 9× the cost of phase (c). That is the cost the viewport-scoped rule buys back,
 and it also means a full-graph settle remains affordable as a one-off on load.
 
 ### Viewport scope is what is being measured
@@ -135,7 +135,7 @@ the code.
 
 With collapse implemented, the live set stays at 13–15 modules, which is the
 "low hundreds worst case" the ADR predicted. The correction moved phase (c)
-mean frame work from ~1.3 ms to ~0.5 ms, so the earlier figures were
+mean frame work from ~1.3 ms to ~0.6 ms, so the earlier figures were
 conservative rather than optimistic — the verdict was never at risk, but the
 evidence now matches the claim.
 
@@ -187,7 +187,7 @@ Each wake runs its own short-lived simulation until Settled and is then dropped
 `VERDICT: canvas-2d viable (>= 55 fps sustained in phases b and c)`
 
 Sustained fps is 59 in both phases (and in phase (a) as well) across three
-runs, against a 55 fps bar; worst-frame work in phase (c) is 3.6 ms against a
+runs, against a 55 fps bar; worst-frame work in phase (c) is 4.1 ms against a
 16.7 ms budget.
 
 Because the verdict is *not* escalation, AC-4 does not apply: **no Epic 2/3
@@ -203,7 +203,7 @@ pan.
 
 ## Caveats
 
-- One machine, one browser, three runs. The margins are wide enough (4×–30×
+- One machine, one browser, three runs. The margins are wide enough (4×–28×
   headroom in phase (c)) that machine-to-machine variance is unlikely to reach
   the 55 fps bar, but this is a spike, not a benchmark suite. Story 3.5 turns
   the harness into the CI version with thresholds.
@@ -214,8 +214,12 @@ pan.
   which is also where JIT warm-up lands. It is recorded because phase (a) is
   the phase with the least headroom.
 - `devicePixelRatio` was 1. A retina run rasterises 4× the pixels; phase (b)'s
-  ~0.17 ms mean leaves room, but the DPR-2 case is worth one confirming run
-  when story 2.5 has a real renderer.
+  ~0.21 ms mean leaves room, but the DPR-2 case is worth one confirming run
+  when story 2.5 has a real renderer. The harness is now DPR-correct — camera
+  and viewport maths run in CSS pixels with a DPR transform on the context —
+  so a Retina run measures the same camera script and the same set of unfolded
+  modules rather than a silently different one. That was a Codex finding, and
+  it is what makes the confirming run meaningful instead of incomparable.
 - Phase (c)'s peak counts vary slightly between runs (13 vs 15 modules) even
   though the fixture and seed are fixed. The camera script is time-based, so
   which frame lands where in the pan shifts by a frame or two between runs. The

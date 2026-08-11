@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   NonMemberDisplacementTracker,
   UNFOLD_ZOOM,
+  cssViewport,
   moduleIntersectsViewport,
   unfoldTransition,
   unfoldedModules,
+  visibleWorldRect,
 } from "./unfold.js";
 
 const vp = { width: 1000, height: 800 };
@@ -34,6 +36,43 @@ describe("unfoldedModules", () => {
     expect(moduleIntersectsViewport(justOutside, cam, vp)).toBe(true);
     const wellOutside = { id: "m", x: 400, y: 0, r: 10 };
     expect(moduleIntersectsViewport(wellOutside, cam, vp)).toBe(false);
+  });
+});
+
+describe("cssViewport", () => {
+  // At k = 2.2 the CSS half-width is (1000/2.2)*0.65 ≈ 295 world units, the
+  // device half-width twice that — so "outside" is visible only if device
+  // pixels leak into the viewport calculation.
+  const modules = [
+    { id: "inside", x: 100, y: 0, r: 10 },
+    { id: "outside", x: 400, y: 0, r: 10 },
+  ];
+  const cam = { cx: 0, cy: 0, k: 2.2 };
+
+  it("makes the visible world rect independent of devicePixelRatio", () => {
+    // Same 1000x800 CSS canvas, rasterised at 1x and at 2x.
+    const at1 = cssViewport({ width: 1000, height: 800 }, 1);
+    const at2 = cssViewport({ width: 2000, height: 1600 }, 2);
+    expect(visibleWorldRect(cam, at1)).toEqual(visibleWorldRect(cam, at2));
+  });
+
+  it("unfolds the same modules at 1x and 2x", () => {
+    const at1 = unfoldedModules(
+      modules,
+      cam,
+      cssViewport({ width: 1000, height: 800 }, 1),
+    );
+    const at2 = unfoldedModules(
+      modules,
+      cam,
+      cssViewport({ width: 2000, height: 1600 }, 2),
+    );
+    expect([...at2]).toEqual(["inside"]);
+    expect([...at1]).toEqual(["inside"]);
+    // Guard against the test passing because nothing is ever in view: feeding
+    // the raw device-pixel size unfolds a module that is genuinely off-screen.
+    const raw = unfoldedModules(modules, cam, { width: 2000, height: 1600 });
+    expect([...raw]).toEqual(["inside", "outside"]);
   });
 });
 
