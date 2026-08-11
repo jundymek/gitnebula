@@ -4,7 +4,8 @@
 // no file contents) and gives `onProgress` an honest total before the
 // expensive pass starts (AD-3).
 
-import { open, readdir } from "node:fs/promises";
+import type { Dirent } from "node:fs";
+import { lstat, open, readdir } from "node:fs/promises";
 import { join } from "node:path";
 
 import type { WarningCollector } from "./warnings.js";
@@ -30,6 +31,36 @@ function isBlankByte(byte: number): boolean {
     byte === VERTICAL_TAB ||
     byte === FORM_FEED
   );
+}
+
+/**
+ * What one directory entry turned out to be.
+ *
+ * Not every filesystem answers that from the directory read. FUSE and some
+ * network mounts return `DT_UNKNOWN`, and then every `Dirent` predicate says
+ * false — ordinary files and directories included. Trusting the predicates
+ * there would report a whole repository as irregular and skip it, so an entry
+ * that claims to be nothing gets an `lstat` before it is written off.
+ */
+export type EntryKind = "file" | "directory" | "symlink" | "other";
+
+export async function classifyEntry(
+  entry: Pick<Dirent, "isSymbolicLink" | "isDirectory" | "isFile">,
+  absolutePath: string,
+): Promise<EntryKind> {
+  if (entry.isSymbolicLink()) return "symlink";
+  if (entry.isDirectory()) return "directory";
+  if (entry.isFile()) return "file";
+
+  try {
+    const stats = await lstat(absolutePath);
+    if (stats.isSymbolicLink()) return "symlink";
+    if (stats.isDirectory()) return "directory";
+    if (stats.isFile()) return "file";
+  } catch {
+    return "other";
+  }
+  return "other";
 }
 
 /**
@@ -70,16 +101,19 @@ export async function collectFiles(
         : entry.name;
       if (isExcluded(relativePath)) continue;
 
-      if (entry.isSymbolicLink()) {
-        warnings.add("symlink-skipped", relativePath);
-        continue;
-      }
-      if (entry.isDirectory()) {
-        await walk(join(absoluteDir, entry.name), relativePath);
-      } else if (entry.isFile()) {
-        files.push(relativePath);
-      } else {
-        warnings.add("irregular-file-skipped", relativePath);
+      const absolutePath = join(absoluteDir, entry.name);
+      switch (await classifyEntry(entry, absolutePath)) {
+        case "symlink":
+          warnings.add("symlink-skipped", relativePath);
+          break;
+        case "directory":
+          await walk(absolutePath, relativePath);
+          break;
+        case "file":
+          files.push(relativePath);
+          break;
+        default:
+          warnings.add("irregular-file-skipped", relativePath);
       }
     }
   }
