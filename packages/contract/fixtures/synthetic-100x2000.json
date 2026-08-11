@@ -30989,7 +30989,7 @@
       "source": "mod-023/",
       "target": "mod-011/",
       "kind": "import",
-      "weight": 4
+      "weight": 3
     },
     {
       "source": "mod-023/",
@@ -32225,7 +32225,7 @@
       "source": "mod-043/",
       "target": "mod-062/",
       "kind": "import",
-      "weight": 5
+      "weight": 4
     },
     {
       "source": "mod-043/file-00.ts",
@@ -33671,7 +33671,7 @@
       "source": "mod-066/",
       "target": "mod-019/",
       "kind": "import",
-      "weight": 5
+      "weight": 4
     },
     {
       "source": "mod-066/",
@@ -34475,7 +34475,7 @@
       "source": "mod-076/",
       "target": "mod-003/",
       "kind": "import",
-      "weight": 3
+      "weight": 2
     },
     {
       "source": "mod-076/",
