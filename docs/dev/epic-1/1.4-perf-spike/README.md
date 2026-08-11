@@ -5,7 +5,10 @@ hold 60 fps at the DoD scale (100 modules / 2,000 files) on a canvas 2D
 renderer? This spike measures it and records a verdict, because Epic 2/3 viz
 specs are written against the answer.
 
-**Verdict is at the bottom.** Raw measurements: `results.json` in this folder.
+**Verdict is at the bottom.** Raw measurements: `results-run-1.json` …
+`results-run-3.json` in this folder — three full runs, so the numbers quoted
+below can be checked against their evidence and the run-to-run spread is
+visible rather than asserted.
 
 ## What was built
 
@@ -22,6 +25,13 @@ harness.
 | `src/camera-script.ts` | deterministic camera keyframes (the scripted sequence)     |
 | `src/fixture.ts`   | fixture loading, with a seeded generator fallback              |
 | `src/main.ts`      | the three measured phases                                      |
+
+A note on what the page renders in phase (c): the drawn link set is rebuilt
+from everything currently unfolded, not from the live simulations. Deriving it
+from live wakes instead means a module's import edges stop being drawn the
+moment it settles, and the measured render cost drifts below the real one —
+that bug was present in the first version of these numbers and is why the
+rendered link count (5,546 at peak) is now reported alongside the node count.
 
 ## Methodology
 
@@ -49,9 +59,9 @@ harness.
 
 ### Fixture provenance — read this before trusting the numbers
 
-`fixtureSource` in `results.json` records which graph produced the run.
+`fixtureSource` in each results file records which graph produced the run.
 
-The recorded run says **`generated-fallback`**: story 1.3's committed synthetic
+All three recorded runs say **`generated-fallback`**: story 1.3's committed synthetic
 document had not merged into the epic branch when this spike ran, so the page
 used its own seeded generator producing the same shape — 100 modules, 2,000
 files, 4,132 import edges, 80 % intra-module file imports. The topology is
@@ -64,32 +74,46 @@ wide — but the re-run is the confirmation, and it is cheap.
 
 ## Results
 
-100 modules, 2,000 files, 4,132 edges, seed `gitnebula-spike`.
+100 modules, 2,000 files, 4,132 edges, seed `gitnebula-spike`. Ranges are
+across the three committed runs.
 
-| phase                              | avg fps | sustained (worst 1 s) | mean frame work | p95    | max     |
-| ---------------------------------- | ------- | --------------------- | --------------- | ------ | ------- |
-| (a) active simulation, all 2,100   | 59.95   | **59**                | 5.26 ms         | 5.7 ms | 15.3 ms |
-| (b) frozen + scripted pan/zoom     | 59.95   | **59**                | 0.19 ms         | 0.3 ms | 0.5 ms  |
-| (c) viewport unfold while panning  | 59.95   | **59**                | 1.14 ms         | 2.5 ms | 4.4 ms  |
+| phase                             | sustained fps (worst 1 s) | mean frame work | p95           | worst frame     |
+| --------------------------------- | ------------------------- | --------------- | ------------- | --------------- |
+| (a) active simulation, all 2,100  | **59** (all runs)         | 5.27 – 5.28 ms  | 5.7 ms        | 15.4 – 16.8 ms  |
+| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.17 – 0.19 ms  | 0.3 ms        | 0.6 – 1.1 ms    |
+| (c) viewport unfold while panning | **59** (all runs)         | 1.29 – 1.35 ms  | 3.0 – 3.1 ms  | 5.0 – 5.4 ms    |
+
+Average fps was 59.9 – 60.0 in every phase of every run.
 
 Supporting numbers:
 
 - Phase (a) reached Settled in **243 frames** (~4.0 s) from the seeded scatter.
 - Phase (b) module drift over the whole 10 s sweep: **0.0 px**. Frozen is
   actually frozen — the simulation is not ticked at all.
-- Phase (c): **83 unfold events** over the 15 s pan, **1,820 file nodes shown**
-  at peak, but only **540 nodes simulated** at peak — the rest were settled and
-  frozen. That gap is the mechanism working.
+- Phase (c): **83–84 unfold events** over the 15 s pan. At peak, **1,820 file
+  nodes and 5,546 links** were being rendered, while only **540 nodes** were
+  being simulated — the rest had settled and been frozen. That gap is the
+  mechanism working: render scales with what is on screen, simulation with what
+  is still moving.
 - Frames are vsync-capped at 60, so 59 sustained is the ceiling, not a
-  shortfall. The headroom figures are the work times: phase (c) uses **1.14 ms
-  of a 16.7 ms budget on average and 4.4 ms at its worst frame** — roughly a
-  3.8× margin at the worst observed frame.
+  shortfall. The headroom is in the work times: phase (c) uses **~1.3 ms of a
+  16.7 ms budget on average and 5.4 ms at its worst observed frame** — roughly
+  a 3× margin at the worst frame and 12× at the mean.
 
 Phase (a) is deliberately the worst case ADR-0006 exists to avoid: every file
-node simulated at once. It still holds 59 fps, at 5.26 ms mean frame work —
-about 4.6× the cost of phase (c). That is the cost the viewport-scoped rule
-buys back, and it also means a full-graph settle remains affordable as a
-one-off on load.
+node simulated at once. It still holds 59 fps, at ~5.3 ms mean frame work —
+about 4× the cost of phase (c). That is the cost the viewport-scoped rule buys
+back, and it also means a full-graph settle remains affordable as a one-off on
+load.
+
+**One outlier worth recording.** An earlier run of the same code measured phase
+(a) at 56.5 avg / 45 worst-1s fps with a single 107 ms frame, while phases (b)
+and (c) were unaffected at 59. It did not reproduce in any of the three
+committed runs. The most likely cause is machine noise rather than the
+renderer — a single long frame during the initial settle, which is also where
+JIT warm-up and the fixture build land. It is noted because phase (a) is the
+phase with the least headroom, and because the verdict should not rest on a
+number whose spread has been quietly filtered.
 
 ## AC-5 — is the wake actually local?
 
@@ -126,8 +150,9 @@ Each wake runs its own short-lived simulation until Settled and is then dropped
 
 `VERDICT: canvas-2d viable (>= 55 fps sustained in phases b and c)`
 
-Sustained fps is 59 in both phases (and in phase (a) as well), against a 55 fps
-bar; worst-frame work in phase (c) is 4.4 ms against a 16.7 ms budget.
+Sustained fps is 59 in both phases (and in phase (a) as well) across three
+runs, against a 55 fps bar; worst-frame work in phase (c) is 5.4 ms against a
+16.7 ms budget.
 
 Because the verdict is *not* escalation, AC-4 does not apply: **no Epic 2/3
 story spec needs amending.** Stories 2.5, 3.3 and 3.5 launch as written, against
@@ -141,13 +166,15 @@ map that lurches on every pan.
 
 ## Caveats
 
-- One machine, one browser, one run per phase. The margins are wide enough
-  (3.8×–88× headroom) that machine-to-machine variance is unlikely to reach the
-  55 fps bar, but this is a spike, not a benchmark suite. Story 3.5 turns the
-  harness into the CI version with thresholds.
+- One machine, one browser, three runs. The margins are wide enough (3×–90×
+  headroom depending on phase and statistic) that machine-to-machine variance
+  is unlikely to reach the 55 fps bar, but this is a spike, not a benchmark
+  suite — and the phase (a) outlier above shows a single frame can be an order
+  of magnitude off. Story 3.5 turns the harness into the CI version with
+  thresholds.
 - `devicePixelRatio` was 1. A retina run rasterises 4× the pixels; phase (b)'s
-  0.19 ms mean leaves room, but the DPR-2 case is worth one confirming run when
-  story 2.5 has a real renderer.
+  ~0.18 ms mean leaves room, but the DPR-2 case is worth one confirming run
+  when story 2.5 has a real renderer.
 - The fixture provenance caveat above.
 - The spike's visual layer is deliberately crude (flat dots and lines). It is
   not evidence about the nebula aesthetic, only about frame cost.

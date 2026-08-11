@@ -323,6 +323,7 @@ async function run(): Promise<void> {
   let unfoldEvents = 0;
   let peakShownFiles = 0;
   let peakSimulatedNodes = 0;
+  let peakShownLinks = 0;
 
   recorder.start("c-viewport-unfold");
   await playScript(phaseCScript(layoutBounds), (cam, t) => {
@@ -337,13 +338,25 @@ async function run(): Promise<void> {
       wakes.push(wake);
       for (const f of wake.members) shownFiles.add(f);
       peakShownFiles = Math.max(peakShownFiles, shownFiles.size);
+      // Rendered links must describe everything currently unfolded, not just
+      // what is still being simulated: a wake is dropped once it settles, so
+      // deriving the rendered set from live wakes silently stops drawing the
+      // import edges of every module that already came to rest, and the
+      // measured render cost drifts below the real one. Rebuilt from
+      // shownFiles instead, which also picks up imports that cross between two
+      // unfolded modules — those belong to no single wake.
       shownLinks = [
         ...moduleLinks,
-        ...wakes.flatMap((w) => w.links),
         ...[...shownFiles].map((f) => ({
           source: nodeById.get(f.parent!)!,
           target: f,
         })),
+        ...allEdges
+          .map((e) => ({
+            source: nodeById.get(e.source)!,
+            target: nodeById.get(e.target)!,
+          }))
+          .filter((l) => shownFiles.has(l.source) && shownFiles.has(l.target)),
       ];
       // Non-members: every file on screen that no live wake is simulating.
       const waking = new Set(wakes.flatMap((w) => w.members));
@@ -361,6 +374,7 @@ async function run(): Promise<void> {
       simulatedNow += w.members.length;
     }
     peakSimulatedNodes = Math.max(peakSimulatedNodes, simulatedNow);
+    peakShownLinks = Math.max(peakShownLinks, shownLinks.length);
     const afterTicks = performance.now();
     // Freeze-on-settle: a wake that has settled stops being ticked entirely.
     wakes = wakes.filter(
@@ -413,6 +427,7 @@ async function run(): Promise<void> {
     frozenDriftPx: frozenDrift,
     unfoldEvents,
     peakShownFiles,
+    peakShownLinks,
     peakSimulatedNodes,
     nonMemberMaxPerFrameDisplacementPx: maxNonMemberPerFrame,
     nonMemberMaxCumulativeDisplacementPx: maxNonMemberCumulative,

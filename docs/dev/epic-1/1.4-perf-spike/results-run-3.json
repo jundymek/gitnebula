@@ -1,0 +1,62 @@
+{
+    "fixtureSource": "generated-fallback",
+    "nodeCount": 2100,
+    "moduleCount": 100,
+    "fileCount": 2000,
+    "edgeCount": 4132,
+    "seed": "gitnebula-spike",
+    "phases": [
+        {
+            "phase": "a-active-all-nodes",
+            "frames": 242,
+            "durationMs": 4036.2999999999997,
+            "avgFps": 59.955900205633874,
+            "worst1sFps": 59,
+            "meanWorkMs": 5.276543211544492,
+            "p95WorkMs": 5.700000047683716,
+            "maxWorkMs": 16.799999952316284
+        },
+        {
+            "phase": "b-frozen-pan-zoom",
+            "frames": 600,
+            "durationMs": 10007.7,
+            "avgFps": 59.953835546629094,
+            "worst1sFps": 59,
+            "meanWorkMs": 0.1808652272835349,
+            "p95WorkMs": 0.30000007152557373,
+            "maxWorkMs": 1.100000023841858
+        },
+        {
+            "phase": "c-viewport-unfold",
+            "frames": 900,
+            "durationMs": 15012.4,
+            "avgFps": 59.95044096879913,
+            "worst1sFps": 59,
+            "meanWorkMs": 1.2907880137154581,
+            "p95WorkMs": 3,
+            "maxWorkMs": 5
+        }
+    ],
+    "settledInFrames": 243,
+    "layoutBounds": {
+        "minX": -1173.2726138332696,
+        "maxX": 989.716542024881,
+        "minY": -1223.609346876968,
+        "maxY": 1074.495003887991
+    },
+    "frozenDriftPx": 0,
+    "unfoldEvents": 83,
+    "peakShownFiles": 1820,
+    "peakShownLinks": 5546,
+    "peakSimulatedNodes": 540,
+    "nonMemberMaxPerFrameDisplacementPx": 0,
+    "nonMemberMaxCumulativeDisplacementPx": 0,
+    "pinnedModuleMaxPerFrameDisplacementPx": 0,
+    "settledBoundPx": 0.5,
+    "canvas": {
+        "width": 1728,
+        "height": 844,
+        "devicePixelRatio": 1
+    },
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
+}
