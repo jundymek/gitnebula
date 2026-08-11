@@ -1,0 +1,29 @@
+{
+  "name": "@gitnebula/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "gitnebula": "./dist/gitnebula.js"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsup",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitnebula/contract": "workspace:*",
+    "@gitnebula/deps": "workspace:*",
+    "@gitnebula/githist": "workspace:*",
+    "@gitnebula/scanner": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "^8.5.1",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

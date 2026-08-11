@@ -1,0 +1,26 @@
+{
+  "name": "@gitnebula/viz",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "perf-spike": "vite perf-spike",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gitnebula/contract": "workspace:*",
+    "d3-force": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "typescript": "catalog:",
+    "vite": "^8.2.1",
+    "vitest": "catalog:"
+  }
+}

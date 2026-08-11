@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": [],
+    // The schema JSON is imported as the validator's input (AD-9).
+    "resolveJsonModule": true
+  },
+  "include": ["src"],
+  // Tests are typechecked by tsconfig.test.json, which grants them node types.
+  // The shipped runtime path keeps `types: []` so an accidental `node:` import
+  // in it fails to compile (1.2 AC-5 / AD-11: contract is environment-neutral,
+  // viz imports it in the browser).
+  "exclude": ["src/**/*.test.ts"]
+}

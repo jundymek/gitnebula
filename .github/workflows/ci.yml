@@ -1,0 +1,43 @@
+name: CI
+
+# CI is intentionally not wired to push/PR for now — the maintainer decided
+# all verification runs locally during implementation (pnpm lint && pnpm
+# typecheck && pnpm test). Restore the push/pull_request triggers when CI is
+# re-enabled (story 4.2 revisits the CI recipe).
+on:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    name: Lint, typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # Version comes from the packageManager field in package.json.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Contract types are freshly generated
+        # AD-9: the JSON Schema is the source and the TS types are generated
+        # from it. Regenerating must be a no-op on a clean checkout — a diff
+        # here means the committed types drifted from the schema.
+        run: |
+          pnpm --filter @gitnebula/contract generate
+          git diff --exit-code -- packages/contract/src/generated
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
