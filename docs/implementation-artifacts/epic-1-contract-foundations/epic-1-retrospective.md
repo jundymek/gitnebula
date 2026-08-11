@@ -180,9 +180,14 @@ review, not assumed.
 
 ## Next-epic readiness
 
-**The ungated part of Epic 2 can launch now**: 2.1 (scanner), 2.2 (deps), 2.3
-(githist) and 2.4 (cli pipeline). The contract is frozen and validated and the
-fixtures exist and are byte-reproducible, which is everything those four need.
+**Three Epic 2 stories can launch immediately**: 2.1 (scanner), 2.2 (deps) and
+2.3 (githist) — all three declare `Depends_on: []`. The contract is frozen and
+validated and the fixtures are byte-reproducible, which is everything they need.
+
+**2.4 (cli pipeline) is launchable but not immediately**: its spec declares
+`Depends_on: [2.1-scanner-core]` and requires the scanner merged into its base
+before work starts. It joins the wave behind 2.1, exactly as 1.2 sat behind 1.1
+in this epic.
 
 **2.5 (viz engine core) stays blocked, and so do 3.3 and 3.5**, until the
 maintainer accepts the 1.4 verdict. That acceptance is precisely what decides
