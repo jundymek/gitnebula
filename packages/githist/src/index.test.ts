@@ -498,6 +498,48 @@ describe("analyze on repositories with no usable history", () => {
     expect(result.history["core/scoring.py"]?.churn).toBe(0);
   });
 
+  it("finds an in-window ancestor hidden behind an older-dated descendant", async () => {
+    // Non-monotonic commit dates are ordinary: clock skew, a rebase, an
+    // import. `--since` would stop the traversal at the 2024-dated tip and
+    // never visit the 2025 commit behind it, silently losing real history.
+    const dir = tempDir();
+    execFileSync("git", ["init", "--quiet", "--template=", "-b", "main", dir]);
+
+    const write = (name: string, at: string): void => {
+      writeFileSync(join(dir, name), `export const x = "${name}";\n`);
+      execFileSync("git", ["-C", dir, "add", "-A"]);
+      execFileSync("git", ["-C", dir, "commit", "--quiet", "-m", name], {
+        env: {
+          ...process.env,
+          GIT_AUTHOR_DATE: at,
+          GIT_COMMITTER_DATE: at,
+          GIT_AUTHOR_NAME: "Skew",
+          GIT_AUTHOR_EMAIL: "skew@fixture.invalid",
+          GIT_COMMITTER_NAME: "Skew",
+          GIT_COMMITTER_EMAIL: "skew@fixture.invalid",
+        },
+      });
+    };
+
+    write("ancestor.ts", "2025-06-01T00:00:00Z");
+    write("descendant.ts", "2024-01-01T00:00:00Z");
+
+    const result = await analyze(
+      {
+        root: dir,
+        scan: scanOf(
+          node("ancestor.ts", "file", null),
+          node("descendant.ts", "file", null),
+        ),
+      },
+      PINNED_CONFIG,
+    );
+
+    expect(result.history["ancestor.ts"]?.commits).toBe(1);
+    expect(result.history["descendant.ts"]?.commits).toBe(0);
+    expect(result.commits).toBe(1);
+  });
+
   it("reads a real repository whose filename contains the record separator", async () => {
     // The end-to-end version of the parser's framing test: git will happily
     // track this name, and it must not fracture the commit stream.

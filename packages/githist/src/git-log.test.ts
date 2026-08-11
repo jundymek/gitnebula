@@ -35,10 +35,23 @@ describe("gitLogArgs", () => {
       "-M",
       "-z",
       "--name-status",
-      "--since=2025-01-01T00:00:00.000Z",
+      "--since-as-filter=2025-01-01T00:00:00.000Z",
       "--until=2026-01-01T00:00:00.000Z",
       "--format=%x1e%H%x1f%ct%x1f%ae",
     ]);
+  });
+
+  it("filters the lower bound instead of cutting the traversal short", () => {
+    // --since halts the walk at the first older-dated commit, so a history
+    // with non-monotonic dates can hide in-window ancestors entirely.
+    expect(gitLogArgs("a", "b")).toContain("--since-as-filter=a");
+    expect(gitLogArgs("a", "b")).not.toContain("--since=a");
+  });
+
+  it("falls back to --since for git too old to know the filtering flag", () => {
+    const args = gitLogArgs("a", "b", false);
+    expect(args).toContain("--since=a");
+    expect(args).not.toContain("--since-as-filter=a");
   });
 
   it("never passes --follow (banned by AD-13)", () => {

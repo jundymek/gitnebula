@@ -60,14 +60,31 @@ const TWO_PATH_STATUS = /^[RC]/;
  * merge, and that is correct, since a merge's content already arrived through
  * the commits being merged. So a merge counts once, repo-wide, and attributes
  * to no node.
+ *
+ * The lower bound is `--since-as-filter`, not `--since`, whenever git supports
+ * it. `--since` is a traversal *cutoff*: git stops walking when it meets a
+ * commit older than the bound, so on a history whose dates are not monotonic —
+ * clock skew, a rebase, an import — an in-window ancestor behind an
+ * older-dated descendant is never visited at all. That is silent data loss, not
+ * a slow path. `--since-as-filter` walks the reachable history and applies the
+ * bound as a filter. `--until` needs no equivalent: it skips newer commits
+ * without halting the walk.
+ *
+ * @param sinceAsFilter false selects the `--since` spelling, for the git
+ * versions before 2.37 that do not know the filtering one. `readGitLog` only
+ * falls back to it after git rejects the flag.
  */
-export function gitLogArgs(sinceIso: string, untilIso: string): string[] {
+export function gitLogArgs(
+  sinceIso: string,
+  untilIso: string,
+  sinceAsFilter = true,
+): string[] {
   return [
     "log",
     "-M",
     "-z",
     "--name-status",
-    `--since=${sinceIso}`,
+    sinceAsFilter ? `--since-as-filter=${sinceIso}` : `--since=${sinceIso}`,
     `--until=${untilIso}`,
     `--format=${LOG_FORMAT}`,
   ];
@@ -153,19 +170,39 @@ export function parseGitLog(raw: string): RawCommit[] {
 /** git's message when the repository exists but holds no commits yet (D10). */
 const EMPTY_REPO = /does not have any commits yet|unknown revision/i;
 
+/** git's complaint about a flag it is too old to know. */
+const UNKNOWN_OPTION = /unknown option|unrecognized argument|usage: git log/i;
+
 /**
  * Runs the single log pass over `[sinceIso, untilIso]` and returns its commits,
  * newest first. A repository with no commits yields an empty list; anything
  * else that fails throws with the cause, for cli to wrap in the AD-7 shape.
+ *
+ * Git older than 2.37 does not know `--since-as-filter`. Rather than probe the
+ * version with an extra process on every run, the correct flag is tried first
+ * and the older spelling used only if git rejects it — so current git pays
+ * nothing, and ancient git still works, with `--since`'s traversal cutoff as
+ * the documented cost.
  */
 export async function readGitLog(
   repoRoot: string,
   sinceIso: string,
   untilIso: string,
 ): Promise<RawCommit[]> {
-  const args = gitLogArgs(sinceIso, untilIso);
-  const raw = await run("git", ["-C", repoRoot, ...args]);
-  return parseGitLog(raw);
+  try {
+    return parseGitLog(
+      await run("git", ["-C", repoRoot, ...gitLogArgs(sinceIso, untilIso)]),
+    );
+  } catch (cause) {
+    if (!UNKNOWN_OPTION.test(String(cause))) throw cause;
+    return parseGitLog(
+      await run("git", [
+        "-C",
+        repoRoot,
+        ...gitLogArgs(sinceIso, untilIso, false),
+      ]),
+    );
+  }
 }
 
 function run(command: string, args: readonly string[]): Promise<string> {

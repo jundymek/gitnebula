@@ -13,16 +13,31 @@ git -C <root> log \
     -M \
     -z \
     --name-status \
-    --since=<windowAnchor − windowDays> \
+    --since-as-filter=<windowAnchor − windowDays> \
     --until=<windowAnchor> \
     --format=%x1e%H%x1f%ct%x1f%ae
 ```
 
 Piece by piece:
 
-- **`--since` / `--until`** bracket the analysis window. Both ends come from
-  `Config.windowAnchor` (AD-13); the analyzer never reads the clock, which is
-  also what an ESLint rule enforces for this package (AD-4).
+- **`--since-as-filter` / `--until`** bracket the analysis window. Both ends
+  come from `Config.windowAnchor` (AD-13); the analyzer never reads the clock,
+  which is also what an ESLint rule enforces for this package (AD-4).
+
+  The lower bound is **`--since-as-filter`, not `--since`**, and the difference
+  is data loss rather than speed. `--since` is a traversal *cutoff*: git stops
+  walking as soon as it meets a commit older than the bound. Commit dates are
+  not reliably monotonic — clock skew, a rebase, an imported history — so an
+  in-window commit sitting behind an older-dated descendant is never visited.
+  Demonstrated on a two-commit repository (ancestor dated 2025-06, descendant
+  dated 2024-01, window 2025): `--since` returns **nothing**,
+  `--since-as-filter` correctly returns the ancestor. `--until` needs no
+  equivalent — it skips newer commits without halting the walk.
+
+  `--since-as-filter` needs git ≥ 2.37. Rather than spend a process probing the
+  version on every run, the correct flag is tried first and `--since` is used
+  only if git rejects it, so current git pays nothing and older git still
+  works, with the cutoff as its documented cost.
 - **`-M`** detects renames and emits them as `R<score>` records with both
   paths, which is where the old→new mapping comes from.
 - **`-z`** NUL-terminates every path, so paths containing spaces, quotes or
@@ -147,7 +162,7 @@ turned into an empty commit list.
 | `src/metrics.ts`        | NEW    | per-node activity, nearest-rank P95, churn                        |
 | `src/cochange.ts`       | NEW    | pair counting, ADR-0005 bounds, stable sort                       |
 | `src/index.ts`          | UPDATE | `analyze` + the pure `computeGitResult`; scaffold seam retired    |
-| `src/*.test.ts`         | NEW    | 67 tests; `index.test.ts` holds the fixture-repo snapshot         |
+| `src/*.test.ts`         | NEW    | 70 tests; `index.test.ts` holds the fixture-repo snapshot         |
 
 `analyze` takes `{ root, scan }` — `ScanResult` is the contract-typed part; the
 envelope is package-local because the contract exports result shapes, not input
