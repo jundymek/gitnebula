@@ -162,6 +162,22 @@ describe("parseGitLog", () => {
     expect(commit?.changes[0]?.path).toBe(path);
   });
 
+  it("keeps an author email containing the field separator whole", () => {
+    // %ae is repository-controlled: git permits nearly any byte in a commit
+    // header. Truncating at the separator would merge two distinct authors
+    // into one identity and undercount `authors`.
+    const first = parseGitLog(
+      record("c1", "100", `od${US}d@x.invalid`, "M", "a.ts"),
+    );
+    const second = parseGitLog(
+      record("c2", "100", `od${US}e@x.invalid`, "M", "a.ts"),
+    );
+
+    expect(first[0]?.authorEmail).toBe(`od${US}d@x.invalid`);
+    expect(second[0]?.authorEmail).toBe(`od${US}e@x.invalid`);
+    expect(first[0]?.authorEmail).not.toBe(second[0]?.authorEmail);
+  });
+
   it("does not mistake a path containing the record separator for a commit", () => {
     // POSIX forbids only NUL and `/` in a filename, so 0x1e is legal in one.
     // Treating every 0x1e in the stream as a record boundary would split the

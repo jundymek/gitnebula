@@ -186,7 +186,7 @@ turned into an empty commit list.
 | `src/metrics.ts`        | NEW    | per-node activity, nearest-rank P95, churn                        |
 | `src/cochange.ts`       | NEW    | pair counting, ADR-0005 bounds, stable sort                       |
 | `src/index.ts`          | UPDATE | `analyze` + the pure `computeGitResult`; scaffold seam retired    |
-| `src/*.test.ts`         | NEW    | 71 tests; `index.test.ts` holds the fixture-repo snapshot         |
+| `src/*.test.ts`         | NEW    | 72 tests; `index.test.ts` holds the fixture-repo snapshot         |
 
 `analyze` takes `{ root, scan }` — `ScanResult` is the contract-typed part; the
 envelope is package-local because the contract exports result shapes, not input

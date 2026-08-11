@@ -123,7 +123,7 @@ export function parseGitLog(raw: string): RawCommit[] {
     // Only tested here — a position where a status or a new commit may start.
     if (token.startsWith(RECORD_SEP)) {
       flush();
-      const [hash = "", committedAt = "", authorEmail = ""] = token
+      const [hash = "", committedAt = "", ...rest] = token
         .slice(RECORD_SEP.length)
         .split(FIELD_SEP);
       header =
@@ -132,7 +132,13 @@ export function parseGitLog(raw: string): RawCommit[] {
           : {
               hash,
               committedAt: Number.parseInt(committedAt, 10),
-              authorEmail: authorEmail.toLowerCase(),
+              // The email is the trailing field and is repository-controlled —
+              // git lets a commit header carry almost any byte in it, 0x1f
+              // included. Rejoining the remainder keeps such an address whole;
+              // splitting it would truncate the identity and could merge two
+              // distinct authors into one. The hash and timestamp before it are
+              // fixed-format and cannot contain the separator.
+              authorEmail: rest.join(FIELD_SEP).toLowerCase(),
             };
       i += 1;
       continue;
