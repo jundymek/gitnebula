@@ -17,7 +17,7 @@ open reference/mockup.html
 ## Setup
 
 - [ ] `pnpm lint` exits 0
-- [ ] `pnpm test` exits 0 (134 tests in `@gitnebula/viz`)
+- [ ] `pnpm test` exits 0 (141 tests in `@gitnebula/viz`)
 - [ ] `pnpm --filter @gitnebula/viz build` exits 0
 
 ## First load (AC-1, AC-2)
@@ -78,8 +78,10 @@ GITNEBULA_FIXTURE=cyclic-imports pnpm --filter @gitnebula/viz dev
 - [ ] Scroll down zooms out the same way
 - [ ] Keep scrolling in: the zoom stops. Keep scrolling out: it stops. Neither
       limit makes the map slide sideways
-- [ ] Resize the window: the map stays framed and stays sharp (no blurring on a
-      Retina display)
+- [ ] Resize the window: the map stays centred on the same point at the same
+      zoom, and stays sharp (no blurring on a Retina display). It does **not**
+      re-fit — that would throw away a camera you had positioned yourself, and
+      the mockup does not re-fit either
 
 ## Version refusal (AC-1, FR-6)
 

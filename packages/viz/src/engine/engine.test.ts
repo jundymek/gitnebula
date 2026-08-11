@@ -161,6 +161,44 @@ describe("CanvasGraphEngine — FR-15 pan and zoom", () => {
     expect(engine.getCamera().k).toBe(MIN_ZOOM);
   });
 
+  it("clamps a zoom pushed in through setCamera", () => {
+    engine.setCamera({ k: 0 });
+    expect(engine.getCamera().k).toBe(MIN_ZOOM);
+    engine.setCamera({ k: -3 });
+    expect(engine.getCamera().k).toBe(MIN_ZOOM);
+    engine.setCamera({ k: Number.POSITIVE_INFINITY });
+    expect(engine.getCamera().k).toBe(MAX_ZOOM);
+    engine.setCamera({ k: 2 });
+    expect(engine.getCamera().k).toBe(2);
+  });
+
+  it("settles a fit promise that pointer input interrupts", async () => {
+    let resolved = false;
+    const flight = engine.fit().then(() => {
+      resolved = true;
+    });
+    engine.frame(10_000);
+    expect(resolved).toBe(false);
+
+    // A drag takes the camera by hand; the flight is cancelled, but its
+    // promise must not stay pending forever.
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 10, clientY: 10 }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 40, clientY: 10 }),
+    );
+    await flight;
+    expect(resolved).toBe(true);
+  });
+
+  it("settles a pending fit when the engine is destroyed", async () => {
+    const flight = engine.fit();
+    engine.frame(10_000);
+    engine.destroy();
+    await expect(flight).resolves.toBeUndefined();
+  });
+
   it("picks the node under a screen point", () => {
     const target = engine.nodes.find((node) => node.kind === "module")!;
     void engine.fit({ durationMs: 0 });

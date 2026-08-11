@@ -67,6 +67,45 @@ describe("loader — FR-6 version gate", () => {
     if (!result.ok) expect(result.failure.kind).toBe("malformed");
   });
 
+  it("refuses a same-major document that is not actually a document", () => {
+    // The version gate matching is not the same as the file being readable:
+    // this one used to pass and then blank the page on `repo.name`.
+    const result = checkVersion({ schemaVersion: "1.0" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.kind).toBe("malformed");
+      expect(result.failure.detail).toContain("nodes");
+    }
+  });
+
+  it.each([
+    ["repo", { schemaVersion: "1.0", nodes: [], edges: [], cochanges: [] }],
+    [
+      "repo.stats",
+      {
+        schemaVersion: "1.0",
+        nodes: [],
+        edges: [],
+        cochanges: [],
+        repo: { name: "x" },
+      },
+    ],
+    [
+      "repo.stats.languages",
+      {
+        schemaVersion: "1.0",
+        nodes: [],
+        edges: [],
+        cochanges: [],
+        repo: { name: "x", stats: { files: 1, loc: 1, commits: 1 } },
+      },
+    ],
+  ])("refuses a document missing %s", (_field, document) => {
+    const result = checkVersion(document);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.kind).toBe("malformed");
+  });
+
   it("refuses a version whose major is not a number", () => {
     const result = checkVersion({ schemaVersion: "next" });
     expect(result.ok).toBe(false);

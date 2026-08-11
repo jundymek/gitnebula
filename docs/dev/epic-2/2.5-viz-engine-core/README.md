@@ -9,7 +9,7 @@ Run it:
 
 ```bash
 pnpm --filter @gitnebula/viz dev            # serves synthetic-100x2000
-pnpm --filter @gitnebula/viz test           # 134 tests
+pnpm --filter @gitnebula/viz test           # 141 tests
 ```
 
 ## How the fixture reaches `./analysis.json` (AC-1)
@@ -36,8 +36,13 @@ into the contract package's internals (AD-2).
 
 `loadAnalysis()` fetches that URL once, then `checkVersion()` compares the
 document's `schemaVersion` major against the contract's
-`SUPPORTED_SCHEMA_MAJOR`. A mismatch renders the FR-6 screen, which names
-**both** versions — "unsupported" without the numbers tells the reader nothing
+`SUPPORTED_SCHEMA_MAJOR`, and follows it with a structural check of the fields
+the Viewer immediately dereferences. The version gate alone is not enough —
+`{"schemaVersion": "1.0"}` passes it and then blanks the page on `repo.name`.
+This is a shape guard, not schema validation: running ajv in the browser would
+pull the validator and the schema into the bundle to re-check what the pipeline
+already validated at emit time. A version mismatch renders the FR-6 screen,
+which names **both** versions — "unsupported" without the numbers tells the reader nothing
 they can act on. Unreachable and unparsable documents get their own screens for
 the same reason.
 

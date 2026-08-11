@@ -23,6 +23,8 @@ describe("camera — FR-15 pan and zoom", () => {
     expect(clampZoom(99)).toBe(MAX_ZOOM);
     expect(clampZoom(2.5)).toBe(2.5);
     expect(clampZoom(Number.NaN)).toBe(MIN_ZOOM);
+    expect(clampZoom(Number.POSITIVE_INFINITY)).toBe(MAX_ZOOM);
+    expect(clampZoom(Number.NEGATIVE_INFINITY)).toBe(MIN_ZOOM);
   });
 
   it("keeps the world point under the cursor while zooming", () => {

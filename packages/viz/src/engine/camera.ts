@@ -24,7 +24,9 @@ export const IDENTITY_CAMERA: CameraState = { x: 0, y: 0, k: 1 };
 
 /** FR-15's clamp. */
 export function clampZoom(k: number): number {
-  if (!Number.isFinite(k)) return MIN_ZOOM;
+  // NaN has no side of the range to fall to, so it falls to the floor.
+  // Infinities do: `Math.min`/`Math.max` clamp them to the right end.
+  if (Number.isNaN(k)) return MIN_ZOOM;
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, k));
 }
 

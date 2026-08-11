@@ -21,6 +21,7 @@ import {
   ZOOM_OUT_STEP,
 } from "./constants.js";
 import {
+  clampZoom,
   fitCamera,
   IDENTITY_CAMERA,
   easeOutCubic,
@@ -157,11 +158,11 @@ export class CanvasGraphEngine implements GraphEngine {
     // reproduce the load layout exactly, not continue the earlier stream
     // (AD-6 — "the same analysis.json always settles into the same map").
     this.rng = mulberry32(this.seed);
+    this.cancelFlight();
     this.layout?.stop();
     this.layout = new ModuleLayout(graph, this.rng);
     this.stars = seedStars(this.rng);
     this.camera = IDENTITY_CAMERA;
-    this.flight = null;
     this.settleStartMs = null;
     this.settleAnnounced = false;
     this.emitter.emit("settle-start", { reason });
@@ -199,6 +200,7 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.removeEventListener("pointercancel", this.onPointerUp);
     this.canvas.removeEventListener("wheel", this.onWheel);
     globalThis.removeEventListener?.("resize", this.onWindowResize);
+    this.cancelFlight();
     this.layout?.stop();
     this.emitter.clear();
   }
@@ -243,19 +245,34 @@ export class CanvasGraphEngine implements GraphEngine {
     this.camera = {
       x: camera.x ?? this.camera.x,
       y: camera.y ?? this.camera.y,
-      k: camera.k ?? this.camera.k,
+      // Clamped here too, not only on the wheel path: FR-15's range is an
+      // invariant of the camera, and a `k` of 0 or Infinity from a caller
+      // would divide through picking and panning.
+      k: clampZoom(camera.k ?? this.camera.k),
     };
     this.emitter.emit("camera", { camera: this.camera });
   }
 
   panBy(dx: number, dy: number): void {
-    this.flight = null;
+    this.cancelFlight();
     this.setCamera(panBy(this.camera, dx, dy));
   }
 
   zoomAt(screen: ScreenPoint, factor: number): void {
-    this.flight = null;
+    this.cancelFlight();
     this.setCamera(zoomAt(this.camera, this.viewport, screen, factor));
+  }
+
+  /**
+   * Drop the running flight, resolving its promise. A caller taking the
+   * camera by hand cancels the flight, but a `fit()` whose promise never
+   * settles would hang whatever awaited it.
+   */
+  private cancelFlight(): void {
+    const flight = this.flight;
+    if (!flight) return;
+    this.flight = null;
+    flight.resolve();
   }
 
   fit(options: FitOptions = {}): Promise<void> {
@@ -280,7 +297,7 @@ export class CanvasGraphEngine implements GraphEngine {
     target: CameraState,
     durationMs: number,
   ): Promise<void> {
-    this.flight?.resolve();
+    this.cancelFlight();
     return new Promise<void>((resolve) => {
       this.flight = {
         from: this.camera,

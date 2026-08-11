@@ -101,7 +101,57 @@ export function checkVersion(parsed: unknown): LoadResult {
     };
   }
 
+  const shapeError = describeShapeProblem(parsed);
+  if (shapeError !== null) {
+    return {
+      ok: false,
+      failure: {
+        kind: "malformed",
+        title: "analysis.json is not a gitnebula document",
+        detail: `It declares schemaVersion ${version}, but ${shapeError}. Re-run gitnebula to regenerate the file.`,
+      },
+    };
+  }
+
   return { ok: true, document: parsed as AnalysisDocument };
+}
+
+/**
+ * A structural check on the fields the Viewer immediately dereferences.
+ *
+ * Not full schema validation: running ajv in the browser would pull the
+ * validator and the schema into the bundle to re-check what the pipeline
+ * already validated at emit time (story 1.2, AD-9), and story 4.1 wants that
+ * bundle self-contained. But "the version matched" is not the same as "this is
+ * a document" — a file containing only `{"schemaVersion": "1.0"}` passes the
+ * gate and then blanks the page on `repo.name`. This turns that into the
+ * malformed screen, which is what FR-6 asks for.
+ */
+function describeShapeProblem(parsed: unknown): string | null {
+  const document = parsed as Partial<AnalysisDocument>;
+  if (!Array.isArray(document.nodes)) return "its `nodes` array is missing";
+  if (!Array.isArray(document.edges)) return "its `edges` array is missing";
+  if (!Array.isArray(document.cochanges)) {
+    return "its `cochanges` array is missing";
+  }
+  const repo = document.repo;
+  if (typeof repo !== "object" || repo === null) {
+    return "it carries no `repo` metadata";
+  }
+  if (typeof repo.name !== "string") return "its `repo.name` is missing";
+  const stats = repo.stats;
+  if (typeof stats !== "object" || stats === null) {
+    return "it carries no `repo.stats`";
+  }
+  for (const field of ["files", "loc", "commits"] as const) {
+    if (typeof stats[field] !== "number") {
+      return `its \`repo.stats.${field}\` is missing`;
+    }
+  }
+  if (typeof stats.languages !== "object" || stats.languages === null) {
+    return "its `repo.stats.languages` map is missing";
+  }
+  return null;
 }
 
 function readSchemaVersion(parsed: unknown): string | null {
