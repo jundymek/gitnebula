@@ -91,9 +91,13 @@ These were settled here and are binding on the analyzers:
   per-kind cap are tunable analyzer policy under the ≤ 5 MB budget (FR-7);
   baking them into the frozen schema would turn a tuning change into a
   version bump. githist enforces the policy.
-- **`format: "date-time"` is registered locally**, as an RFC 3339 regex in
-  `validate.ts`, instead of pulling in `ajv-formats`. It is the only format
-  the contract uses.
+- **`format: "date-time"` is registered locally** in `validate.ts` instead of
+  pulling in `ajv-formats`; it is the only format the contract uses. It checks
+  RFC 3339 *semantics*, not just digit placement: component ranges and the
+  calendar, so `2026-02-29` is rejected in a non-leap year and
+  `2026-99-99T25:61:61Z` cannot reach the Viewer as an `Invalid Date`. A leap
+  second (`:60`) is accepted, per RFC 3339 §5.6 — `git log` reproduces whatever
+  a commit recorded.
 
 ## Environment neutrality (AC-5)
 

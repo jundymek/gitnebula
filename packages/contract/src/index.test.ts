@@ -256,6 +256,64 @@ describe("validateAnalysis", () => {
     );
   });
 
+  // The schema declares `format: "date-time"`, which promises RFC 3339
+  // semantics — not merely the right number of digits in the right places. A
+  // shape-only check would let `2026-99-99T25:61:61Z` reach the Viewer, where
+  // `new Date(...)` turns it into `Invalid Date` and the panel renders NaN.
+  const validInstants = [
+    "2026-08-11T10:00:00.000Z", // toISOString()
+    "2026-08-11T10:00:00Z", // no fraction
+    "2026-08-11t10:00:00z", // RFC 3339 allows lowercase
+    "2026-08-11T12:00:00+02:00", // git log --date=iso-strict
+    "2026-08-11T08:00:00-02:30", // half-hour offset
+    "2024-02-29T00:00:00Z", // leap day in a leap year
+    "2026-12-31T23:59:60Z", // RFC 3339 permits a leap second
+  ];
+
+  it.each(validInstants)("accepts the RFC 3339 instant %s", (instant) => {
+    const document = clone(minimalDocument());
+    document.repo.analyzedAt = instant;
+
+    expect(validateAnalysis(document).valid).toBe(true);
+  });
+
+  const invalidInstants = [
+    "2026-99-99T25:61:61Z", // every component out of range
+    "2026-13-01T00:00:00Z", // month 13
+    "2026-00-01T00:00:00Z", // month 0
+    "2026-08-32T00:00:00Z", // day 32
+    "2026-08-00T00:00:00Z", // day 0
+    "2026-02-30T00:00:00Z", // February never has 30 days
+    "2026-02-29T00:00:00Z", // 2026 is not a leap year
+    "2026-04-31T00:00:00Z", // April has 30 days
+    "2026-08-11T24:00:00Z", // hour 24
+    "2026-08-11T10:60:00Z", // minute 60
+    "2026-08-11T10:00:61Z", // second 61
+    "2026-08-11T10:00:00+24:00", // offset hour out of range
+    "2026-08-11T10:00:00+02:60", // offset minute out of range
+    "2026-08-11T10:00:00", // no timezone — RFC 3339 requires one
+    "2026-08-11 10:00:00Z", // space instead of T
+    "not a date",
+  ];
+
+  it.each(invalidInstants)("rejects the malformed instant %s", (instant) => {
+    const document = clone(minimalDocument());
+    document.repo.analyzedAt = instant;
+
+    expect(errorsOf(document).map((error) => error.path)).toContain(
+      "/repo/analyzedAt",
+    );
+  });
+
+  it("applies the same date-time rule to a node's lastChangedAt", () => {
+    const document = clone(minimalDocument());
+    document.nodes[0]!.lastChangedAt = "2026-02-29T00:00:00Z";
+
+    expect(errorsOf(document).map((error) => error.path)).toContain(
+      "/nodes/0/lastChangedAt",
+    );
+  });
+
   it("rejects a non-object document with a root pointer", () => {
     const errors = errorsOf("not a document");
 
