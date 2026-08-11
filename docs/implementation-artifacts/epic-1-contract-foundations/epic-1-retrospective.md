@@ -184,10 +184,15 @@ review, not assumed.
 2.3 (githist) — all three declare `Depends_on: []`. The contract is frozen and
 validated and the fixtures are byte-reproducible, which is everything they need.
 
-**2.4 (cli pipeline) is launchable but not immediately**: its spec declares
-`Depends_on: [2.1-scanner-core]` and requires the scanner merged into its base
-before work starts. It joins the wave behind 2.1, exactly as 1.2 sat behind 1.1
-in this epic.
+**2.4 (cli pipeline) can launch in the same wave, but its pipeline wiring
+cannot.** Its spec declares `Depends_on: [2.1-scanner-core]` and needs the
+scanner in its base *for integration* — while explicitly directing the agent to
+build the config resolver and progress plumbing while waiting, and to integrate
+against contract types with inert stubs until each analyzer merges. Launching
+the story and wiring the scanner-dependent pipeline are two different moments;
+only the second waits. Epic 1's chain was serial because each story needed the
+previous one's code to exist at all; Epic 2's is not, and treating it as serial
+would idle an agent for no reason.
 
 **2.5 (viz engine core) stays blocked, and so do 3.3 and 3.5**, until the
 maintainer accepts the 1.4 verdict. That acceptance is precisely what decides
