@@ -10,7 +10,6 @@ this document quotes it rather than restating it:
 
 ```sh
 git -C <root> log \
-    --no-merges \
     -M \
     -z \
     --name-status \
@@ -34,11 +33,15 @@ Piece by piece:
   `-z` has already spent NUL on paths. The commit **message is deliberately not
   requested**, so no user-controlled text can reach the parser and forge a
   record boundary.
-- **`--no-merges`**: under `--name-status` a merge prints no file records at
-  all, so it can never attribute a change to a node. Counting merges in the
-  repo-wide total while ignoring their content would make that total disagree
-  with the per-node numbers, so `GitResult.commits` means "commits in the
-  window that changed files".
+- **No `--no-merges`**, deliberately. `GitResult.commits` is contractually the
+  repo-wide count and `lastCommitAt` the newest instant in the window, so
+  filtering merges would undercount on any merge-based workflow and could
+  report a stale last-changed instant. Merges therefore stay in the stream and
+  attribute to no node: git prints no file records for a merge, which is
+  correct, since its content already arrived through the commits being merged.
+  A `commit --allow-empty` behaves identically — counted repo-wide, attributed
+  nowhere. (This reverses an earlier decision in this branch; the measurement
+  that settled it is in the story's Dev Agent Record.)
 
 ### Why `--follow` is banned
 

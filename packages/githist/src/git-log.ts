@@ -45,11 +45,19 @@ const TWO_PATH_STATUS = /^[RC]/;
  * (thousands on a real repo) and it cannot observe co-change at all, since a
  * per-file log never shows which files moved together. `-M` gives the same
  * rename information inline, in the one pass this analyzer is allowed.
+ *
+ * `--no-merges` is deliberately absent too. Merges must stay in the stream
+ * because `GitResult.commits` is contractually the repo-wide count and
+ * `lastCommitAt` the newest instant in the window — on a merge-based workflow,
+ * filtering them would undercount and could report a stale last-changed
+ * instant. Their *file* records are another matter: git prints none for a
+ * merge, and that is correct, since a merge's content already arrived through
+ * the commits being merged. So a merge counts once, repo-wide, and attributes
+ * to no node.
  */
 export function gitLogArgs(sinceIso: string, untilIso: string): string[] {
   return [
     "log",
-    "--no-merges",
     "-M",
     "-z",
     "--name-status",

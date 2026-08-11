@@ -123,6 +123,10 @@ export function computeGitResult(
   let lastCommitAt: number | null = null;
 
   for (const [index, commit] of commits.entries()) {
+    // Every commit in the window counts towards the repo-wide figures, which
+    // is what the contract says they are. A changeless commit — a merge, or
+    // `commit --allow-empty` — simply attributes to no node below: it has no
+    // paths, so there is nothing to drop and nothing to warn about.
     if (lastCommitAt === null || commit.committedAt > lastCommitAt) {
       lastCommitAt = commit.committedAt;
     }

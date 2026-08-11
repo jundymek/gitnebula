@@ -32,7 +32,6 @@ describe("gitLogArgs", () => {
     );
     expect(args).toEqual([
       "log",
-      "--no-merges",
       "-M",
       "-z",
       "--name-status",
@@ -44,6 +43,12 @@ describe("gitLogArgs", () => {
 
   it("never passes --follow (banned by AD-13)", () => {
     expect(gitLogArgs("a", "b")).not.toContain("--follow");
+  });
+
+  it("keeps merges in the stream, so the repo-wide count stays repo-wide", () => {
+    // git prints no file records for a merge, so it attributes to no node —
+    // but it is still a commit in the window and must be counted as one.
+    expect(gitLogArgs("a", "b")).not.toContain("--no-merges");
   });
 });
 

@@ -336,6 +336,29 @@ describe("computeGitResult", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("counts a changeless commit repo-wide but attributes it to no node", () => {
+    // A merge (git prints no file records for one) or `commit --allow-empty`.
+    const result = computeGitResult(
+      [
+        commit("merge", 400, "ada@x.invalid"),
+        commit("c1", 100, "ada@x.invalid", touch("web/api.ts")),
+      ],
+      scanOf(node("web/", "module", null), node("web/api.ts", "file", "web/")),
+    );
+
+    expect(result.commits).toBe(2);
+    // The newest instant in the window is the merge's, even though it changed
+    // no file — `lastCommitAt` is repo-wide, unlike a node's lastChangedAt.
+    expect(result.lastCommitAt).toBe("1970-01-01T00:06:40.000Z");
+    expect(result.history["web/api.ts"]).toEqual({
+      churn: 1,
+      commits: 1,
+      authors: 1,
+      lastChangedAt: "1970-01-01T00:01:40.000Z",
+    });
+    expect(result.warnings).toEqual([]);
+  });
+
   it("reports progress once per commit", () => {
     const seen: Array<[number, number]> = [];
     computeGitResult(
