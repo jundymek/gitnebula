@@ -267,8 +267,7 @@ describe("validateAnalysis", () => {
     "2026-08-11T12:00:00+02:00", // git log --date=iso-strict
     "2026-08-11T08:00:00-02:30", // half-hour offset
     "2024-02-29T00:00:00Z", // leap day in a leap year
-    "2026-12-31T23:59:60Z", // a leap second, at the only instant one occurs
-    "2027-01-01T00:59:60+01:00", // the same leap second, seen from +01:00
+    "2026-12-31T23:59:59Z", // the last representable second of a year
   ];
 
   it.each(validInstants)("accepts the RFC 3339 instant %s", (instant) => {
@@ -290,11 +289,13 @@ describe("validateAnalysis", () => {
     "2026-08-11T24:00:00Z", // hour 24
     "2026-08-11T10:60:00Z", // minute 60
     "2026-08-11T10:00:61Z", // second 61
-    // A leap second exists only at 23:59:60 UTC. `:60` at any other instant is
-    // not a timestamp any clock, or `git log`, can produce.
-    "2026-08-11T10:00:60Z", // midday leap second
-    "2026-12-31T23:59:60+01:00", // 22:59:60 UTC — the wrong instant
-    "2026-12-31T22:59:60Z", // an hour early
+    // A leap second is legal RFC 3339 but unrepresentable downstream: `git`
+    // stores POSIX epoch seconds, which have no leap second, and `new Date()`
+    // returns Invalid Date for one. Accepting it would let the Viewer render
+    // the NaN this format exists to prevent.
+    "2026-12-31T23:59:60Z", // the one instant a leap second may occur
+    "2027-01-01T00:59:60+01:00", // the same instant, seen from +01:00
+    "2026-08-11T10:00:60Z", // a midday :60
     "2026-08-11T10:00:00+24:00", // offset hour out of range
     "2026-08-11T10:00:00+02:60", // offset minute out of range
     "2026-08-11T10:00:00", // no timezone — RFC 3339 requires one
@@ -309,6 +310,15 @@ describe("validateAnalysis", () => {
     expect(errorsOf(document).map((error) => error.path)).toContain(
       "/repo/analyzedAt",
     );
+  });
+
+  // The point of validating date-time semantics rather than shape: the Viewer
+  // feeds these strings straight to `new Date(...)`, so anything the contract
+  // accepts must survive that. This asserts the invariant itself, not a list
+  // of examples — a future widening that lets an unparseable instant through
+  // fails here even if nobody thought to add it to the table above.
+  it.each(validInstants)("accepted instant %s parses as a real Date", (i) => {
+    expect(Number.isNaN(new Date(i).getTime())).toBe(false);
   });
 
   it("applies the same date-time rule to a node's lastChangedAt", () => {

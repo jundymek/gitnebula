@@ -29,8 +29,10 @@ export type ValidationResult =
 // `2026-99-99T25:61:61Z`, which the Viewer turns into an `Invalid Date` and
 // renders as NaN in the panel — so the component ranges and the calendar are
 // checked too, which is what `format: "date-time"` promises.
+// The offset sign is not captured: only the magnitude of its components is
+// bounded, and no arithmetic is done on the offset.
 const RFC3339_DATE_TIME =
-  /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|([+-])(\d{2}):(\d{2}))$/;
+  /^(\d{4})-(\d{2})-(\d{2})[Tt](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:[Zz]|[+-](\d{2}):(\d{2}))$/;
 
 /** Days per month, 1-indexed; February is resolved against the year. */
 const DAYS_IN_MONTH = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -42,14 +44,18 @@ function isLeapYear(year: number): boolean {
 /**
  * True when `value` is a full RFC 3339 timestamp: correct shape, every
  * component in range, and a day that exists in that month of that year.
+ *
+ * Every accepted value parses with `new Date(...)` — asserted in the tests,
+ * because that is what the Viewer does with it.
  */
 function isRfc3339DateTime(value: string): boolean {
   const match = RFC3339_DATE_TIME.exec(value);
   if (match === null) return false;
 
   const [, year, month, day, hour, minute, second] = match.map(Number);
-  const offsetHour = match[8] === undefined ? 0 : Number(match[8]);
-  const offsetMinute = match[9] === undefined ? 0 : Number(match[9]);
+  // Absent for a `Z` timezone, which is an offset of zero.
+  const offsetHour = match[7] === undefined ? 0 : Number(match[7]);
+  const offsetMinute = match[8] === undefined ? 0 : Number(match[8]);
 
   if (month! < 1 || month! > 12) return false;
 
@@ -57,21 +63,14 @@ function isRfc3339DateTime(value: string): boolean {
     month === 2 && isLeapYear(year!) ? 29 : DAYS_IN_MONTH[month!]!;
   if (day! < 1 || day! > lastDay) return false;
 
-  if (hour! > 23 || minute! > 59) return false;
-  if (offsetHour > 23 || offsetMinute > 59) return false;
+  // Second 60 is rejected, deliberately, though RFC 3339 §5.6 permits a leap
+  // second. Nothing downstream can represent one: git stores POSIX epoch
+  // seconds, which have no leap second, and `new Date("…T23:59:60Z")` returns
+  // Invalid Date — so accepting it would hand the Viewer exactly the NaN this
+  // format exists to keep out. No producer in this pipeline can emit one.
+  if (hour! > 23 || minute! > 59 || second! > 59) return false;
 
-  if (second! < 60) return true;
-  if (second! > 60) return false;
-
-  // Second 60 is a leap second. RFC 3339 §5.6 permits one, but only at the
-  // instant one actually occurs — 23:59:60 UTC — so the local time is shifted
-  // back by the offset before it is checked. `10:00:60Z` is not a timestamp any
-  // clock can produce, and accepting it would make the format's promise a lie.
-  const offsetMinutes =
-    (match[7] === "-" ? -1 : 1) * (offsetHour * 60 + offsetMinute);
-  const utcMinutes = (hour! * 60 + minute! - offsetMinutes + 1440) % 1440;
-
-  return utcMinutes === 23 * 60 + 59;
+  return offsetHour <= 23 && offsetMinute <= 59;
 }
 
 const ajv = new Ajv2020({

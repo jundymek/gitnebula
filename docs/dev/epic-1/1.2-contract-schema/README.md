@@ -95,9 +95,13 @@ These were settled here and are binding on the analyzers:
   pulling in `ajv-formats`; it is the only format the contract uses. It checks
   RFC 3339 *semantics*, not just digit placement: component ranges and the
   calendar, so `2026-02-29` is rejected in a non-leap year and
-  `2026-99-99T25:61:61Z` cannot reach the Viewer as an `Invalid Date`. A leap
-  second (`:60`) is accepted per RFC 3339 §5.6, but only at the instant one
-  occurs — `23:59:60` UTC, offset-normalized — so `10:00:60Z` is rejected.
+  `2026-99-99T25:61:61Z` cannot reach the Viewer as an `Invalid Date`. The
+  governing invariant, asserted in the tests: **every instant the contract
+  accepts parses with `new Date(...)`**, because that is what the Viewer does
+  with it. A leap second (`:60`) is therefore rejected even though RFC 3339
+  §5.6 permits one — git stores POSIX epoch seconds, which have no leap
+  second, and `new Date("2026-12-31T23:59:60Z")` is `Invalid Date`, so no
+  producer here can emit one and no consumer could read it.
 
 ## Environment neutrality (AC-5)
 
