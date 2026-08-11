@@ -47,6 +47,13 @@ describe("compileLayerRules", () => {
     expect(resolve("weird")).toBe("other");
   });
 
+  it("matches regardless of case", () => {
+    expect(resolve("src/App.TSX")).toBe("frontend");
+    expect(resolve("src/Service.PY")).toBe("backend");
+    expect(resolve("Tests/Thing.py")).toBe("test");
+    expect(resolve("deploy/DOCKERFILE")).toBe("infra");
+  });
+
   it("prepends config overrides so user globs win over the default table", () => {
     const withOverride = compileLayerRules({ "src/**": "infra" });
 

@@ -129,12 +129,21 @@ export const DEFAULT_EXCLUDES: readonly string[] = [
 export type ExcludeMatcher = (relativePath: string) => boolean;
 
 /**
- * Compiles the exclude globs once, up front. `dot: true` because a great many
- * of the paths worth excluding start with a dot, and picomatch hides those by
- * default.
+ * Compiles the exclude globs once, up front.
+ *
+ * `dot: true` because a great many of the paths worth excluding start with a
+ * dot, and picomatch hides those by default.
+ *
+ * `nocase: true` because `logo.PNG` is the same asset as `logo.png` and a
+ * case-sensitive list would quietly let it through. It is also a determinism
+ * argument (AD-4): APFS and NTFS are case-insensitive while ext4 is not, so a
+ * case-sensitive matcher can give two answers for one repository depending on
+ * the machine it is checked out on.
  */
 export function compileExcludes(globs: readonly string[]): ExcludeMatcher {
-  const matchers = globs.map((glob) => picomatch(glob, { dot: true }));
+  const matchers = globs.map((glob) =>
+    picomatch(glob, { dot: true, nocase: true }),
+  );
   return (relativePath: string) =>
     matchers.some((isMatch) => isMatch(relativePath));
 }

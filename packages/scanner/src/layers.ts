@@ -139,8 +139,11 @@ export function compileLayerRules(
     ...Object.entries(overrides).map(([glob, layer]) => ({ glob, layer })),
     ...table,
   ];
+  // `nocase` for the same reason the exclude matcher uses it: `App.TSX` is a
+  // React component and `MAKEFILE` is a makefile, and a case-sensitive table
+  // would classify them differently depending on the checkout's filesystem.
   const compiled = rules.map((rule) => ({
-    isMatch: picomatch(rule.glob, { dot: true }),
+    isMatch: picomatch(rule.glob, { dot: true, nocase: true }),
     layer: rule.layer,
   }));
 

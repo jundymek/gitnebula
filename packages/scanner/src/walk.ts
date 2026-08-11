@@ -23,11 +23,12 @@ const CARRIAGE_RETURN = 0x0d;
 const SPACE = 0x20;
 const NUL = 0x00;
 
+// Carriage return is deliberately absent: it is a line ending here, not
+// blank filler inside a line.
 function isBlankByte(byte: number): boolean {
   return (
     byte === SPACE ||
     byte === TAB ||
-    byte === CARRIAGE_RETURN ||
     byte === VERTICAL_TAB ||
     byte === FORM_FEED
   );
@@ -245,7 +246,12 @@ export async function countLoc(absolutePath: string): Promise<LocResult> {
       for (let i = 0; i < bytesRead; i += 1) {
         const byte = buffer[i] as number;
 
-        if (byte === LINE_FEED) {
+        // Three line endings exist in the wild: LF, CRLF, and the bare CR of
+        // pre-OS X Mac files. Both bytes close the line, and CRLF needs no
+        // special case — the zero-length "line" between its two bytes carries
+        // no content, and lines with no content are not counted. That also
+        // makes a CRLF straddling a chunk boundary a non-event.
+        if (byte === CARRIAGE_RETURN || byte === LINE_FEED) {
           // A candidate cut short by the line ending was never whitespace.
           if (lead !== 0) lineHasContent = true;
           lead = 0;

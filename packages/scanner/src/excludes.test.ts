@@ -79,6 +79,18 @@ describe("compileExcludes", () => {
     expect(isExcluded("node_modules")).toBe(false);
   });
 
+  it("matches regardless of case", () => {
+    const isExcluded = compileExcludes(DEFAULT_EXCLUDES);
+
+    // Uppercase asset extensions are ordinary in repositories authored on
+    // case-insensitive filesystems, and they are the same assets.
+    expect(isExcluded("docs/LOGO.PNG")).toBe(true);
+    expect(isExcluded("docs/Photo.JPG")).toBe(true);
+    expect(isExcluded("docs/Manual.PDF")).toBe(true);
+    expect(isExcluded("Node_Modules")).toBe(true);
+    expect(isExcluded("src/Main.TS")).toBe(false);
+  });
+
   it("matches dotted paths, which picomatch hides by default", () => {
     const isExcluded = compileExcludes(["**/.secret"]);
 

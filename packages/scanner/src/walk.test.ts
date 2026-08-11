@@ -127,6 +127,23 @@ describe("countLoc — Unicode whitespace", () => {
     expect(await locOf(`${padding}\n\u00A0\n`)).toBe(1);
   });
 
+  it("counts a bare carriage return as a line ending", async () => {
+    // Pre-OS X Mac files use CR alone. Treating it as blank filler would
+    // report the whole file as a single line.
+    expect(await locOf("a = 1\rb = 2\rc = 3\r")).toBe(3);
+    expect(await locOf("a = 1\r\rb = 2\r")).toBe(2);
+  });
+
+  it("counts a CRLF pair as one line ending, not two", async () => {
+    expect(await locOf("a = 1\r\nb = 2\r\n")).toBe(2);
+    expect(await locOf("a = 1\r\n\r\nb = 2\r\n")).toBe(2);
+  });
+
+  it("counts a CRLF split across a chunk boundary as one line ending", async () => {
+    const padding = "x".repeat(64 * 1024 - 1);
+    expect(await locOf(`${padding}\r\ny = 2\r\n`)).toBe(2);
+  });
+
   it("treats a truncated sequence at end of file as content", async () => {
     // A lone 0xC2 is not valid UTF-8 — it is bytes, so the line is not blank.
     expect(await locOf(Buffer.from([0xc2]))).toBe(1);
