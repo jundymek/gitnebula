@@ -15,7 +15,7 @@ development_status:
   # was waiting for; that acceptance released 2.5 / 3.3 / 3.5.
   1.4-perf-spike: done
   # Epic 2 — Analysis Pipeline and Living Map (-> M2)
-  2.1-scanner-core: backlog
+  2.1-scanner-core: review
   2.2-deps-ts-imports: review
   2.3-githist-metrics: backlog
   2.4-cli-pipeline: backlog
