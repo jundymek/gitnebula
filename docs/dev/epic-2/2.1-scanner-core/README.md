@@ -29,7 +29,10 @@ analyze(input: ScanInput, config: Config, onProgress?: ScanProgress): Promise<Sc
 
 `DEFAULT_EXCLUDES` and `LAYER_RULES` are exported as **data**, not behaviour —
 cli resolves configuration against them and tuning them never touches analyzer
-logic (AD-3, ADR-0002).
+logic (AD-3, ADR-0002). Both are matched case-insensitively: `logo.PNG` is the
+same asset as `logo.png`, and since APFS and NTFS fold case where ext4 does
+not, a case-sensitive matcher would let one repository classify two ways
+depending on the machine holding the checkout (AD-4).
 
 ## How each part decides
 
@@ -38,7 +41,8 @@ Blank and whitespace-only lines do not count; comments do. Whitespace means
 Unicode whitespace, not merely ASCII — a line holding one no-break space or an
 ideographic space is blank to a reader and is counted as blank here, which the
 counter resolves by recognizing those characters' byte sequences rather than
-by decoding UTF-8 in the hot loop. Stripping comments
+by decoding UTF-8 in the hot loop. All three line endings in the wild end a
+line: LF, CRLF, and the bare CR of pre-OS X Mac files. Stripping comments
 would need a parser per language, which is `deps`' business. Files are streamed
 in 64 KB chunks and never retained whole, so a checked-in 40 MB blob costs one
 chunk of memory.
@@ -229,7 +233,7 @@ calls `analyze` for real. It is marked as such in the source.
 ## Verification
 
 ```sh
-pnpm --filter @gitnebula/scanner test   # 140 tests
+pnpm --filter @gitnebula/scanner test   # 145 tests
 pnpm lint && pnpm test                  # both exit 0, whole workspace
 ```
 
