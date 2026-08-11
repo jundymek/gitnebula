@@ -37,22 +37,22 @@ evidence. Check `runValid`, `fixtureSource`, `settleTimedOut` and
 
 ## What to look at while it runs
 
-- [ ] Phase (a): the layout visibly expands and comes to rest — it stops on
+- [x] Phase (a): the layout visibly expands and comes to rest — it stops on
       its own, no manual freeze.
-- [ ] Phase (b): panning and zooming is smooth and the layout does **not**
+- [x] Phase (b): panning and zooming is smooth and the layout does **not**
       drift; frozen means frozen (module positions identical at the start and
       end of the sweep).
-- [ ] Phase (c): as the camera pans, modules entering the viewport pop open
+- [x] Phase (c): as the camera pans, modules entering the viewport pop open
       into their file nodes, and modules leaving the viewport stay collapsed —
       file nodes never appear across the whole map at once (ADR-0006).
-- [ ] Phase (c): when a module unfolds, the rest of the map stays still. Its
+- [x] Phase (c): when a module unfolds, the rest of the map stays still. Its
       members fan out from the module's position; nothing outside it jumps.
-- [ ] No visible stutter that the numbers do not already account for; if you
+- [x] No visible stutter that the numbers do not already account for; if you
       see one the numbers miss, that is a finding worth reporting.
 
 ## Owner gate
 
-- [ ] The maintainer accepts the verdict recorded in `README.md`.
+- [x] The maintainer accepts the verdict recorded in `README.md`.
 
 This box is the story's acceptance gate and is **not** the implementing
 agent's to tick — superman reports the verdict, the owner closes it at the M1
