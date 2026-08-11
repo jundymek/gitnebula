@@ -16,3 +16,7 @@ _bmad/custom/config.user.toml
 # OS / editor
 .DS_Store
 *.log
+
+# perf-spike run output (regenerated on every run; the recorded evidence
+# lives in docs/dev/epic-1/1.4-perf-spike/results.json)
+packages/viz/perf-spike/results.json
