@@ -7,11 +7,16 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "generate": "node scripts/generate-types.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "json-schema-to-typescript": "^15.0.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0"
   }
 }

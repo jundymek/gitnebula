@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
-    "types": []
+    "types": [],
+    // The schema JSON is imported as the validator's input (AD-9).
+    "resolveJsonModule": true
   },
   "include": ["src"]
 }
