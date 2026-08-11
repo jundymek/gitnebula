@@ -2,12 +2,14 @@
 // only composer). Each analyzer exposes AD-3's single entry
 // `analyze(input, config, onProgress?)`.
 //
-// TEMPORARY — story 2.4 runs while 2.1/2.2/2.3 are still open PRs. Until an
+// TEMPORARY — story 2.4 runs while 2.1 and 2.3 are still open PRs. Until an
 // analyzer's story merges into the epic branch its package is the story-1.1
 // scaffold stub, which has no `analyze`. This module detects that and
 // substitutes an inert result so the pipeline is testable end to end. The
 // detection disappears as each story lands: by the time 2.4 opens its PR all
 // three are wired for real (AC-5) and `stubbedAnalyzers` is empty.
+//
+// deps (2.2) is merged and imported directly — no detection left for it.
 //
 // The input shapes below are confirmed by 2.1, 2.2 and 2.3: a package-local
 // wrapper carrying the absolute repo root, because `ScannedNode.path` is
@@ -19,7 +21,7 @@ import type {
   GitResult,
   ScanResult,
 } from "@gitnebula/contract";
-import * as depsModule from "@gitnebula/deps";
+import { analyze as depsAnalyze } from "@gitnebula/deps";
 import * as githistModule from "@gitnebula/githist";
 import * as scannerModule from "@gitnebula/scanner";
 
@@ -49,10 +51,6 @@ const scannerAnalyze = optionalExport<Analyze<ScanInput, ScanResult>>(
   scannerModule,
   "analyze",
 );
-const depsAnalyze = optionalExport<Analyze<UniverseInput, DepsResult>>(
-  depsModule,
-  "analyze",
-);
 const githistAnalyze = optionalExport<Analyze<UniverseInput, GitResult>>(
   githistModule,
   "analyze",
@@ -72,7 +70,6 @@ export const defaultExcludes: readonly string[] =
  */
 export const stubbedAnalyzers: readonly string[] = [
   scannerAnalyze === undefined ? "scanner" : null,
-  depsAnalyze === undefined ? "deps" : null,
   githistAnalyze === undefined ? "githist" : null,
 ].filter((name): name is string => name !== null);
 
@@ -81,8 +78,6 @@ const emptyScan: ScanResult = {
   stats: { files: 0, loc: 0, languages: {} },
   warnings: [],
 };
-
-const emptyDeps: DepsResult = { edges: [], warnings: [] };
 
 const emptyGit: GitResult = {
   history: {},
@@ -106,7 +101,6 @@ export function deps(
   config: Config,
   onProgress?: OnProgress,
 ): Promise<DepsResult> {
-  if (depsAnalyze === undefined) return Promise.resolve(emptyDeps);
   return depsAnalyze(input, config, onProgress);
 }
 
