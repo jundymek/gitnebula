@@ -1,0 +1,65 @@
+{
+  "schemaVersion": "1.0",
+  "repo": {
+    "name": "fixture-zero-history",
+    "remoteUrl": null,
+    "analyzedAt": "2026-01-01T00:00:00.000Z",
+    "defaultBranch": "main",
+    "analysisWindowDays": 365,
+    "stats": {
+      "files": 2,
+      "loc": 55,
+      "commits": 0,
+      "languages": {
+        "python": 0.6,
+        "typescript": 0.4
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "core/",
+      "kind": "module",
+      "parent": null,
+      "path": "core/",
+      "layer": "backend",
+      "loc": 55,
+      "churn": 0,
+      "commits": 0,
+      "authors": 0,
+      "lastChangedAt": null,
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "core/scoring.py",
+      "kind": "file",
+      "parent": "core/",
+      "path": "core/scoring.py",
+      "layer": "backend",
+      "loc": 33,
+      "churn": 0,
+      "commits": 0,
+      "authors": 0,
+      "lastChangedAt": null,
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "core/types.ts",
+      "kind": "file",
+      "parent": "core/",
+      "path": "core/types.ts",
+      "layer": "backend",
+      "loc": 22,
+      "churn": 0,
+      "commits": 0,
+      "authors": 0,
+      "lastChangedAt": null,
+      "description": null,
+      "descriptionSource": null
+    }
+  ],
+  "edges": [],
+  "cochanges": []
+}

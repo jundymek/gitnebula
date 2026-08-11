@@ -1,0 +1,11 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    // Test files only. Fixture and fixture-repo tests read the filesystem and
+    // spawn the repo builder, so they need node types; the shipped runtime
+    // path never does and is typechecked without them by tsconfig.json.
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts"]
+}

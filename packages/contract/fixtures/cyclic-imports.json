@@ -1,0 +1,143 @@
+{
+  "schemaVersion": "1.0",
+  "repo": {
+    "name": "fixture-cyclic-imports",
+    "remoteUrl": null,
+    "analyzedAt": "2026-01-01T00:00:00.000Z",
+    "defaultBranch": "main",
+    "analysisWindowDays": 365,
+    "stats": {
+      "files": 3,
+      "loc": 90,
+      "commits": 6,
+      "languages": {
+        "typescript": 1
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "a/",
+      "kind": "module",
+      "parent": null,
+      "path": "a/",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.4,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-20T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "a/index.ts",
+      "kind": "file",
+      "parent": "a/",
+      "path": "a/index.ts",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.4,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-20T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "b/",
+      "kind": "module",
+      "parent": null,
+      "path": "b/",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.3,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-21T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "b/index.ts",
+      "kind": "file",
+      "parent": "b/",
+      "path": "b/index.ts",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.3,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-21T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "c/",
+      "kind": "module",
+      "parent": null,
+      "path": "c/",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.2,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-22T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "c/index.ts",
+      "kind": "file",
+      "parent": "c/",
+      "path": "c/index.ts",
+      "layer": "backend",
+      "loc": 30,
+      "churn": 0.2,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-12-22T09:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "a/",
+      "target": "b/",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "a/index.ts",
+      "target": "b/index.ts",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "b/",
+      "target": "c/",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "b/index.ts",
+      "target": "c/index.ts",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "c/",
+      "target": "a/",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "c/index.ts",
+      "target": "a/index.ts",
+      "kind": "import",
+      "weight": 1
+    }
+  ],
+  "cochanges": []
+}

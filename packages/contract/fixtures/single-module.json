@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "1.0",
+  "repo": {
+    "name": "fixture-single-module",
+    "remoteUrl": null,
+    "analyzedAt": "2026-01-01T00:00:00.000Z",
+    "defaultBranch": "main",
+    "analysisWindowDays": 365,
+    "stats": {
+      "files": 1,
+      "loc": 42,
+      "commits": 3,
+      "languages": {
+        "typescript": 1
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "app/",
+      "kind": "module",
+      "parent": null,
+      "path": "app/",
+      "layer": "backend",
+      "loc": 42,
+      "churn": 0.5,
+      "commits": 3,
+      "authors": 1,
+      "lastChangedAt": "2025-12-30T12:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "app/main.ts",
+      "kind": "file",
+      "parent": "app/",
+      "path": "app/main.ts",
+      "layer": "backend",
+      "loc": 42,
+      "churn": 0.5,
+      "commits": 3,
+      "authors": 1,
+      "lastChangedAt": "2025-12-30T12:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    }
+  ],
+  "edges": [],
+  "cochanges": []
+}
