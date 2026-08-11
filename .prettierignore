@@ -1,0 +1,17 @@
+# Lockfile and build output
+pnpm-lock.yaml
+dist/
+node_modules/
+test-fixtures/.generated/
+
+# Frozen / third-party artifacts — append-only, never reformatted
+docs/
+_bmad/
+reference/
+CLAUDE.md
+.claude/
+
+# terminal-agents worktree scratch files (never committed)
+plan.md
+DECISIONS.md
+PR_SUMMARY.md

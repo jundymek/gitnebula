@@ -6,6 +6,9 @@ dist/
 build/
 *.tsbuildinfo
 
+# Generated fixture repositories (AD-14) — built by scripts, never committed
+test-fixtures/.generated/
+
 # BMAD personal settings (per-developer, not shared)
 _bmad/config.user.toml
 _bmad/custom/config.user.toml

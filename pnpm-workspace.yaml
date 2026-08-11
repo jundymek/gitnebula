@@ -1,0 +1,13 @@
+# One package per brief-§9 module (AD-2, AD-11).
+packages:
+  - packages/*
+
+# Dependencies allowed to run install scripts (pnpm 10 blocks them by default).
+onlyBuiltDependencies:
+  - esbuild
+
+# Shared dev-dependency versions, declared once (pnpm catalog).
+catalog:
+  "@types/node": ^20.19.43
+  typescript: ^5.9.3
+  vitest: ^4.1.10
