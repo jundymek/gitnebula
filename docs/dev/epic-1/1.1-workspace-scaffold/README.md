@@ -1,7 +1,8 @@
 # 1.1-workspace-scaffold — what the scaffold provides
 
 This story created the pnpm workspace every later story builds on. On a fresh
-clone (Node ≥ 20, pnpm 10 via corepack):
+clone (Node ≥ 20.19 — Vite 8's floor within the Node 20 line — and pnpm 10 via
+corepack):
 
 ```bash
 pnpm install

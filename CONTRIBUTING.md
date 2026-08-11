@@ -7,7 +7,8 @@ details live in [CLAUDE.md](CLAUDE.md).
 
 ## Getting started
 
-Requirements: Node.js ≥ 20 and pnpm 10 (the exact version is pinned in the
+Requirements: Node.js ≥ 20.19 (Vite's floor within the Node 20 line) and
+pnpm 10 (the exact version is pinned in the
 `packageManager` field — with [corepack](https://nodejs.org/api/corepack.html)
 enabled, `pnpm` resolves to it automatically).
 
