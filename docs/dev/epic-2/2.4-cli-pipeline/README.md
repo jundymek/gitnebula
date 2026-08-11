@@ -38,12 +38,18 @@ two do not fight over the cursor.
 | `repo.analyzedAt`                            | this package — the run start, injected once    |
 | `repo.analysisWindowDays`                    | resolved config                                |
 | `repo.stats.files` / `loc` / `languages`     | scanner                                        |
-| `repo.stats.commits`                         | githist (in-window commits that changed files) |
+| `repo.stats.commits`                         | githist — the repo-wide in-window count, merges included |
 | node structure (`id`…`loc`)                  | scanner                                        |
 | node history (`churn`, `commits`, `authors`, `lastChangedAt`) | githist                      |
 | `edges`                                      | deps                                           |
 | `cochanges`                                  | githist                                        |
 | `description` / `descriptionSource`          | always `null` in MVP (AD-10)                   |
+
+`repo.stats.commits` counts every commit in the window, merges included, and is
+taken from githist verbatim. On a repository that merges branches it can
+therefore exceed what the per-node `commits` numbers suggest: a merge commit
+changes no file, so it attributes to no node. That is the contract's meaning of
+the field, not a disagreement between two counters.
 
 The contract needs three repository facts no analyzer produces. `cli` reads
 them itself with `git rev-parse`, `git remote get-url origin` and
