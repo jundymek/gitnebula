@@ -106,10 +106,37 @@ describe("loader — FR-6 version gate", () => {
     if (!result.ok) expect(result.failure.kind).toBe("malformed");
   });
 
-  it("refuses a version whose major is not a number", () => {
-    const result = checkVersion({ schemaVersion: "next" });
+  it.each(["next", "1garbage", "1.x", "1", "v1.0", "1.0.0"])(
+    "refuses the unreadable version %s on an otherwise valid document",
+    (schemaVersion) => {
+      // The document is complete apart from the version, so nothing but the
+      // version parser can reject it. That matters: `parseInt` reads a
+      // *prefix*, so "1garbage" and "1.x" both came back as 1 and sailed
+      // through the compatibility gate as if they were "1.0".
+      const result = checkVersion({ ...loadSyntheticFixture(), schemaVersion });
+      expect(result.ok).toBe(false);
+      if (!result.ok) expect(result.failure.kind).toBe("malformed");
+    },
+  );
+
+  it("refuses a document whose nodes are not nodes", () => {
+    const document = loadSyntheticFixture();
+    const result = checkVersion({ ...document, nodes: [null] });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.failure.kind).toBe("unsupported-version");
+    if (!result.ok) {
+      expect(result.failure.kind).toBe("malformed");
+      expect(result.failure.detail).toContain("node at index 0");
+    }
+  });
+
+  it("refuses a document whose edges are not edges", () => {
+    const document = loadSyntheticFixture();
+    const result = checkVersion({
+      ...document,
+      edges: [{ source: "a", target: "b" }, 7],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.failure.detail).toContain("edge at index 1");
   });
 });
 

@@ -28,8 +28,24 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   // Constructed after `mountChrome` has put the stage in the document: the
   // engine measures the canvas on construction, and an unattached element
   // measures 0 × 0.
-  engine = createGraphEngine({ canvas: stage });
-  connectEngine(store, engine);
-  engine.load(result.document);
+  try {
+    engine = createGraphEngine({ canvas: stage });
+    connectEngine(store, engine);
+    engine.load(result.document);
+  } catch (cause) {
+    // The loader's shape guard covers what the Viewer dereferences, but it is
+    // a guard, not the schema. Anything it lets through that the engine still
+    // cannot build becomes the FR-6 screen rather than a blank page with a
+    // stack trace in the console.
+    engine?.destroy();
+    renderErrorScreen(root, {
+      kind: "malformed",
+      title: "analysis.json could not be rendered",
+      detail: `The document loaded but the map could not be built from it: ${
+        cause instanceof Error ? cause.message : String(cause)
+      }. Re-run gitnebula to regenerate the file.`,
+    });
+    return null;
+  }
   return engine;
 }

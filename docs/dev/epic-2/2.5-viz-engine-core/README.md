@@ -9,7 +9,7 @@ Run it:
 
 ```bash
 pnpm --filter @gitnebula/viz dev            # serves synthetic-100x2000
-pnpm --filter @gitnebula/viz test           # 141 tests
+pnpm --filter @gitnebula/viz test           # 148 tests
 ```
 
 ## How the fixture reaches `./analysis.json` (AC-1)
@@ -41,7 +41,13 @@ the Viewer immediately dereferences. The version gate alone is not enough —
 `{"schemaVersion": "1.0"}` passes it and then blanks the page on `repo.name`.
 This is a shape guard, not schema validation: running ajv in the browser would
 pull the validator and the schema into the bundle to re-check what the pipeline
-already validated at emit time. A version mismatch renders the FR-6 screen,
+already validated at emit time. It checks the elements of `nodes` and `edges`
+as well as the arrays themselves — `nodes: [null]` passes an `Array.isArray`
+check and then throws inside the graph builder — and the version string is
+matched whole against `<integer>.<integer>`, because `parseInt` reads a prefix
+and would take `1garbage` for major 1. Whatever the guard does not model,
+`boot()` catches: an engine that cannot build the document renders the FR-6
+screen rather than blanking the page. A version mismatch renders the FR-6 screen,
 which names **both** versions — "unsupported" without the numbers tells the reader nothing
 they can act on. Unreachable and unparsable documents get their own screens for
 the same reason.

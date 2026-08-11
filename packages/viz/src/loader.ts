@@ -88,6 +88,16 @@ export function checkVersion(parsed: unknown): LoadResult {
   }
 
   const major = majorOf(version);
+  if (major === null) {
+    return {
+      ok: false,
+      failure: {
+        kind: "malformed",
+        title: "analysis.json declares an unreadable schemaVersion",
+        detail: `\`${version}\` is not a version. A gitnebula document carries \`<major>.<minor>\`, both integers.`,
+      },
+    };
+  }
   if (major !== SUPPORTED_SCHEMA_MAJOR) {
     return {
       ok: false,
@@ -127,10 +137,37 @@ export function checkVersion(parsed: unknown): LoadResult {
  * gate and then blanks the page on `repo.name`. This turns that into the
  * malformed screen, which is what FR-6 asks for.
  */
+function isNodeShaped(node: unknown): boolean {
+  if (typeof node !== "object" || node === null) return false;
+  const candidate = node as Record<string, unknown>;
+  return (
+    typeof candidate.id === "string" &&
+    (candidate.kind === "module" || candidate.kind === "file") &&
+    typeof candidate.path === "string" &&
+    typeof candidate.layer === "string" &&
+    typeof candidate.loc === "number" &&
+    typeof candidate.churn === "number"
+  );
+}
+
+function isEdgeShaped(edge: unknown): boolean {
+  if (typeof edge !== "object" || edge === null) return false;
+  const candidate = edge as Record<string, unknown>;
+  return (
+    typeof candidate.source === "string" && typeof candidate.target === "string"
+  );
+}
+
 function describeShapeProblem(parsed: unknown): string | null {
   const document = parsed as Partial<AnalysisDocument>;
   if (!Array.isArray(document.nodes)) return "its `nodes` array is missing";
+  // The elements matter as much as the array: a `nodes: [null]` passes an
+  // Array.isArray check and then throws inside the graph builder.
+  const badNode = document.nodes.findIndex((node) => !isNodeShaped(node));
+  if (badNode !== -1) return `its node at index ${badNode} is not a node`;
   if (!Array.isArray(document.edges)) return "its `edges` array is missing";
+  const badEdge = document.edges.findIndex((edge) => !isEdgeShaped(edge));
+  if (badEdge !== -1) return `its edge at index ${badEdge} is not an edge`;
   if (!Array.isArray(document.cochanges)) {
     return "its `cochanges` array is missing";
   }
@@ -160,10 +197,16 @@ function readSchemaVersion(parsed: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** `"1.0"` → 1. A version whose major is not a number can never match. */
-function majorOf(version: string): number {
-  const major = Number.parseInt(version.split(".")[0] ?? "", 10);
-  return Number.isNaN(major) ? -1 : major;
+/**
+ * `"1.0"` → 1; anything that is not `<integer>.<integer>` → null.
+ *
+ * The whole string is matched on purpose. `Number.parseInt` reads a *prefix*,
+ * so `"1garbage"` and `"1.x"` both come back as 1 and would sail through the
+ * compatibility gate as if they were `1.0`.
+ */
+function majorOf(version: string): number | null {
+  const match = /^(\d+)\.(\d+)$/.exec(version);
+  return match === null ? null : Number.parseInt(match[1]!, 10);
 }
 
 function unreachable(reason: string): LoadResult {

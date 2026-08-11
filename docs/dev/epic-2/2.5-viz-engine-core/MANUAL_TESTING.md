@@ -17,7 +17,7 @@ open reference/mockup.html
 ## Setup
 
 - [ ] `pnpm lint` exits 0
-- [ ] `pnpm test` exits 0 (141 tests in `@gitnebula/viz`)
+- [ ] `pnpm test` exits 0 (148 tests in `@gitnebula/viz`)
 - [ ] `pnpm --filter @gitnebula/viz build` exits 0
 
 ## First load (AC-1, AC-2)
