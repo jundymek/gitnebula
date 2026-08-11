@@ -80,6 +80,27 @@ describe("VisibilityWatch", () => {
     expect(w.valid).toBe(true);
   });
 
+  it("invalidates a run whose tab was hidden with no frame to notice it", () => {
+    // Chrome can suspend rAF entirely on a background tab: no frame() call
+    // ever observes document.hidden, so the counter alone would report clean.
+    let hidden = false;
+    const w = new VisibilityWatch(() => hidden);
+    for (let i = 0; i < 20; i++) w.frame();
+    hidden = true;
+    w.visibilityChanged(); // the event fires; no frames run while suspended
+    hidden = false;
+    w.visibilityChanged();
+    for (let i = 0; i < 20; i++) w.frame();
+    expect(w.hiddenFrames).toBe(0);
+    expect(w.everHidden).toBe(true);
+    expect(w.valid).toBe(false);
+  });
+
+  it("invalidates a run that started on a hidden tab", () => {
+    const w = new VisibilityWatch(() => true);
+    expect(w.valid).toBe(false);
+  });
+
   it("invalidates a run that spent any frame on a hidden tab", () => {
     let hidden = false;
     const w = new VisibilityWatch(() => hidden);

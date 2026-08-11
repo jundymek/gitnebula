@@ -60,15 +60,18 @@ is detected and recorded rather than left to the reader:
 | ----------------- | ------------------------------------------------------------------- |
 | `fixtureSource`   | anything but `contract-fixture` means the yardstick document did not load |
 | `settleTimedOut`  | phase (a) hit the 3,000-frame cap — (b) and (c) then measure a layout frozen mid-motion, not a settled one |
-| `hiddenFrames`    | non-zero means the tab was backgrounded: Chrome throttles rAF and the fps figures describe the throttle |
+| `hiddenFrames` / `documentEverHidden` | the tab was backgrounded at some point: Chrome throttles rAF there — and can suspend it outright, which is why the `visibilitychange` event is watched as well as the frame counter |
 
-The `hiddenFrames` guard was added because it happened: the first attempt at
-these numbers ran with the tab behind another window, and phase (a) took over
-90 seconds to do what takes 4 seconds in the foreground. Throttled runs do not
+The visibility guard was added because it happened: the first attempt at these
+numbers ran with the tab behind another window, and phase (a) took over 90
+seconds to do what takes 4 seconds in the foreground. Throttled runs do not
 announce themselves — the phase structure, the JSON and the status line all
 look right — so the page now refuses to call such a run `done` without
-`INVALID RUN` beside it. **Reproducing these numbers requires the spike tab
-visible and in front.**
+`INVALID RUN` beside it. Counting throttled frames is not sufficient on its
+own: Chrome can suspend rAF outright, in which case no frame callback ever
+observes the hidden state and the counter stays at zero precisely in the worst
+case, so a `visibilitychange` listener is the second witness.
+**Reproducing these numbers requires the spike tab visible and in front.**
 
 All three committed runs have `runValid: true`.
 
@@ -97,9 +100,9 @@ across the three committed runs.
 
 | phase                             | sustained fps (worst 1 s) | mean frame work | p95            | worst frame     |
 | --------------------------------- | ------------------------- | --------------- | -------------- | --------------- |
-| (a) active simulation, all 2,100  | **59** (all runs)         | 5.27 – 5.35 ms  | 5.5 – 5.7 ms   | 14.6 – 19.0 ms  |
-| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.20 ms         | 0.3 ms         | 0.5 – 0.7 ms    |
-| (c) viewport unfold while panning | **59** (all runs)         | 0.53 – 0.58 ms  | 1.5 – 1.6 ms   | 3.1 – 4.0 ms    |
+| (a) active simulation, all 2,100  | **59** (all runs)         | 5.15 – 5.26 ms  | 5.6 ms         | 14.7 – 18.5 ms  |
+| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.18 – 0.20 ms  | 0.3 ms         | 0.4 – 0.7 ms    |
+| (c) viewport unfold while panning | **59** (all runs)         | 0.55 – 0.58 ms  | 1.6 – 1.7 ms   | 2.9 – 4.2 ms    |
 
 Average fps was 59.95 in every phase of every run.
 
@@ -110,16 +113,16 @@ Supporting numbers:
 - Phase (b) module drift over the whole 10 s sweep: **0.0 px**. Frozen is
   actually frozen — the simulation is not ticked at all.
 - Phase (c) over the 15 s pan: **67–69 unfold events and 55–56 collapse
-  events**. At peak, **13–15 modules were unfolded at once — 260–300 file nodes
-  of the 2,000**, with 521–577 links drawn. The graph never accumulates: what
+  events**. At peak, **13–14 modules were unfolded at once — 260–280 file nodes
+  of the 2,000**, with 521–554 links drawn. The graph never accumulates: what
   leaves the viewport collapses.
 - Frames are vsync-capped at 60, so 59 sustained is the ceiling, not a
   shortfall. The headroom is in the work times: phase (c) uses **~0.55 ms of a
-  16.7 ms budget on average and 4.0 ms at its worst observed frame** — roughly
-  a 4× margin at the worst frame and 30× at the mean.
+  16.7 ms budget on average and 4.2 ms at its worst observed frame** — roughly
+  a 4× margin at the worst frame and 29× at the mean.
 
 Phase (a) is deliberately the worst case ADR-0006 exists to avoid: every file
-node simulated at once. It still holds 59 fps, at ~5.3 ms mean frame work —
+node simulated at once. It still holds 59 fps, at ~5.2 ms mean frame work —
 about 9× the cost of phase (c). That is the cost the viewport-scoped rule buys back,
 and it also means a full-graph settle remains affordable as a one-off on load.
 
@@ -133,7 +136,7 @@ phase measured something the viewer will never do. It still held 59 fps, which
 is why the defect was invisible in the numbers and had to be caught by reading
 the code.
 
-With collapse implemented, the live set stays at 13–15 modules, which is the
+With collapse implemented, the live set stays at 13–14 modules, which is the
 "low hundreds worst case" the ADR predicted. The correction moved phase (c)
 mean frame work from ~1.3 ms to ~0.55 ms, so the earlier figures were
 conservative rather than optimistic — the verdict was never at risk, but the
@@ -197,7 +200,7 @@ Each wake runs its own short-lived simulation until Settled and is then dropped
 `VERDICT: canvas-2d viable (>= 55 fps sustained in phases b and c)`
 
 Sustained fps is 59 in both phases (and in phase (a) as well) across three
-runs, against a 55 fps bar; worst-frame work in phase (c) is 4.0 ms against a
+runs, against a 55 fps bar; worst-frame work in phase (c) is 4.2 ms against a
 16.7 ms budget.
 
 Because the verdict is *not* escalation, AC-4 does not apply: **no Epic 2/3
@@ -230,7 +233,7 @@ pan.
   so a Retina run measures the same camera script and the same set of unfolded
   modules rather than a silently different one. That was a Codex finding, and
   it is what makes the confirming run meaningful instead of incomparable.
-- Phase (c)'s peak counts vary slightly between runs (13 vs 15 modules) even
+- Phase (c)'s peak counts vary slightly between runs (13 vs 14 modules) even
   though the fixture and seed are fixed. The camera script is time-based, so
   which frame lands where in the pan shifts by a frame or two between runs. The
   spread is small and does not touch the verdict.

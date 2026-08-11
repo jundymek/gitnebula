@@ -171,6 +171,11 @@ async function run(): Promise<void> {
   // Every measured frame is checked: a hidden tab throttles rAF and would
   // otherwise produce a normal-looking, entirely fictional result.
   const visibility = new VisibilityWatch(() => document.hidden);
+  // rAF can be suspended outright on a background tab, in which case no frame
+  // callback ever observes the hidden state — the event is the only witness.
+  document.addEventListener("visibilitychange", () =>
+    visibility.visibilityChanged(),
+  );
   // CSS pixels, not the canvas backing store — see cssViewport.
   const vp = cssViewport(canvas, devicePixelRatio);
 
@@ -483,9 +488,10 @@ async function run(): Promise<void> {
 
   if (!visibility.valid) {
     console.error(
-      `SPIKE_INVALID: ${visibility.hiddenFrames} frame(s) ran on a hidden tab. ` +
-        "Chrome throttles requestAnimationFrame in the background — re-run with " +
-        "the spike tab visible and in front.",
+      `SPIKE_INVALID: the tab was hidden during the run ` +
+        `(${visibility.hiddenFrames} throttled frame(s) observed). ` +
+        "Chrome throttles or suspends requestAnimationFrame in the background — " +
+        "re-run with the spike tab visible and in front.",
     );
   }
   // The three ways a run can look normal and mean nothing. Recorded in the
@@ -513,6 +519,7 @@ async function run(): Promise<void> {
     // Non-zero means the tab was backgrounded mid-run: rAF was throttled and
     // every fps number below describes the throttle, not the renderer.
     hiddenFrames: visibility.hiddenFrames,
+    documentEverHidden: visibility.everHidden,
     layoutBounds,
     frozenDriftPx: frozenDrift,
     unfoldEvents,

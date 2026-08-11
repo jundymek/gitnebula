@@ -84,16 +84,36 @@ export function aggregate(
  * frame at all invalidates the run.
  */
 export class VisibilityWatch {
+  /** Frames that ran while hidden — non-zero means rAF was throttled, not stopped. */
   hiddenFrames = 0;
+  /** Whether the document was ever hidden, however briefly. */
+  everHidden: boolean;
 
-  constructor(private readonly isHidden: () => boolean) {}
+  constructor(private readonly isHidden: () => boolean) {
+    // A run started on an already-hidden tab is invalid from frame zero.
+    this.everHidden = isHidden();
+  }
 
   frame(): void {
-    if (this.isHidden()) this.hiddenFrames++;
+    if (this.isHidden()) {
+      this.hiddenFrames++;
+      this.everHidden = true;
+    }
+  }
+
+  /**
+   * Feed this from a `visibilitychange` listener. Counting hidden frames alone
+   * is not enough: Chrome throttles rAF on a background tab, but it can also
+   * suspend it outright, and then no frame callback runs while hidden at all —
+   * the counter stays at zero and the run looks clean precisely in the worst
+   * case. The event fires either way.
+   */
+  visibilityChanged(): void {
+    if (this.isHidden()) this.everHidden = true;
   }
 
   get valid(): boolean {
-    return this.hiddenFrames === 0;
+    return !this.everHidden;
   }
 }
 
