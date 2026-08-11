@@ -9,7 +9,7 @@
 development_status:
   # Epic 1 — Contract and Foundations (-> M1)
   1.1-workspace-scaffold: review
-  1.2-contract-schema: ready-for-dev
+  1.2-contract-schema: review
   1.3-contract-fixtures: ready-for-dev
   1.4-perf-spike: ready-for-dev
   # Epic 2 — Analysis Pipeline and Living Map (-> M2)

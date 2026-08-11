@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/jundymek/gitnebula/schema/analysis-1.0.json",
+  "title": "AnalysisDocument",
+  "description": "gitnebula analysis.json — the single interface between the pipeline and the Viewer. Normative source of the generated TypeScript types (AD-9).",
+  "type": "object",
+  "required": ["schemaVersion", "repo", "nodes", "edges", "cochanges"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "description": "Contract version. Major changes are breaking and require their own story plus an ADR (AD-9).",
+      "const": "1.0"
+    },
+    "repo": { "$ref": "#/$defs/repo" },
+    "nodes": {
+      "description": "Modules and files. Sorted by id (ADR-0005).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/node" }
+    },
+    "edges": {
+      "description": "Import edges at both levels. Sorted by source then target (ADR-0005).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/edge" }
+    },
+    "cochanges": {
+      "description": "Bounded co-change pairs, file-file and module-module. Sorted by count descending then ids (ADR-0005).",
+      "type": "array",
+      "items": { "$ref": "#/$defs/cochange" }
+    }
+  },
+  "$defs": {
+    "layer": {
+      "title": "Layer",
+      "description": "Architectural layer assigned by the scanner's rule table (ADR-0002).",
+      "enum": ["backend", "frontend", "infra", "test", "other"]
+    },
+    "nodeKind": {
+      "title": "NodeKind",
+      "description": "A node is either a module (a derived directory grouping) or a file.",
+      "enum": ["module", "file"]
+    },
+    "repo": {
+      "title": "RepoMetadata",
+      "type": "object",
+      "required": [
+        "name",
+        "remoteUrl",
+        "analyzedAt",
+        "defaultBranch",
+        "analysisWindowDays",
+        "stats"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "description": "Repository name, derived from the remote or the directory.",
+          "type": "string",
+          "minLength": 1
+        },
+        "remoteUrl": {
+          "description": "Origin remote URL, or null when the repository has no remote.",
+          "type": ["string", "null"]
+        },
+        "analyzedAt": {
+          "description": "Run start instant. The only field allowed to differ between two runs on identical repo state (ADR-0005).",
+          "type": "string",
+          "format": "date-time"
+        },
+        "defaultBranch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "analysisWindowDays": {
+          "description": "Length of the analysis window in days. The window lives here, never in field names (ADR-0003).",
+          "type": "integer",
+          "minimum": 1
+        },
+        "stats": { "$ref": "#/$defs/repoStats" }
+      }
+    },
+    "repoStats": {
+      "title": "RepoStats",
+      "type": "object",
+      "required": ["files", "loc", "commits", "languages"],
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "description": "Analyzed files, after exclusions.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "loc": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "commits": {
+          "description": "Commits in the analysis window.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "languages": {
+          "description": "Language name to share of analyzed lines, in 0..1.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          }
+        }
+      }
+    },
+    "node": {
+      "title": "AnalysisNode",
+      "type": "object",
+      "required": [
+        "id",
+        "kind",
+        "parent",
+        "path",
+        "layer",
+        "loc",
+        "churn",
+        "commits",
+        "authors",
+        "lastChangedAt",
+        "description",
+        "descriptionSource"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Stable node identifier, unique across the document.",
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": { "$ref": "#/$defs/nodeKind" },
+        "parent": {
+          "description": "Id of the owning module, or null for a top-level node. Membership is expressed only here — there are no membership edges (ADR-0005).",
+          "type": ["string", "null"]
+        },
+        "path": {
+          "description": "Repository-relative path, POSIX separators.",
+          "type": "string",
+          "minLength": 1
+        },
+        "layer": { "$ref": "#/$defs/layer" },
+        "loc": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "churn": {
+          "description": "Normalized commit activity: min(1, commits / P95(commits over same-kind nodes with at least one commit)) (ADR-0003).",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "commits": {
+          "description": "Commits in the analysis window touching this node. Module commits are counted directly, never summed from files (ADR-0003).",
+          "type": "integer",
+          "minimum": 0
+        },
+        "authors": {
+          "description": "Distinct authors in the analysis window.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "lastChangedAt": {
+          "description": "Most recent commit instant touching this node, or null when the node has no history in the repository.",
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "description": {
+          "description": "Reserved for the post-MVP describe layer. Present, required and null-valued in MVP (AD-10).",
+          "type": "null"
+        },
+        "descriptionSource": {
+          "description": "Reserved for the post-MVP describe layer. Present, required and null-valued in MVP (AD-10).",
+          "type": "null"
+        }
+      }
+    },
+    "edge": {
+      "title": "AnalysisEdge",
+      "type": "object",
+      "required": ["source", "target", "kind", "weight"],
+      "additionalProperties": false,
+      "properties": {
+        "source": {
+          "description": "Id of the importing node.",
+          "type": "string",
+          "minLength": 1
+        },
+        "target": {
+          "description": "Id of the imported node.",
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": { "const": "import" },
+        "weight": {
+          "description": "For a module edge, the number of underlying file-level import pairs; for a file edge, 1 (ADR-0005).",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "cochange": {
+      "title": "CochangePair",
+      "description": "An unordered pair of same-kind nodes that changed together. Bounds (count threshold, per-kind cap) are analyzer policy, not contract shape (PRD FR-7).",
+      "type": "object",
+      "required": ["a", "b", "count"],
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "type": "string",
+          "minLength": 1
+        },
+        "b": {
+          "type": "string",
+          "minLength": 1
+        },
+        "count": {
+          "description": "Commits in the analysis window touching both nodes.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    }
+  }
+}
