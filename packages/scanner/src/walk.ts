@@ -1,0 +1,154 @@
+// Tree walk and LOC counting.
+//
+// Two passes on purpose: collecting paths is cheap (directory entries only,
+// no file contents) and gives `onProgress` an honest total before the
+// expensive pass starts (AD-3).
+
+import { open, readdir } from "node:fs/promises";
+import { join } from "node:path";
+
+import type { WarningCollector } from "./warnings.js";
+
+import type { ExcludeMatcher } from "./excludes.js";
+
+/** Read size for the LOC pass. Contents are never retained past the chunk. */
+const CHUNK_BYTES = 64 * 1024;
+
+const TAB = 0x09;
+const LINE_FEED = 0x0a;
+const VERTICAL_TAB = 0x0b;
+const FORM_FEED = 0x0c;
+const CARRIAGE_RETURN = 0x0d;
+const SPACE = 0x20;
+const NUL = 0x00;
+
+function isBlankByte(byte: number): boolean {
+  return (
+    byte === SPACE ||
+    byte === TAB ||
+    byte === CARRIAGE_RETURN ||
+    byte === VERTICAL_TAB ||
+    byte === FORM_FEED
+  );
+}
+
+/**
+ * Walks `root` depth-first, returning repository-relative POSIX paths of every
+ * file that survives the exclude globs.
+ *
+ * A directory that matches an exclude glob is pruned whole — one test skips
+ * the entire subtree, which is what makes `node_modules` cheap rather than
+ * merely absent from the result.
+ *
+ * Symlinks are skipped and counted: a symlink is not an independent unit of
+ * code, and following one invites a cycle. Anything that is neither a regular
+ * file nor a directory (sockets, devices, FIFOs) is skipped the same way.
+ */
+export async function collectFiles(
+  root: string,
+  isExcluded: ExcludeMatcher,
+  warnings: WarningCollector,
+): Promise<string[]> {
+  const files: string[] = [];
+
+  async function walk(absoluteDir: string, relativeDir: string): Promise<void> {
+    let entries;
+    try {
+      entries = await readdir(absoluteDir, { withFileTypes: true });
+    } catch {
+      warnings.add("unreadable-directory", relativeDir || ".");
+      return;
+    }
+
+    // Fixed traversal order: two runs must produce the same warning counts and
+    // the same progress sequence, not merely the same sorted result (AD-4).
+    entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+
+    for (const entry of entries) {
+      const relativePath = relativeDir
+        ? `${relativeDir}/${entry.name}`
+        : entry.name;
+      if (isExcluded(relativePath)) continue;
+
+      if (entry.isSymbolicLink()) {
+        warnings.add("symlink-skipped", relativePath);
+        continue;
+      }
+      if (entry.isDirectory()) {
+        await walk(join(absoluteDir, entry.name), relativePath);
+      } else if (entry.isFile()) {
+        files.push(relativePath);
+      } else {
+        warnings.add("irregular-file-skipped", relativePath);
+      }
+    }
+  }
+
+  await walk(root, "");
+  return files;
+}
+
+/** What one LOC pass learned about a file. */
+export interface LocResult {
+  /** Lines carrying at least one non-whitespace character. 0 when binary. */
+  readonly loc: number;
+  /** True when a NUL byte appeared in the first chunk. */
+  readonly binary: boolean;
+  /** True when the file could not be read at all. */
+  readonly unreadable: boolean;
+}
+
+/**
+ * Counts lines carrying at least one non-whitespace character, streaming the
+ * file in chunks — no full-file retention, so a 40 MB checked-in blob costs
+ * one chunk of memory rather than forty megabytes of it.
+ *
+ * Binary files are detected by a NUL byte in the first chunk. They are still
+ * *nodes* — the universe stays closed (AD-13) — but contribute 0 LOC, because
+ * "lines" is not a meaningful count over bytes that are not text.
+ */
+export async function countLoc(absolutePath: string): Promise<LocResult> {
+  let handle;
+  try {
+    handle = await open(absolutePath, "r");
+  } catch {
+    return { loc: 0, binary: false, unreadable: true };
+  }
+
+  try {
+    const buffer = Buffer.allocUnsafe(CHUNK_BYTES);
+    let loc = 0;
+    let lineHasContent = false;
+    let firstChunk = true;
+
+    for (;;) {
+      const { bytesRead } = await handle.read(buffer, 0, CHUNK_BYTES, null);
+      if (bytesRead === 0) break;
+
+      if (firstChunk) {
+        firstChunk = false;
+        if (buffer.indexOf(NUL, 0) >= 0 && buffer.indexOf(NUL, 0) < bytesRead) {
+          return { loc: 0, binary: true, unreadable: false };
+        }
+      }
+
+      for (let i = 0; i < bytesRead; i += 1) {
+        const byte = buffer[i] as number;
+        if (byte === LINE_FEED) {
+          if (lineHasContent) loc += 1;
+          lineHasContent = false;
+        } else if (!isBlankByte(byte)) {
+          lineHasContent = true;
+        }
+      }
+    }
+
+    // A last line with no trailing newline still counts.
+    if (lineHasContent) loc += 1;
+    return { loc, binary: false, unreadable: false };
+  } catch {
+    return { loc: 0, binary: false, unreadable: true };
+  } finally {
+    await handle.close();
+  }
+}

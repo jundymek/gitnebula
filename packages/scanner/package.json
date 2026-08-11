@@ -11,10 +11,12 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@gitnebula/contract": "workspace:*"
+    "@gitnebula/contract": "workspace:*",
+    "picomatch": "^4.0.5"
   },
   "devDependencies": {
     "@types/node": "catalog:",
+    "@types/picomatch": "^4.0.3",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
