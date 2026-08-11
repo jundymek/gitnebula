@@ -57,6 +57,10 @@ function isRfc3339DateTime(value: string): boolean {
   const offsetHour = match[7] === undefined ? 0 : Number(match[7]);
   const offsetMinute = match[8] === undefined ? 0 : Number(match[8]);
 
+  // Year 0000 parses in JavaScript, so the Date invariant does not exclude it,
+  // but no repository has commits from it: a zero year reaching here is an
+  // upstream parsing bug that should surface as a validation failure.
+  if (year! < 1) return false;
   if (month! < 1 || month! > 12) return false;
 
   const lastDay =

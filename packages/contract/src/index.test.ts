@@ -279,6 +279,9 @@ describe("validateAnalysis", () => {
 
   const invalidInstants = [
     "2026-99-99T25:61:61Z", // every component out of range
+    // Year 0000 parses in JavaScript, but no repository has commits from it —
+    // a zero year is an upstream parsing bug, not a timestamp.
+    "0000-01-01T00:00:00Z",
     "2026-13-01T00:00:00Z", // month 13
     "2026-00-01T00:00:00Z", // month 0
     "2026-08-32T00:00:00Z", // day 32
