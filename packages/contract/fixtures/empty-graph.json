@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1.0",
+  "repo": {
+    "name": "fixture-empty-graph",
+    "remoteUrl": null,
+    "analyzedAt": "2026-01-01T00:00:00.000Z",
+    "defaultBranch": "main",
+    "analysisWindowDays": 365,
+    "stats": {
+      "files": 0,
+      "loc": 0,
+      "commits": 0,
+      "languages": {}
+    }
+  },
+  "nodes": [],
+  "edges": [],
+  "cochanges": []
+}

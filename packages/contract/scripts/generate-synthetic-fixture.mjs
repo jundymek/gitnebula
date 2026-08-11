@@ -1,0 +1,229 @@
+#!/usr/bin/env node
+// Generates fixtures/synthetic-100x2000.json: 100 modules / 2,000 files.
+// Fully seeded — running twice produces byte-identical output (AC-1).
+// This is the perf yardstick fixture (ADR-0006, PRD FR-14).
+
+import { writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const SEED = 0x6e6562; // "neb"
+const MODULE_COUNT = 100;
+const FILES_PER_MODULE = 20; // 100 * 20 = 2,000 files
+const BASE_TIME_MS = Date.UTC(2025, 0, 1); // deterministic anchor, not the clock
+
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return function next() {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const rand = mulberry32(SEED);
+const randInt = (min, max) => min + Math.floor(rand() * (max - min + 1));
+const pick = (arr) => arr[Math.floor(rand() * arr.length)];
+
+const LAYERS = ["backend", "frontend", "infra", "test", "other"];
+const EXTENSIONS = [".ts", ".ts", ".ts", ".py"]; // rough TS-heavy mix
+
+const pad = (n, width) => String(n).padStart(width, "0");
+const isoAt = (offsetDays) =>
+  new Date(BASE_TIME_MS + offsetDays * 86_400_000).toISOString();
+
+const nodes = [];
+const edges = [];
+const fileIdsByModule = new Map();
+
+let totalLoc = 0;
+let totalCommits = 0;
+let tsFiles = 0;
+let pyFiles = 0;
+
+for (let m = 0; m < MODULE_COUNT; m += 1) {
+  const moduleId = `mod-${pad(m, 3)}/`;
+  const layer = LAYERS[m % LAYERS.length];
+  const fileIds = [];
+
+  let moduleLoc = 0;
+  let moduleCommits = 0;
+  let moduleChurnMax = 0;
+  let moduleLastChanged = 0;
+
+  for (let f = 0; f < FILES_PER_MODULE; f += 1) {
+    const ext = pick(EXTENSIONS);
+    if (ext === ".py") pyFiles += 1;
+    else tsFiles += 1;
+    const fileId = `${moduleId}file-${pad(f, 2)}${ext}`;
+    const loc = randInt(5, 400);
+    const commits = randInt(0, 40);
+    const churn = Math.round(rand() * 1000) / 1000;
+    const changedOffset = randInt(0, 364);
+
+    moduleLoc += loc;
+    moduleCommits += commits;
+    moduleChurnMax = Math.max(moduleChurnMax, churn);
+    moduleLastChanged = Math.max(moduleLastChanged, changedOffset);
+
+    nodes.push({
+      id: fileId,
+      kind: "file",
+      parent: moduleId,
+      path: fileId,
+      layer,
+      loc,
+      churn,
+      commits,
+      authors: randInt(1, 5),
+      lastChangedAt: isoAt(changedOffset),
+      description: null,
+      descriptionSource: null,
+    });
+    fileIds.push(fileId);
+  }
+
+  totalLoc += moduleLoc;
+  totalCommits += moduleCommits;
+  fileIdsByModule.set(moduleId, fileIds);
+
+  nodes.push({
+    id: moduleId,
+    kind: "module",
+    parent: null,
+    path: moduleId,
+    layer,
+    loc: moduleLoc,
+    churn: moduleChurnMax,
+    commits: moduleCommits,
+    authors: randInt(1, 12),
+    lastChangedAt: isoAt(moduleLastChanged),
+    description: null,
+    descriptionSource: null,
+  });
+}
+
+// Module-level import edges: each module imports 1–4 later modules (acyclic by
+// construction keeps the fixture stress-shaped, not pathological), weight =
+// number of underlying file pairs, which we also emit (ADR-0005: both levels).
+const moduleIds = [...fileIdsByModule.keys()];
+for (let m = 0; m < MODULE_COUNT; m += 1) {
+  const source = moduleIds[m];
+  const targetCount = randInt(1, 4);
+  const targets = new Set();
+  for (let t = 0; t < targetCount; t += 1) {
+    const target = moduleIds[randInt(0, MODULE_COUNT - 1)];
+    if (target !== source) targets.add(target);
+  }
+  for (const target of [...targets].sort()) {
+    const pairs = randInt(1, 6);
+    const sourceFiles = fileIdsByModule.get(source);
+    const targetFiles = fileIdsByModule.get(target);
+    // Sampling can draw the same file pair twice. A repeat is dropped rather
+    // than resampled, so the module edge's weight is derived from the pairs
+    // actually emitted, not from the sample count — ADR-0005 defines weight as
+    // "the number of underlying file-level import pairs", which is exactly what
+    // a viz aggregation test would check this fixture against.
+    const seen = new Set();
+    const filePairs = [];
+    for (let p = 0; p < pairs; p += 1) {
+      const from = pick(sourceFiles);
+      const to = pick(targetFiles);
+      const key = `${from}\u0000${to}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      filePairs.push({ source: from, target: to, kind: "import", weight: 1 });
+    }
+    edges.push({ source, target, kind: "import", weight: filePairs.length });
+    edges.push(...filePairs);
+  }
+}
+
+// Co-changes: bounded per ADR-0005 (count >= 3, top 500 per kind).
+const cochanges = [];
+for (let i = 0; i < 500; i += 1) {
+  const a = moduleIds[randInt(0, MODULE_COUNT - 1)];
+  const b = moduleIds[randInt(0, MODULE_COUNT - 1)];
+  if (a === b) continue;
+  const [lo, hi] = a < b ? [a, b] : [b, a];
+  cochanges.push({ a: lo, b: hi, count: randInt(3, 50) });
+}
+for (let i = 0; i < 500; i += 1) {
+  const mod = moduleIds[randInt(0, MODULE_COUNT - 1)];
+  const files = fileIdsByModule.get(mod);
+  const a = pick(files);
+  const b = pick(files);
+  if (a === b) continue;
+  const [lo, hi] = a < b ? [a, b] : [b, a];
+  cochanges.push({ a: lo, b: hi, count: randInt(3, 30) });
+}
+const dedup = new Map();
+for (const pair of cochanges) {
+  dedup.set(`${pair.a}\u0000${pair.b}`, pair);
+}
+
+// Stable sorts per ADR-0005: nodes by id, edges by source/target,
+// cochanges by count desc then ids.
+nodes.sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+edges.sort((x, y) =>
+  x.source !== y.source
+    ? x.source < y.source
+      ? -1
+      : 1
+    : x.target < y.target
+      ? -1
+      : x.target > y.target
+        ? 1
+        : 0,
+);
+const sortedCochanges = [...dedup.values()].sort((x, y) =>
+  y.count !== x.count
+    ? y.count - x.count
+    : x.a !== y.a
+      ? x.a < y.a
+        ? -1
+        : 1
+      : x.b < y.b
+        ? -1
+        : x.b > y.b
+          ? 1
+          : 0,
+);
+
+const fileCount = nodes.filter((n) => n.kind === "file").length;
+const document = {
+  schemaVersion: "1.0",
+  repo: {
+    name: "fixture-synthetic-100x2000",
+    remoteUrl: null,
+    analyzedAt: isoAt(365),
+    defaultBranch: "main",
+    analysisWindowDays: 365,
+    stats: {
+      files: fileCount,
+      loc: totalLoc,
+      commits: totalCommits,
+      languages: {
+        python: Math.round((pyFiles / fileCount) * 1000) / 1000,
+        typescript: Math.round((tsFiles / fileCount) * 1000) / 1000,
+      },
+    },
+  },
+  nodes,
+  edges,
+  cochanges: sortedCochanges,
+};
+
+const outPath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "fixtures",
+  "synthetic-100x2000.json",
+);
+writeFileSync(outPath, `${JSON.stringify(document, null, 2)}\n`);
+console.log(
+  `wrote ${outPath}: ${fileCount} files, ${moduleIds.length} modules, ` +
+    `${edges.length} edges, ${sortedCochanges.length} cochanges`,
+);

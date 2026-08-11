@@ -8,10 +8,12 @@
   },
   "scripts": {
     "generate": "node scripts/generate-types.mjs",
+    "generate:fixtures": "node scripts/generate-synthetic-fixture.mjs",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json"
   },
   "devDependencies": {
+    "@types/node": "catalog:",
     "json-schema-to-typescript": "^15.0.4",
     "typescript": "catalog:",
     "vitest": "catalog:"
