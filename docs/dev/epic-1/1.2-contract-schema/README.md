@@ -96,8 +96,8 @@ These were settled here and are binding on the analyzers:
   RFC 3339 *semantics*, not just digit placement: component ranges and the
   calendar, so `2026-02-29` is rejected in a non-leap year and
   `2026-99-99T25:61:61Z` cannot reach the Viewer as an `Invalid Date`. A leap
-  second (`:60`) is accepted, per RFC 3339 §5.6 — `git log` reproduces whatever
-  a commit recorded.
+  second (`:60`) is accepted per RFC 3339 §5.6, but only at the instant one
+  occurs — `23:59:60` UTC, offset-normalized — so `10:00:60Z` is rejected.
 
 ## Environment neutrality (AC-5)
 

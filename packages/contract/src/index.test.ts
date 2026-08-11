@@ -267,7 +267,8 @@ describe("validateAnalysis", () => {
     "2026-08-11T12:00:00+02:00", // git log --date=iso-strict
     "2026-08-11T08:00:00-02:30", // half-hour offset
     "2024-02-29T00:00:00Z", // leap day in a leap year
-    "2026-12-31T23:59:60Z", // RFC 3339 permits a leap second
+    "2026-12-31T23:59:60Z", // a leap second, at the only instant one occurs
+    "2027-01-01T00:59:60+01:00", // the same leap second, seen from +01:00
   ];
 
   it.each(validInstants)("accepts the RFC 3339 instant %s", (instant) => {
@@ -289,6 +290,11 @@ describe("validateAnalysis", () => {
     "2026-08-11T24:00:00Z", // hour 24
     "2026-08-11T10:60:00Z", // minute 60
     "2026-08-11T10:00:61Z", // second 61
+    // A leap second exists only at 23:59:60 UTC. `:60` at any other instant is
+    // not a timestamp any clock, or `git log`, can produce.
+    "2026-08-11T10:00:60Z", // midday leap second
+    "2026-12-31T23:59:60+01:00", // 22:59:60 UTC — the wrong instant
+    "2026-12-31T22:59:60Z", // an hour early
     "2026-08-11T10:00:00+24:00", // offset hour out of range
     "2026-08-11T10:00:00+02:60", // offset minute out of range
     "2026-08-11T10:00:00", // no timezone — RFC 3339 requires one

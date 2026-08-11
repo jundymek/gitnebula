@@ -58,11 +58,20 @@ function isRfc3339DateTime(value: string): boolean {
   if (day! < 1 || day! > lastDay) return false;
 
   if (hour! > 23 || minute! > 59) return false;
-  // 60 is deliberate: RFC 3339 §5.6 permits a leap second, and `git log` will
-  // reproduce whatever a commit recorded.
+  if (offsetHour > 23 || offsetMinute > 59) return false;
+
+  if (second! < 60) return true;
   if (second! > 60) return false;
 
-  return offsetHour <= 23 && offsetMinute <= 59;
+  // Second 60 is a leap second. RFC 3339 §5.6 permits one, but only at the
+  // instant one actually occurs — 23:59:60 UTC — so the local time is shifted
+  // back by the offset before it is checked. `10:00:60Z` is not a timestamp any
+  // clock can produce, and accepting it would make the format's promise a lie.
+  const offsetMinutes =
+    (match[7] === "-" ? -1 : 1) * (offsetHour * 60 + offsetMinute);
+  const utcMinutes = (hour! * 60 + minute! - offsetMinutes + 1440) % 1440;
+
+  return utcMinutes === 23 * 60 + 59;
 }
 
 const ajv = new Ajv2020({
