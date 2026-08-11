@@ -1,0 +1,132 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`analyze against the crafted TS fixture > matches the committed snapshot and is identical across runs (AC-5) 1`] = `
+{
+  "edges": [
+    {
+      "kind": "import",
+      "source": "app",
+      "target": "core",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "app",
+      "target": "utils",
+      "weight": 2,
+    },
+    {
+      "kind": "import",
+      "source": "app/index.ts",
+      "target": "app/view.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "app/index.ts",
+      "target": "core/index.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "app/view.ts",
+      "target": "app/view.css",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "app/view.ts",
+      "target": "utils/format.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "app/view.ts",
+      "target": "utils/pad.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core",
+      "target": "shared",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core",
+      "target": "utils",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core/engine.ts",
+      "target": "core/lazy.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core/engine.ts",
+      "target": "shared/util.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core/engine.ts",
+      "target": "utils/format.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "core/index.ts",
+      "target": "core/engine.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "legacy",
+      "target": "utils",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "legacy/loader.js",
+      "target": "utils/pad.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "main.ts",
+      "target": "app/index.ts",
+      "weight": 1,
+    },
+    {
+      "kind": "import",
+      "source": "utils/format.ts",
+      "target": "utils/pad.ts",
+      "weight": 1,
+    },
+  ],
+  "warnings": [
+    {
+      "code": "external-import",
+      "count": 3,
+      "detail": "react in core/engine.ts",
+    },
+    {
+      "code": "outside-universe-import",
+      "count": 1,
+      "detail": "../vendored/secret in core/lazy.ts",
+    },
+    {
+      "code": "unparsable-file",
+      "count": 1,
+      "detail": "broken.ts",
+    },
+    {
+      "code": "unresolved-import",
+      "count": 2,
+      "detail": "@/missing in app/index.ts",
+    },
+  ],
+}
+`;

@@ -2,7 +2,11 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
-    "types": ["node"]
+    "types": ["node"],
+    // The TypeScript compiler API ships as CommonJS with `export =`; a default
+    // import is the only form that works under Node ESM at runtime, and this
+    // is what makes it type-check as well.
+    "esModuleInterop": true
   },
   "include": ["src"]
 }

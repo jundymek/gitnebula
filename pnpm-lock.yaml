@@ -91,13 +91,13 @@ importers:
       '@gitnebula/contract':
         specifier: workspace:*
         version: link:../contract
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 20.19.43
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 4.1.10(@types/node@20.19.43)(vite@8.2.1(@types/node@20.19.43)(esbuild@0.27.7))

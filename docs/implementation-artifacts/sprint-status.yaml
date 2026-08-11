@@ -16,7 +16,7 @@ development_status:
   1.4-perf-spike: done
   # Epic 2 — Analysis Pipeline and Living Map (-> M2)
   2.1-scanner-core: backlog
-  2.2-deps-ts-imports: backlog
+  2.2-deps-ts-imports: review
   2.3-githist-metrics: backlog
   2.4-cli-pipeline: backlog
   2.5-viz-engine-core: backlog
