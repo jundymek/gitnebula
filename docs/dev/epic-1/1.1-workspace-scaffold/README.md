@@ -31,8 +31,10 @@ pnpm build      # tsup (cli) + vite (viz) — the only two build edges (AD-11)
   `viz` compiles against DOM lib with no `node:` types; `contract` has neither
   DOM nor node types (environment-neutral); scanner/deps/githist/cli are
   Node-side.
-- **CI**: `.github/workflows/ci.yml` runs install + lint + typecheck + test on
-  every push and PR (Node 20, pnpm from the `packageManager` field).
+- **CI**: `.github/workflows/ci.yml` defines install + lint + typecheck + test
+  (Node 20, pnpm from the `packageManager` field). By maintainer decision it is
+  currently trigger-disabled (`workflow_dispatch` only) — all verification runs
+  locally during implementation; story 4.2 revisits CI.
 - **Repo hygiene**: MIT `LICENSE`, `CONTRIBUTING.md` (commit convention,
   trailers, squash policy), `.gitignore` covers `dist/` and
   `test-fixtures/.generated/`.

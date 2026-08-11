@@ -1,8 +1,11 @@
 name: CI
 
+# CI is intentionally not wired to push/PR for now — the maintainer decided
+# all verification runs locally during implementation (pnpm lint && pnpm
+# typecheck && pnpm test). Restore the push/pull_request triggers when CI is
+# re-enabled (story 4.2 revisits the CI recipe).
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 jobs:
   checks:
