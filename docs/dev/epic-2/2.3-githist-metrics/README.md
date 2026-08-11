@@ -14,15 +14,26 @@ git -C <root> log \
     -z \
     --name-status \
     --since-as-filter=<windowAnchor − windowDays> \
-    --until=<windowAnchor> \
     --format=%x1e%H%x1f%ct%x1f%ae
 ```
 
 Piece by piece:
 
-- **`--since-as-filter` / `--until`** bracket the analysis window. Both ends
+- **`--since-as-filter`** is the window's lower bound. Both ends of the window
   come from `Config.windowAnchor` (AD-13); the analyzer never reads the clock,
   which is also what an ESLint rule enforces for this package (AD-4).
+
+  **There is no `--until`.** The upper bound is applied in `computeGitResult`
+  instead, because a commit newer than the anchor still carries rename records
+  the scanner's HEAD paths depend on. If a file is renamed after the anchor,
+  `--until` hides that rename, and every in-window change under the old name
+  then resolves to a path the scanner has never heard of and is dropped as
+  outside the universe — the file simply loses its history. This is not exotic:
+  cli ships `--window-anchor` for deterministic runs, so any pinned past anchor
+  puts HEAD's renames after it. Post-anchor commits are therefore read, used
+  for aliasing, and excluded from every metric — no counts, no co-change, no
+  `lastCommitAt`. Removing `--until` costs nothing in traversal; it only ever
+  filtered output, never the walk.
 
   The lower bound is **`--since-as-filter`, not `--since`**, and the difference
   is data loss rather than speed. `--since` is a traversal *cutoff*: git stops
@@ -31,8 +42,7 @@ Piece by piece:
   in-window commit sitting behind an older-dated descendant is never visited.
   Demonstrated on a two-commit repository (ancestor dated 2025-06, descendant
   dated 2024-01, window 2025): `--since` returns **nothing**,
-  `--since-as-filter` correctly returns the ancestor. `--until` needs no
-  equivalent — it skips newer commits without halting the walk.
+  `--since-as-filter` correctly returns the ancestor.
 
   `--since-as-filter` needs git ≥ 2.37. Rather than spend a process probing the
   version on every run, the correct flag is tried first and `--since` is used
@@ -120,7 +130,7 @@ repo-wide.
   is more stable than display name; `.mailmap` is not consulted (it would be a
   second side effect no story asks for).
 - **`lastChangedAt`** — newest **committer** instant, ISO UTC. Committer date
-  throughout, because `--since`/`--until` filter on it and git offers no
+  throughout, because the window's lower bound filters on it and git offers no
   author-date equivalent; reporting author dates would let a node's timestamp
   fall outside the window that selected it.
 - **`churn`** — `min(1, commits / P95(commits))`, P95 taken over same-kind
@@ -186,7 +196,7 @@ turned into an empty commit list.
 | `src/metrics.ts`        | NEW    | per-node activity, nearest-rank P95, churn                        |
 | `src/cochange.ts`       | NEW    | pair counting, ADR-0005 bounds, stable sort                       |
 | `src/index.ts`          | UPDATE | `analyze` + the pure `computeGitResult`; scaffold seam retired    |
-| `src/*.test.ts`         | NEW    | 72 tests; `index.test.ts` holds the fixture-repo snapshot         |
+| `src/*.test.ts`         | NEW    | 74 tests; `index.test.ts` holds the fixture-repo snapshot         |
 
 `analyze` takes `{ root, scan }` — `ScanResult` is the contract-typed part; the
 envelope is package-local because the contract exports result shapes, not input

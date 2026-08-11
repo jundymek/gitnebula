@@ -70,8 +70,11 @@ export async function analyze(
   onProgress?: ProgressReporter,
 ): Promise<GitResult> {
   const { since, until } = analysisWindow(config);
-  const commits = await readGitLog(input.root, since, until);
-  return computeGitResult(commits, input.scan, onProgress);
+  const commits = await readGitLog(input.root, since);
+  return computeGitResult(commits, input.scan, {
+    windowEnd: Math.floor(Date.parse(until) / 1000),
+    onProgress,
+  });
 }
 
 /** The window as ISO instants: `[anchor − windowDays, anchor]` (AD-13). */
@@ -91,16 +94,30 @@ export function analysisWindow(config: Config): {
   };
 }
 
+/** Options for {@link computeGitResult}. */
+export interface ComputeOptions {
+  /**
+   * Committer instant (unix seconds) the window ends at — commits newer than
+   * it alias renames but contribute no metrics. Defaults to no upper bound.
+   */
+  readonly windowEnd?: number;
+  readonly onProgress?: ProgressReporter;
+}
+
 /**
  * The pure half: parsed commits (newest first) plus the scan universe in,
  * `GitResult` out. Kept separate from the git spawn so every rule here —
  * rename mapping, universe filtering, churn, co-change bounds — is testable
  * without a repository.
+ *
+ * The tunables are a named object rather than positional parameters: two
+ * optional trailing arguments of different types is precisely the shape where
+ * a caller silently passes a callback into a number slot.
  */
 export function computeGitResult(
   commits: readonly RawCommit[],
   scan: ScanResult,
-  onProgress?: ProgressReporter,
+  { windowEnd = Number.POSITIVE_INFINITY, onProgress }: ComputeOptions = {},
 ): GitResult {
   const filesByPath = new Map<string, ScannedNode>();
   const activity = new Map<string, NodeActivity>();
@@ -121,8 +138,22 @@ export function computeGitResult(
   const bulk = new Counter();
   const orphanModules = new Counter();
   let lastCommitAt: number | null = null;
+  let inWindow = 0;
 
   for (const [index, commit] of commits.entries()) {
+    // The window's upper bound is applied here rather than by `--until`, so a
+    // commit newer than the anchor still contributes its renames to the chain.
+    // Without that, a file renamed after the anchor would leave every in-window
+    // change under its old name resolving to a path the scanner never saw, and
+    // the whole lot would be dropped as outside the universe. Such a commit
+    // aliases and nothing else: no metrics, no co-change, no repo-wide count.
+    if (commit.committedAt > windowEnd) {
+      chain.observe(commit);
+      onProgress?.(index + 1, commits.length);
+      continue;
+    }
+
+    inWindow += 1;
     // Every commit in the window counts towards the repo-wide figures, which
     // is what the contract says they are. A changeless commit — a merge, or
     // `commit --allow-empty` — simply attributes to no node below: it has no
@@ -177,7 +208,7 @@ export function computeGitResult(
       ...fileCochanges.bounded(),
       ...moduleCochanges.bounded(),
     ]),
-    commits: commits.length,
+    commits: inWindow,
     lastCommitAt: toIsoUtc(lastCommitAt),
     warnings: [
       dropped.warning("path-outside-universe"),

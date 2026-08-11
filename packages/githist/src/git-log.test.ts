@@ -26,17 +26,13 @@ function record(
 
 describe("gitLogArgs", () => {
   it("asks for one -M --name-status pass over the window", () => {
-    const args = gitLogArgs(
-      "2025-01-01T00:00:00.000Z",
-      "2026-01-01T00:00:00.000Z",
-    );
+    const args = gitLogArgs("2025-01-01T00:00:00.000Z");
     expect(args).toEqual([
       "log",
       "-M",
       "-z",
       "--name-status",
       "--since-as-filter=2025-01-01T00:00:00.000Z",
-      "--until=2026-01-01T00:00:00.000Z",
       "--format=%x1e%H%x1f%ct%x1f%ae",
     ]);
   });
@@ -44,24 +40,24 @@ describe("gitLogArgs", () => {
   it("filters the lower bound instead of cutting the traversal short", () => {
     // --since halts the walk at the first older-dated commit, so a history
     // with non-monotonic dates can hide in-window ancestors entirely.
-    expect(gitLogArgs("a", "b")).toContain("--since-as-filter=a");
-    expect(gitLogArgs("a", "b")).not.toContain("--since=a");
+    expect(gitLogArgs("a")).toContain("--since-as-filter=a");
+    expect(gitLogArgs("a")).not.toContain("--since=a");
   });
 
   it("falls back to --since for git too old to know the filtering flag", () => {
-    const args = gitLogArgs("a", "b", false);
+    const args = gitLogArgs("a", false);
     expect(args).toContain("--since=a");
     expect(args).not.toContain("--since-as-filter=a");
   });
 
   it("never passes --follow (banned by AD-13)", () => {
-    expect(gitLogArgs("a", "b")).not.toContain("--follow");
+    expect(gitLogArgs("a")).not.toContain("--follow");
   });
 
   it("keeps merges in the stream, so the repo-wide count stays repo-wide", () => {
     // git prints no file records for a merge, so it attributes to no node —
     // but it is still a commit in the window and must be counted as one.
-    expect(gitLogArgs("a", "b")).not.toContain("--no-merges");
+    expect(gitLogArgs("a")).not.toContain("--no-merges");
   });
 });
 

@@ -359,6 +359,37 @@ describe("computeGitResult", () => {
     expect(result.warnings).toEqual([]);
   });
 
+  it("takes renames from post-anchor commits but counts nothing from them", () => {
+    // The scanner sees HEAD, where the file is already `new.ts`. The rename
+    // happened after the anchor, so it must still teach the chain that
+    // `old.ts` is the same file — otherwise the in-window commit below
+    // resolves to a path the universe has never heard of and is dropped.
+    const result = computeGitResult(
+      [
+        commit("after", 900, "late@x.invalid", {
+          status: "R",
+          oldPath: "old.ts",
+          path: "new.ts",
+        }),
+        commit("inside", 100, "ada@x.invalid", touch("old.ts")),
+      ],
+      scanOf(node("new.ts", "file", null)),
+      { windowEnd: 500 },
+    );
+
+    expect(result.history["new.ts"]).toEqual({
+      churn: 1,
+      commits: 1,
+      authors: 1,
+      lastChangedAt: "1970-01-01T00:01:40.000Z",
+    });
+    // The post-anchor commit is outside the window: absent from the repo-wide
+    // count and from lastCommitAt, and its author is not an author.
+    expect(result.commits).toBe(1);
+    expect(result.lastCommitAt).toBe("1970-01-01T00:01:40.000Z");
+    expect(result.warnings).toEqual([]);
+  });
+
   it("reports progress once per commit", () => {
     const seen: Array<[number, number]> = [];
     computeGitResult(
@@ -367,7 +398,7 @@ describe("computeGitResult", () => {
         commit("c1", 100, "a@x.invalid", touch("a.ts")),
       ],
       scanOf(node("a.ts", "file", null)),
-      (done, total) => seen.push([done, total]),
+      { onProgress: (done, total) => seen.push([done, total]) },
     );
     expect(seen).toEqual([
       [1, 2],
@@ -441,6 +472,28 @@ describe("analyze against the built fixture repo (AC-6, AD-14)", () => {
     const first = await analyze(input, PINNED_CONFIG);
     const second = await analyze(input, PINNED_CONFIG);
     expect(JSON.stringify(second)).toBe(JSON.stringify(first));
+  });
+
+  it("resolves a rename that happens after the anchor", async () => {
+    // Window [2025-01-01, 2025-04-01]; the fixture renames core/score.py to
+    // core/scoring.py on 2025-04-05, i.e. AFTER the anchor. The scanner still
+    // sees the post-rename name at HEAD, so both in-window commits under the
+    // old name must be credited to core/scoring.py rather than dropped. This
+    // is the case `--until` used to hide, and it is reachable in ordinary use
+    // through cli's `--window-anchor` flag.
+    const result = await analyze(
+      { root: fixtureRepo, scan: fixtureScan() },
+      {
+        ...PINNED_CONFIG,
+        windowAnchor: "2025-04-01T00:00:00Z",
+        windowDays: 90,
+      },
+    );
+
+    expect(result.commits).toBe(2);
+    expect(result.history["core/scoring.py"]?.commits).toBe(2);
+    expect(result.history["web/api.ts"]?.commits).toBe(2);
+    expect(result.warnings).toEqual([]);
   });
 
   it("excludes out-of-window history from a shorter window", async () => {
