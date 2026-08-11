@@ -17,7 +17,7 @@ development_status:
   # Epic 2 — Analysis Pipeline and Living Map (-> M2)
   2.1-scanner-core: review
   2.2-deps-ts-imports: review
-  2.3-githist-metrics: backlog
+  2.3-githist-metrics: review
   2.4-cli-pipeline: backlog
   2.5-viz-engine-core: backlog
   # Epic 3 — Full Exploration Experience
