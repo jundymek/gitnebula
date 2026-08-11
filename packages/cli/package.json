@@ -21,12 +21,12 @@
     "@gitnebula/githist": "workspace:*",
     "@gitnebula/scanner": "workspace:*",
     "commander": "^15.0.0",
+    "typescript": "catalog:",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "^8.5.1",
-    "typescript": "catalog:",
     "vitest": "catalog:"
   }
 }

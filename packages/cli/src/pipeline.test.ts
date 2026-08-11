@@ -78,16 +78,32 @@ describe("runPipeline on the fixture repo (AC-2, AC-3, AC-5)", () => {
     const { run, output } = runOnFixture();
     await run;
 
-    expect(completedStages(output())).toEqual([
-      "repo",
-      "config",
-      "scan",
-      "deps",
-      "githist",
-      "assemble",
-      "enrich",
-      "emit",
-    ]);
+    const completed = completedStages(output());
+
+    // deps and githist are deliberately concurrent, so which of the two
+    // finishes first is not the pipeline's promise — only that both sit
+    // between scan and assemble. Asserting a fixed order here would encode a
+    // race, and did: it passed only while one of them was a stub.
+    expect(completed.slice(0, 3)).toEqual(["repo", "config", "scan"]);
+    expect(completed.slice(3, 5).sort()).toEqual(["deps", "githist"]);
+    expect(completed.slice(5)).toEqual(["assemble", "enrich", "emit"]);
+  });
+
+  it("starts deps and githist together rather than one after the other", async () => {
+    const { run, output } = runOnFixture();
+    await run;
+
+    // Both start lines come before either end line: the two stages genuinely
+    // overlap, rather than being a sequence the summary calls parallel.
+    const lines = output().split("\n");
+    const lastStart = Math.max(
+      lines.indexOf("▸ deps"),
+      lines.indexOf("▸ githist"),
+    );
+    const firstEnd = lines.findIndex((line) => /^✔ (deps|githist) /.test(line));
+
+    expect(lastStart).toBeGreaterThanOrEqual(0);
+    expect(firstEnd).toBeGreaterThan(lastStart);
   });
 
   it("prints a start line and an elapsed end line for every stage", async () => {

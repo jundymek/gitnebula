@@ -126,6 +126,19 @@ run.
 pointing at story 3.2, which adds the shallow clone and the local server. It is
 not implemented here.
 
+## The bundle
+
+`tsup` inlines every workspace package (AD-11) but leaves `typescript`
+external, and `@gitnebula/cli` declares it as a runtime dependency. `deps`
+resolves imports through the TypeScript compiler API (ADR-0001); that package
+is CommonJS and inlining it into an ESM bundle makes the binary die on its
+first import. It was also 9.5 MB of a 9.9 MB bundle — external, the bundle is
+389 KB.
+
+Nothing in the test suites catches this, because they run from source where the
+compiler API loads fine. It was found by running `dist/gitnebula.js`. Story 4.1
+should add a smoke test that executes the built binary.
+
 ## Files
 
 | file                                             | NEW/UPDATE | why                                                            |
