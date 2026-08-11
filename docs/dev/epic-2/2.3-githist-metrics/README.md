@@ -31,8 +31,16 @@ Piece by piece:
   diff content.
 - **`--format`** uses ASCII record (0x1e) and unit (0x1f) separators because
   `-z` has already spent NUL on paths. The commit **message is deliberately not
-  requested**, so no user-controlled text can reach the parser and forge a
-  record boundary.
+  requested**, so no user-controlled text reaches the header.
+
+  The record separator is nonetheless **never searched for across the stream**.
+  POSIX forbids only NUL and `/` in a filename, so a tracked path may legally
+  contain 0x1e, and splitting on every occurrence would tear such a path in
+  half and invent a commit from its tail. Instead the stream is split on NUL —
+  which a path cannot contain — and a leading 0x1e is tested only at positions
+  where a header may begin. Path tokens are consumed positionally and never
+  inspected. Both the parser and a real repository carrying such a filename are
+  covered by tests.
 - **No `--no-merges`**, deliberately. `GitResult.commits` is contractually the
   repo-wide count and `lastCommitAt` the newest instant in the window, so
   filtering merges would undercount on any merge-based workflow and could
@@ -139,7 +147,7 @@ turned into an empty commit list.
 | `src/metrics.ts`        | NEW    | per-node activity, nearest-rank P95, churn                        |
 | `src/cochange.ts`       | NEW    | pair counting, ADR-0005 bounds, stable sort                       |
 | `src/index.ts`          | UPDATE | `analyze` + the pure `computeGitResult`; scaffold seam retired    |
-| `src/*.test.ts`         | NEW    | 61 tests; `index.test.ts` holds the fixture-repo snapshot         |
+| `src/*.test.ts`         | NEW    | 67 tests; `index.test.ts` holds the fixture-repo snapshot         |
 
 `analyze` takes `{ root, scan }` — `ScanResult` is the contract-typed part; the
 envelope is package-local because the contract exports result shapes, not input
@@ -149,7 +157,7 @@ across both analyzers.
 ## Verification
 
 ```sh
-pnpm --filter @gitnebula/githist test   # 61 tests
+pnpm --filter @gitnebula/githist test   # 67 tests
 pnpm lint                               # eslint + prettier
 ```
 

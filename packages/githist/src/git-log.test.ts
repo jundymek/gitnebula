@@ -148,4 +148,32 @@ describe("parseGitLog", () => {
     const [commit] = parseGitLog(record("odd", "1", "a@b.c", "M", path));
     expect(commit?.changes[0]?.path).toBe(path);
   });
+
+  it("does not mistake a path containing the record separator for a commit", () => {
+    // POSIX forbids only NUL and `/` in a filename, so 0x1e is legal in one.
+    // Treating every 0x1e in the stream as a record boundary would split the
+    // path in half and invent a commit from its tail.
+    const path = `web/od${RS}d.ts`;
+    const commits = parseGitLog(
+      record("first", "100", "a@b.c", "M", path, "M", "web/api.ts") +
+        record("second", "200", "b@b.c", "M", "web/other.ts"),
+    );
+
+    expect(commits.map((commit) => commit.hash)).toEqual(["first", "second"]);
+    expect(commits[0]?.changes).toEqual([
+      { status: "M", path },
+      { status: "M", path: "web/api.ts" },
+    ]);
+  });
+
+  it("does not mistake a path starting with the record separator for a commit", () => {
+    const path = `${RS}leading.ts`;
+    const commits = parseGitLog(record("only", "100", "a@b.c", "M", path));
+    expect(commits).toHaveLength(1);
+    expect(commits[0]?.changes).toEqual([{ status: "M", path }]);
+  });
+
+  it("ignores trailing tokens that precede any commit header", () => {
+    expect(parseGitLog("junk\0more\0")).toEqual([]);
+  });
 });

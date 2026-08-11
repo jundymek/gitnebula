@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -496,6 +496,44 @@ describe("analyze on repositories with no usable history", () => {
     expect(result.commits).toBe(0);
     expect(result.lastCommitAt).toBeNull();
     expect(result.history["core/scoring.py"]?.churn).toBe(0);
+  });
+
+  it("reads a real repository whose filename contains the record separator", async () => {
+    // The end-to-end version of the parser's framing test: git will happily
+    // track this name, and it must not fracture the commit stream.
+    const dir = tempDir();
+    const oddName = `od\x1ed.ts`;
+    execFileSync("git", ["init", "--quiet", "--template=", "-b", "main", dir]);
+    writeFileSync(join(dir, oddName), "export const odd = 1;\n");
+    writeFileSync(join(dir, "plain.ts"), "export const plain = 1;\n");
+    execFileSync("git", ["-C", dir, "add", "-A"]);
+    execFileSync("git", ["-C", dir, "commit", "--quiet", "-m", "odd name"], {
+      env: {
+        ...process.env,
+        GIT_AUTHOR_DATE: "2025-05-01T00:00:00Z",
+        GIT_COMMITTER_DATE: "2025-05-01T00:00:00Z",
+        GIT_AUTHOR_NAME: "Odd",
+        GIT_AUTHOR_EMAIL: "odd@fixture.invalid",
+        GIT_COMMITTER_NAME: "Odd",
+        GIT_COMMITTER_EMAIL: "odd@fixture.invalid",
+      },
+    });
+
+    const result = await analyze(
+      {
+        root: dir,
+        scan: scanOf(
+          node(oddName, "file", null),
+          node("plain.ts", "file", null),
+        ),
+      },
+      PINNED_CONFIG,
+    );
+
+    expect(result.commits).toBe(1);
+    expect(result.history[oddName]?.commits).toBe(1);
+    expect(result.history["plain.ts"]?.commits).toBe(1);
+    expect(result.warnings).toEqual([]);
   });
 
   it("aborts when the path is not a repository (AD-7 stage failure)", async () => {

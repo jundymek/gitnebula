@@ -28,7 +28,13 @@ export interface RawCommit {
 // header, so NUL cannot delimit commits; 0x1e/0x1f are the ASCII separators
 // reserved for exactly this and can never appear in a hash, a unix timestamp
 // or an email address. The commit message is deliberately not requested, so
-// no user-controlled text reaches the parser.
+// no user-controlled text reaches the header.
+//
+// A *path*, though, may legally contain 0x1e — POSIX forbids only NUL and `/`.
+// So the record separator is never searched for across the stream: the stream
+// is split on NUL, and a leading 0x1e is only ever tested at a position where
+// a header may begin. Path tokens are consumed positionally and never
+// inspected, which is what makes such a filename harmless.
 const RECORD_SEP = "\x1e";
 const FIELD_SEP = "\x1f";
 const LOG_FORMAT = `%x1e%H%x1f%ct%x1f%ae`;
@@ -68,58 +74,78 @@ export function gitLogArgs(sinceIso: string, untilIso: string): string[] {
 }
 
 /**
- * Parses the raw `git log` stream. Splitting on the record separator is safe
- * for a partial stream: the caller feeds whole output, but the parser is
- * written so a trailing incomplete record is simply the last chunk.
+ * Parses the raw `git log` stream.
+ *
+ * `-z` makes the stream a flat sequence of NUL-terminated tokens, so the parse
+ * is a small state machine over them rather than a search for delimiters: a
+ * token is read as a commit header only where one may legally begin — at the
+ * start, or after a change's paths have been consumed. Everywhere else the
+ * token is a path, taken by position and never examined. That is what keeps a
+ * filename containing the record separator (or a newline, or a quote) from
+ * being mistaken for a new commit.
  */
 export function parseGitLog(raw: string): RawCommit[] {
   const commits: RawCommit[] = [];
+  const tokens = raw.split("\0");
+  let changes: RawChange[] = [];
+  let header: {
+    hash: string;
+    committedAt: number;
+    authorEmail: string;
+  } | null = null;
 
-  for (const record of raw.split(RECORD_SEP)) {
-    if (record.length === 0) continue;
+  const flush = (): void => {
+    if (header !== null) commits.push({ ...header, changes });
+    changes = [];
+  };
 
-    // -z NUL-terminates the header and every path, so the last token is the
-    // empty string after the final NUL.
-    const tokens = record.split("\0");
-    const header = tokens[0] ?? "";
-    const [hash = "", committedAt = "", authorEmail = ""] =
-      header.split(FIELD_SEP);
-    if (hash.length === 0) continue;
+  let i = 0;
+  while (i < tokens.length) {
+    const token = tokens[i] ?? "";
 
-    const changes: RawChange[] = [];
-    let i = 1;
-    while (i < tokens.length) {
-      // git separates the header from the file list with a newline, which -z
-      // leaves glued to the first status token ("\nR100"). Trimming is what
-      // makes the first change parse like every other one.
-      const status = tokens[i]?.trim();
-      if (status === undefined || status.length === 0) {
-        i += 1;
-        continue;
-      }
-      if (TWO_PATH_STATUS.test(status)) {
-        const oldPath = tokens[i + 1];
-        const path = tokens[i + 2];
-        if (oldPath !== undefined && path !== undefined && path.length > 0) {
-          changes.push({ status: status[0] ?? status, path, oldPath });
-        }
-        i += 3;
-      } else {
-        const path = tokens[i + 1];
-        if (path !== undefined && path.length > 0) {
-          changes.push({ status: status[0] ?? status, path });
-        }
-        i += 2;
-      }
+    // Only tested here — a position where a status or a new commit may start.
+    if (token.startsWith(RECORD_SEP)) {
+      flush();
+      const [hash = "", committedAt = "", authorEmail = ""] = token
+        .slice(RECORD_SEP.length)
+        .split(FIELD_SEP);
+      header =
+        hash.length === 0
+          ? null
+          : {
+              hash,
+              committedAt: Number.parseInt(committedAt, 10),
+              authorEmail: authorEmail.toLowerCase(),
+            };
+      i += 1;
+      continue;
     }
 
-    commits.push({
-      hash,
-      committedAt: Number.parseInt(committedAt, 10),
-      authorEmail: authorEmail.toLowerCase(),
-      changes,
-    });
+    // git separates the header from the file list with a newline, which -z
+    // leaves glued to the first status token ("\nR100"). Trimming is what
+    // makes the first change parse like every other one.
+    const status = token.trim();
+    if (status.length === 0 || header === null) {
+      i += 1;
+      continue;
+    }
+
+    if (TWO_PATH_STATUS.test(status)) {
+      const oldPath = tokens[i + 1];
+      const path = tokens[i + 2];
+      if (oldPath !== undefined && path !== undefined && path.length > 0) {
+        changes.push({ status: status[0] ?? status, path, oldPath });
+      }
+      i += 3;
+    } else {
+      const path = tokens[i + 1];
+      if (path !== undefined && path.length > 0) {
+        changes.push({ status: status[0] ?? status, path });
+      }
+      i += 2;
+    }
   }
+  flush();
 
   return commits;
 }
