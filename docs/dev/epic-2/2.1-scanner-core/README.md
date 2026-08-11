@@ -34,7 +34,11 @@ logic (AD-3, ADR-0002).
 ## How each part decides
 
 **LOC** is physical lines carrying at least one non-whitespace character.
-Blank and whitespace-only lines do not count; comments do. Stripping comments
+Blank and whitespace-only lines do not count; comments do. Whitespace means
+Unicode whitespace, not merely ASCII — a line holding one no-break space or an
+ideographic space is blank to a reader and is counted as blank here, which the
+counter resolves by recognizing those characters' byte sequences rather than
+by decoding UTF-8 in the hot loop. Stripping comments
 would need a parser per language, which is `deps`' business. Files are streamed
 in 64 KB chunks and never retained whole, so a checked-in 40 MB blob costs one
 chunk of memory.
@@ -209,7 +213,7 @@ test code.
 | `packages/scanner/src/modules.ts`         | NEW        | module derivation and the descent heuristic       |
 | `packages/scanner/src/warnings.ts`        | NEW        | AD-7 counted-drop collector                       |
 | `packages/scanner/src/analyze.test.ts`    | NEW        | end-to-end behaviour over crafted temp trees      |
-| `packages/scanner/src/walk.test.ts`       | NEW        | entry classification, including the `DT_UNKNOWN` path |
+| `packages/scanner/src/walk.test.ts`       | NEW        | entry classification and the Unicode whitespace rule |
 | `packages/scanner/src/fixture-repo.test.ts`| NEW       | AC-4 snapshot + byte-identity on the fixture repo |
 | `packages/scanner/src/excludes.test.ts`   | NEW        | AC-1 exclusion coverage, both directions          |
 | `packages/scanner/src/layers.test.ts`     | NEW        | AC-2 ordering, overrides, dominance               |
@@ -225,7 +229,7 @@ calls `analyze` for real. It is marked as such in the source.
 ## Verification
 
 ```sh
-pnpm --filter @gitnebula/scanner test   # 123 tests
+pnpm --filter @gitnebula/scanner test   # 140 tests
 pnpm lint && pnpm test                  # both exit 0, whole workspace
 ```
 
