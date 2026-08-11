@@ -97,9 +97,9 @@ across the three committed runs.
 
 | phase                             | sustained fps (worst 1 s) | mean frame work | p95            | worst frame     |
 | --------------------------------- | ------------------------- | --------------- | -------------- | --------------- |
-| (a) active simulation, all 2,100  | **59** (all runs)         | 5.12 – 5.28 ms  | 5.5 – 5.8 ms   | 16.1 – 16.9 ms  |
-| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.20 – 0.22 ms  | 0.3 ms         | 0.4 – 0.6 ms    |
-| (c) viewport unfold while panning | **59** (all runs)         | 0.57 – 0.62 ms  | 1.7 – 1.8 ms   | 3.4 – 4.1 ms    |
+| (a) active simulation, all 2,100  | **59** (all runs)         | 5.27 – 5.35 ms  | 5.5 – 5.7 ms   | 14.6 – 19.0 ms  |
+| (b) frozen + scripted pan/zoom    | **59** (all runs)         | 0.20 ms         | 0.3 ms         | 0.5 – 0.7 ms    |
+| (c) viewport unfold while panning | **59** (all runs)         | 0.53 – 0.58 ms  | 1.5 – 1.6 ms   | 3.1 – 4.0 ms    |
 
 Average fps was 59.95 in every phase of every run.
 
@@ -114,12 +114,12 @@ Supporting numbers:
   of the 2,000**, with 521–577 links drawn. The graph never accumulates: what
   leaves the viewport collapses.
 - Frames are vsync-capped at 60, so 59 sustained is the ceiling, not a
-  shortfall. The headroom is in the work times: phase (c) uses **~0.6 ms of a
-  16.7 ms budget on average and 4.1 ms at its worst observed frame** — roughly
-  a 4× margin at the worst frame and 28× at the mean.
+  shortfall. The headroom is in the work times: phase (c) uses **~0.55 ms of a
+  16.7 ms budget on average and 4.0 ms at its worst observed frame** — roughly
+  a 4× margin at the worst frame and 30× at the mean.
 
 Phase (a) is deliberately the worst case ADR-0006 exists to avoid: every file
-node simulated at once. It still holds 59 fps, at ~5.2 ms mean frame work —
+node simulated at once. It still holds 59 fps, at ~5.3 ms mean frame work —
 about 9× the cost of phase (c). That is the cost the viewport-scoped rule buys back,
 and it also means a full-graph settle remains affordable as a one-off on load.
 
@@ -135,7 +135,7 @@ the code.
 
 With collapse implemented, the live set stays at 13–15 modules, which is the
 "low hundreds worst case" the ADR predicted. The correction moved phase (c)
-mean frame work from ~1.3 ms to ~0.6 ms, so the earlier figures were
+mean frame work from ~1.3 ms to ~0.55 ms, so the earlier figures were
 conservative rather than optimistic — the verdict was never at risk, but the
 evidence now matches the claim.
 
@@ -159,6 +159,16 @@ Yes, and the measured answer is exactly zero.
 simulating — i.e. the members of modules unfolded earlier, which had already
 settled. Module nodes are reported separately because pinning makes their zero
 trivial; the interesting zero is the one for already-unfolded files.
+
+**A zero is only worth as much as the set it was measured over.** An earlier
+version of this measurement re-partitioned files into "waking" and "frozen"
+only when a module entered or left the viewport. But a wake also disappears
+when it *settles*, and its files become frozen non-members at that moment — so
+they went unmeasured until the next viewport transition, which is precisely the
+interval where a freshly frozen file is most likely to still be drifting. The
+partition is now refreshed whenever the wake set changes for any reason, which
+is a strictly larger measured set. The answer is still 0.0 px, and it now means
+what it says.
 
 Getting this to zero required three implementation details that are easy to get
 wrong, and all three belong in the Epic 3 spec that implements unfold:
@@ -187,7 +197,7 @@ Each wake runs its own short-lived simulation until Settled and is then dropped
 `VERDICT: canvas-2d viable (>= 55 fps sustained in phases b and c)`
 
 Sustained fps is 59 in both phases (and in phase (a) as well) across three
-runs, against a 55 fps bar; worst-frame work in phase (c) is 4.1 ms against a
+runs, against a 55 fps bar; worst-frame work in phase (c) is 4.0 ms against a
 16.7 ms budget.
 
 Because the verdict is *not* escalation, AC-4 does not apply: **no Epic 2/3

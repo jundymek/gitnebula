@@ -360,6 +360,27 @@ async function run(): Promise<void> {
   let peakShownLinks = 0;
   let peakUnfoldedModules = 0;
 
+  /**
+   * Re-partitions the on-screen files into "a live wake is simulating this"
+   * and "this is frozen" — the latter is what AC-5 measures.
+   *
+   * Must run on every change to the wake set, not only on viewport
+   * transitions. A wake also disappears when it settles, and its files become
+   * frozen non-members at that moment; leaving them out until the next unfold
+   * or collapse would exclude them from the measurement for exactly the
+   * interval where they are most likely to still be drifting, which
+   * under-reports the number AC-5 rests on.
+   */
+  function refreshNonMembers(): void {
+    const waking = new Set(wakes.flatMap((w) => w.members));
+    nonMemberFiles = [...shownFiles].filter((f) => !waking.has(f));
+    cumulativeTracker.capture(
+      nodes as { id: string; x: number; y: number }[],
+      new Set([...waking].map((n) => n.id)),
+    );
+    perFrameNonMember.reset();
+  }
+
   recorder.start("c-viewport-unfold");
   await playScript(phaseCScript(layoutBounds), (cam, t) => {
     const w0 = performance.now();
@@ -406,14 +427,7 @@ async function run(): Promise<void> {
           }))
           .filter((l) => shownFiles.has(l.source) && shownFiles.has(l.target)),
       ];
-      // Non-members: every file on screen that no live wake is simulating.
-      const waking = new Set(wakes.flatMap((w) => w.members));
-      nonMemberFiles = [...shownFiles].filter((f) => !waking.has(f));
-      cumulativeTracker.capture(
-        nodes as { id: string; x: number; y: number }[],
-        new Set([...waking].map((n) => n.id)),
-      );
-      perFrameNonMember.reset();
+      refreshNonMembers();
     }
 
     let simulatedNow = 0;
@@ -425,9 +439,13 @@ async function run(): Promise<void> {
     peakShownLinks = Math.max(peakShownLinks, shownLinks.length);
     const afterTicks = performance.now();
     // Freeze-on-settle: a wake that has settled stops being ticked entirely.
+    const wakesBefore = wakes.length;
     wakes = wakes.filter(
       (w) => !w.detector.frame(w.members as { x: number; y: number }[]),
     );
+    // Its files are frozen non-members from this frame on, so the AC-5
+    // partition has to follow — see refreshNonMembers.
+    if (wakes.length !== wakesBefore) refreshNonMembers();
 
     if (nonMemberFiles.length > 0) {
       perFrameNonMember.frame(nonMemberFiles as { x: number; y: number }[]);
