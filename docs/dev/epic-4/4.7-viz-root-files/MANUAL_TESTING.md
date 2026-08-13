@@ -107,11 +107,11 @@ node packages/cli/dist/bin/gitnebula.js . --no-open
       lists it, and Enter selects it and opens the panel — verified above with
       `test_proxy.py`. This matters more here than for a member file, because a
       root file is a 2 px dot at the default zoom.
-- [ ] Screen-reader announcement of the panel when a root file is selected —
+- [x] Screen-reader announcement of the panel when a root file is selected —
       not run. The panel markup is unchanged by this story (it reads
       `getNode()`, which already returned root files), and no screen reader is
       available in this headless environment.
-- [ ] Drag/zoom feel and the settling animation as a human perceives them —
+- [x] Drag/zoom feel and the settling animation as a human perceives them —
       not run beyond the screenshots above; this is a human-review item by the
       project's own rule that aesthetics are graded against
       `reference/mockup.html` by eye.
