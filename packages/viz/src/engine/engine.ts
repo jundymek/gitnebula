@@ -89,7 +89,13 @@ interface CameraFlight {
    */
   startMs: number | null;
   readonly durationMs: number;
-  readonly resolve: () => void;
+  /**
+   * Resolved with `true` on arrival and `false` when the flight was cancelled.
+   * A cancelled flight must not run its caller's arrival effects — panning
+   * during a search flight would otherwise still select the node the user
+   * just steered away from.
+   */
+  readonly resolve: (arrived: boolean) => void;
 }
 
 export class CanvasGraphEngine implements GraphEngine {
@@ -321,7 +327,7 @@ export class CanvasGraphEngine implements GraphEngine {
     const flight = this.flight;
     if (!flight) return;
     this.flight = null;
-    flight.resolve();
+    flight.resolve(false);
   }
 
   fit(options: FitOptions = {}): Promise<void> {
@@ -331,7 +337,8 @@ export class CanvasGraphEngine implements GraphEngine {
       this.setCamera(target);
       return Promise.resolve();
     }
-    return this.animateCameraTo(target, durationMs);
+    // `fit` has no arrival effects, so it does not care which way it ended.
+    return this.animateCameraTo(target, durationMs).then(() => undefined);
   }
 
   /**
@@ -345,6 +352,16 @@ export class CanvasGraphEngine implements GraphEngine {
     const node = this.getNode(id);
     if (!node) return;
     this.cameraTakenByUser = true;
+
+    // The search box works from the first frame, but the layout keeps moving
+    // for 2–3 s. Aiming at a node that is still drifting means arriving where
+    // it *was*: the target is captured once, and 620 ms later the node has
+    // moved on. So a navigation during the settle finishes the settle first —
+    // the user asked to go somewhere, and a stable destination is worth more
+    // than the remainder of an animation they interrupted. It also gives a
+    // file's local wake a final parent position to settle around instead of a
+    // transient one.
+    this.finishSettle();
 
     // A file inside a collapsed module has no position of its own yet, so the
     // module is unfolded first and the wake run to Settled — the target must
@@ -371,9 +388,27 @@ export class CanvasGraphEngine implements GraphEngine {
       return;
     }
 
-    await this.animateCameraTo(target, durationMs);
+    const arrived = await this.animateCameraTo(target, durationMs);
+    // Cancelled — the user panned, zoomed, searched again, or reloaded while
+    // this flight was in the air. Selecting now would open a panel on a node
+    // they steered away from.
+    if (!arrived) return;
     this.startPulse(id);
     this.setSelected(id);
+  }
+
+  /**
+   * Run the module layout to Settled immediately, as if the animation had
+   * finished. Used when the user navigates during the settle; the reduced-motion
+   * path does the same thing for the same reason, and reports a zero duration
+   * because nothing was animated.
+   */
+  private finishSettle(): void {
+    const layout = this.layout;
+    if (!layout || layout.settled) return;
+    const frames = layout.runToSettled();
+    this.announceSettled(frames, 0);
+    this.updateUnfolds();
   }
 
   /**
@@ -424,9 +459,9 @@ export class CanvasGraphEngine implements GraphEngine {
   private animateCameraTo(
     target: CameraState,
     durationMs: number,
-  ): Promise<void> {
+  ): Promise<boolean> {
     this.cancelFlight();
-    return new Promise<void>((resolve) => {
+    return new Promise<boolean>((resolve) => {
       this.flight = {
         from: this.camera,
         to: target,
@@ -730,7 +765,7 @@ export class CanvasGraphEngine implements GraphEngine {
     this.emitter.emit("camera", { camera: this.camera });
     if (t >= 1) {
       this.flight = null;
-      flight.resolve();
+      flight.resolve(true);
     }
   }
 

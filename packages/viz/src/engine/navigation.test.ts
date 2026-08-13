@@ -444,6 +444,61 @@ describe("AC-3 — search fly-to", () => {
     expect(engine.getSelected()?.id).toBe(module.id);
   });
 
+  it("does not select the target of a flight the user cancelled", async () => {
+    // Codex P1. `cancelFlight()` resolves the same promise as arrival, so the
+    // arrival effects ran even when a pan, a zoom or a second search had taken
+    // the camera away — dragging during a search flight opened a panel on the
+    // node the user had just steered off.
+    settledEngine();
+    const module = firstModule();
+    const selects: (string | null)[] = [];
+    engine.on("select", (p) => selects.push(p.node?.id ?? null));
+
+    const flight = engine.flyTo(module.id);
+    run(4);
+    engine.panBy(50, 50); // the user takes over mid-flight
+    run(60);
+    await flight;
+
+    expect(selects).toEqual([]);
+    expect(engine.getSelected()).toBeNull();
+    expect(scene().pulse).toBeNull();
+  });
+
+  it("does not let a second search select the first one's target", async () => {
+    settledEngine();
+    const modules = engine.nodes.filter((n) => n.kind === "module");
+    const selects: (string | null)[] = [];
+    engine.on("select", (p) => selects.push(p.node?.id ?? null));
+
+    const first = engine.flyTo(modules[0]!.id);
+    run(4);
+    const second = engine.flyTo(modules[1]!.id);
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await Promise.all([first, second]);
+
+    // Only the flight that actually arrived selects.
+    expect(selects).toEqual([modules[1]!.id]);
+  });
+
+  it("arrives on the node when the search happened during the settle", async () => {
+    // Codex P1. The target used to be captured from a position the layout was
+    // still moving, so the camera arrived where the node had been 620 ms ago.
+    engine = create();
+    engine.load(loadSyntheticFixture());
+    run(5); // still settling
+
+    const module = firstModule();
+    const flight = engine.flyTo(module.id);
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await flight;
+
+    // The camera centre must be the node's position, not a stale one.
+    const drawn = scene().nodes.find((item) => item.node.id === module.id)!;
+    const camera = engine.getCamera();
+    expect(Math.hypot(drawn.x - camera.x, drawn.y - camera.y)).toBeLessThan(1);
+  });
+
   it("ignores a fly-to for a node that does not exist", async () => {
     settledEngine();
     const before = engine.getCamera();
