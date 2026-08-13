@@ -27,6 +27,10 @@ test-fixtures/.generated/
 # unaffected.
 /analysis.json
 
+# Promo-video workspace: an experiment kept out of the repository's history by
+# choice. Not project source — the map gitnebula draws of itself excludes it.
+/marketing/
+
 # BMAD personal settings (per-developer, not shared)
 _bmad/config.user.toml
 _bmad/custom/config.user.toml
