@@ -1,4 +1,5 @@
-import { basename } from "node:path";
+import { writeFileSync } from "node:fs";
+import { basename, join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
@@ -53,6 +54,31 @@ describe("resolveRepo (metadata the contract needs and no analyzer produces)", (
 
   it("reads the branch of an unborn HEAD rather than guessing", () => {
     expect(resolveRepo(bareRepo()).defaultBranch).toBe("trunk");
+  });
+
+  it("says a mistyped path does not exist, rather than blaming git", () => {
+    // A missing cwd and a missing git binary both surface as ENOENT from
+    // execFileSync, so the naive handler told anyone who mistyped a path to
+    // install git.
+    let thrown: unknown;
+    try {
+      resolveRepo("/does/not/exist");
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect((thrown as StageError).cause).toBe("/does/not/exist does not exist");
+    expect((thrown as StageError).remedy).not.toMatch(/install git/);
+  });
+
+  it("rejects a file the way it rejects a missing path", () => {
+    const dir = makeTempDir(temps, "gitnebula-file-");
+    const file = join(dir, "not-a-repo.txt");
+    writeFileSync(file, "");
+
+    expect(() => resolveRepo(file)).toThrow(
+      /^repo: .+not-a-repo\.txt is not a directory — /,
+    );
   });
 
   it("fails in the AD-7 shape on a directory that is not a repository (AC-2)", () => {

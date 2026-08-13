@@ -4,6 +4,9 @@
 //
 // `run` returns an exit code instead of calling `process.exit`, so the failure
 // paths are testable without spawning a process.
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
+
 import { Command, CommanderError } from "commander";
 
 import { StageError, describeThrown } from "./errors.js";
@@ -33,9 +36,26 @@ interface ParsedFlags {
  * A remote target is recognised so it can be refused clearly. URL mode is
  * story 3.2 (shallow clone into a temp dir); implementing it here would widen
  * this story's scope and duplicate that one.
+ *
+ * The host-like third alternative is why {@link isRemoteTarget} checks the
+ * filesystem first: `example.com/checkout` and `repo.local/src` are perfectly
+ * good directory names, and a local path that exists is a local path.
  */
 const REMOTE_TARGET =
   /^(?:[a-z][a-z0-9+.-]*:\/\/|git@|[\w.-]+\.[a-z]{2,}[/:])/i;
+
+/**
+ * True when `target` should be treated as a remote repository: it looks like
+ * one *and* no such path exists locally. Existence wins, because a directory
+ * the user can point at is never a URL.
+ */
+function isRemoteTarget(target: string, cwd: string): boolean {
+  if (!REMOTE_TARGET.test(target)) return false;
+  // A scheme or an scp-style spec is unambiguous; only the host-like form can
+  // collide with a directory name.
+  if (/^(?:[a-z][a-z0-9+.-]*:\/\/|git@)/i.test(target)) return true;
+  return !existsSync(resolve(cwd, target));
+}
 
 export function createProgram(write: (chunk: string) => void): Command {
   const program = new Command();
@@ -108,7 +128,7 @@ export async function run(
   }
 
   try {
-    if (REMOTE_TARGET.test(target)) {
+    if (isRemoteTarget(target, options.cwd ?? process.cwd())) {
       throw new StageError(
         INPUT_STAGE,
         `analyzing a remote repository (${target}) is not supported in this release`,

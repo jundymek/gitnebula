@@ -8,6 +8,7 @@
 // This is also the pipeline's preflight: a target that is not a git
 // repository fails here, before any analyzer starts, in AD-7's shape.
 import { execFileSync } from "node:child_process";
+import { statSync } from "node:fs";
 import { basename } from "node:path";
 
 import { StageError } from "./errors.js";
@@ -65,6 +66,28 @@ export function resolveRepo(target: string): RepoInfo {
 }
 
 function resolveRoot(target: string): string {
+  // Checked before spawning git, because a missing `cwd` and a missing `git`
+  // both surface as ENOENT from `execFileSync` — and telling someone who
+  // mistyped a path to install git is worse than saying nothing.
+  let stats;
+  try {
+    stats = statSync(target);
+  } catch (error) {
+    throw new StageError(
+      REPO_STAGE,
+      `${target} does not exist`,
+      "check the path, or run gitnebula with no argument to analyze the current directory",
+      { underlying: error },
+    );
+  }
+  if (!stats.isDirectory()) {
+    throw new StageError(
+      REPO_STAGE,
+      `${target} is not a directory`,
+      "pass the path of a git repository, not of a file inside one",
+    );
+  }
+
   try {
     return git(target, ["rev-parse", "--show-toplevel"]);
   } catch (error) {
