@@ -25,6 +25,7 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { describeViewerSize, measureViewer } from "./bundle.js";
 import {
+  buildWorkspace,
   ensureFixtureRepo,
   fixtureRepo,
   makeTempDir,
@@ -44,26 +45,13 @@ const SUMMARY =
 const temps: string[] = [];
 afterEach(() => removeAll(temps));
 
-/**
- * `pnpm build`, unconditionally.
- *
- * Skipping it when `dist/` already exists is the obvious optimisation and it
- * is wrong: `dist/` is exactly as old as whenever it was last built, so a
- * green run here would be a green run over a binary the branch no longer
- * describes. That already happened once on this branch — a stale bundle
- * answered `unknown command` to a subcommand it predated.
- *
- * Calling the workspace's own build entry rather than tsup and vite directly
- * is also the point: AC-5 says `pnpm build` is the only build entry, and a
- * test that reached past it to its two halves would be the second one.
- */
-function build(): void {
-  execFileSync("pnpm", ["build"], { cwd: workspaceRoot, stdio: "ignore" });
-}
-
 beforeAll(() => {
   ensureFixtureRepo();
-  build();
+  // Unconditional, for the reason `buildWorkspace` documents: a stale bundle
+  // once answered `unknown command` to a subcommand it predated. Story 4.6
+  // moved the implementation into `test-support` so the second suite that
+  // needs a fresh build does not race this one.
+  buildWorkspace();
 }, 300_000);
 
 /** Packs the package (running its prepack) and returns the tarball's path. */

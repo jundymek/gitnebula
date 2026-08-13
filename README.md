@@ -51,8 +51,36 @@ Optional `.gitnebula.yml` in the repository root sets `excludes`, `windowDays`,
 `hotspotThreshold` and `layers`; command-line flags win over the file.
 
 Before the first npm release, `npx` has nothing to fetch — run it from a clone
-instead: `pnpm install && pnpm build && node packages/cli/dist/gitnebula.js .`
-(details in [CONTRIBUTING.md](CONTRIBUTING.md)).
+instead:
+
+```bash
+pnpm install
+pnpm build
+node packages/cli/scripts/prepack.mjs      # one extra step, explained below
+node packages/cli/dist/bin/gitnebula.js .
+```
+
+The third line is what npm runs for you when you install the package: it puts
+the built viewer and the Python grammar where the binary looks for them. A
+development checkout never packs, so skipping it leaves a binary that writes
+`analysis.json` but cannot serve the map, refuses `gitnebula build`, and loses
+the imports of any repository containing Python. More in
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
+## A static bundle you can host
+
+```bash
+npx gitnebula build                   # → ./gitnebula-bundle/
+npx gitnebula build -o ./site         # → ./site/
+```
+
+`gitnebula build` writes exactly two files into the output directory —
+`index.html`, with the whole viewer inlined, and `analysis.json` — and nothing
+else. The viewer carries its own JS and CSS and makes no external request; it
+reads `analysis.json` from beside itself. Copy the directory to any static
+host — there is no build step on the other side and nothing to run server-side.
+(Serve it over HTTP rather than opening `index.html` off disk: the viewer
+fetches its sibling `analysis.json`, which browsers block on `file://`.)
 
 ## The map of gitnebula itself
 
