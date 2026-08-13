@@ -3,15 +3,16 @@
 //
 //   GITNEBULA_MEASURE_REPO=/path/to/excalidraw pnpm --filter @gitnebula/deps test
 //
-// The numbers this produced, and the excalidraw commit they came from, are
-// recorded in docs/dev/epic-2/2.2-deps-ts-imports/README.md.
+// The numbers this produced, and the commits they came from, are recorded in
+// docs/dev/epic-2/2.2-deps-ts-imports/README.md (excalidraw, TS/JS) and
+// docs/dev/epic-3/3.1-deps-python/README.md (streamlit, both languages).
 import { readdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 import type { Config, ScanResult, ScannedNode } from "@gitnebula/contract";
 import { describe, expect, it } from "vitest";
 
-import { analyze, isTsJsPath } from "./index.js";
+import { analyze, isPythonPath, isTsJsPath } from "./index.js";
 
 const REPO = process.env.GITNEBULA_MEASURE_REPO;
 /** Optional: where to write the measurement, for pasting into the docs. */
@@ -40,6 +41,14 @@ const SKIP = new Set([
   "build",
   ".next",
   "coverage",
+  // Python's equivalents of node_modules and dist, all of them scanner
+  // exclusions too: a checked-out venv would otherwise flood the universe.
+  ".venv",
+  "venv",
+  "site-packages",
+  "__pycache__",
+  ".mypy_cache",
+  ".pytest_cache",
 ]);
 
 function walk(root: string, relative = ""): string[] {
@@ -80,9 +89,10 @@ function universeOf(root: string): ScanResult {
         parent: modules.has(moduleId) ? moduleId : null,
         path: file,
         layer: "other",
-        loc: isTsJsPath(file)
-          ? readFileSync(path.join(root, file), "utf8").split("\n").length
-          : 0,
+        loc:
+          isTsJsPath(file) || isPythonPath(file)
+            ? readFileSync(path.join(root, file), "utf8").split("\n").length
+            : 0,
       };
     }),
   ];
@@ -98,13 +108,17 @@ describe.skipIf(REPO === undefined)("unresolved-import rate (AC-6)", () => {
   it("stays at or below the FR-11 threshold of 20%", async () => {
     const root = path.resolve(REPO ?? ".");
     const scan = universeOf(root);
+    const started = performance.now();
     const result = await analyze({ root, scan }, CONFIG);
+    const elapsedMs = Math.round(performance.now() - started);
 
     const count = (code: string): number =>
       result.warnings.find((warning) => warning.code === code)?.count ?? 0;
 
+    const isSource = (file: string): boolean =>
+      isTsJsPath(file) || isPythonPath(file);
     const resolved = result.edges.filter((edge) =>
-      isTsJsPath(edge.source),
+      isSource(edge.source),
     ).length;
     const external = count("external-import");
     const outside = count("outside-universe-import");
@@ -119,12 +133,23 @@ describe.skipIf(REPO === undefined)("unresolved-import rate (AC-6)", () => {
       {
         repo: root,
         files: scan.nodes.filter((node) => node.kind === "file").length,
+        tsJsFiles: scan.nodes.filter(
+          (node) => node.kind === "file" && isTsJsPath(node.path),
+        ).length,
+        pythonFiles: scan.nodes.filter(
+          (node) => node.kind === "file" && isPythonPath(node.path),
+        ).length,
+        tsJsEdges: result.edges.filter((edge) => isTsJsPath(edge.source))
+          .length,
+        pythonEdges: result.edges.filter((edge) => isPythonPath(edge.source))
+          .length,
         specifiers,
         resolvedEdges: resolved,
         external,
         outsideUniverse: outside,
         unresolved,
         unparsableFiles: count("unparsable-file"),
+        elapsedMs,
         unresolvedRateOverCandidates: Number(rate.toFixed(4)),
         unresolvedRateOverAllSpecifiers: Number(
           (unresolved / Math.max(specifiers, 1)).toFixed(4),

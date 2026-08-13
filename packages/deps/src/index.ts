@@ -7,11 +7,14 @@ import path from "node:path";
 import type { Config, DepsResult, ScanResult } from "@gitnebula/contract";
 
 import { buildEdges, type FilePair } from "./edges.js";
+import { analyzePythonSources, pythonSourcesOf } from "./python/analyze.js";
 import { collectSpecifiers, isTsJsPath } from "./ts/collect.js";
 import { createResolver } from "./ts/resolve.js";
 import { createWarningCounter } from "./warnings.js";
 
 export { isTsJsPath } from "./ts/collect.js";
+export { isPythonPath } from "./python/collect.js";
+export { grammarPath } from "./python/parser.js";
 export type { WarningCode } from "./warnings.js";
 
 export const packageName = "@gitnebula/deps";
@@ -110,6 +113,11 @@ export async function analyze(
     .filter((node) => node.kind === "file" && isTsJsPath(node.path))
     .map((node) => ({ id: node.id, path: node.path }))
     .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0));
+  const pythonSources = pythonSourcesOf(input.scan.nodes);
+
+  // One progress scale over both languages: a repo is one stage to the reader,
+  // whatever it is written in.
+  const total = sources.length + pythonSources.length;
 
   const pairs: FilePair[] = [];
   let done = 0;
@@ -123,14 +131,14 @@ export async function analyze(
       // Listed by the scanner but unreadable now: same class of failure as a
       // file that does not parse, and the same non-fatal treatment.
       warnings.record("unparsable-file", source.path);
-      onProgress?.(++done, sources.length);
+      onProgress?.(++done, total);
       continue;
     }
 
     const { specifiers, parseFailed } = collectSpecifiers(absolute, text);
     if (parseFailed) {
       warnings.record("unparsable-file", source.path);
-      onProgress?.(++done, sources.length);
+      onProgress?.(++done, total);
       continue;
     }
 
@@ -189,8 +197,20 @@ export async function analyze(
       );
     }
 
-    onProgress?.(++done, sources.length);
+    onProgress?.(++done, total);
   }
+
+  // Two parsers, one output path (AC-5): the Python half produces the same
+  // `FilePair`s, records into the same counters, and its edges are aggregated
+  // and sorted by the same `buildEdges` as the TS half's.
+  pairs.push(
+    ...(await analyzePythonSources(pythonSources, {
+      root,
+      idByPath,
+      warnings,
+      onFileDone: () => onProgress?.(++done, total),
+    })),
+  );
 
   return {
     edges: buildEdges(pairs, parentById),
