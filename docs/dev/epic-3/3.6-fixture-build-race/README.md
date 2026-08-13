@@ -82,6 +82,7 @@ free when the repository is already built.
 | AC-3 | `pnpm --filter @gitnebula/<pkg> test`, each from a clean `.generated/`: contract 103, scanner 145, githist 74, deps 24+1 skipped, cli 84, viz 148 — all exit 0. |
 | AC-4 | `git -C test-fixtures/.generated/history-repo log --format=%H` before and after the change: **identical**, HEAD `70cc4d3ce32dc991795fd87c077cf3cf9f967b55`. The crafted history was not touched; the build directory's path does not enter a commit hash. |
 | AC-5 | `packages/cli/src/fixture-build.test.ts`, two assertions. Both were seen red before being relied on: the concurrency case fails against the old builder (`Error: Command failed`), the caller case fails with a `pretest` added to `packages/viz`. |
+| signals | Killing a builder mid-build (`kill -TERM`) exits 143 and leaves no lock behind — only the abandoned `history-repo.building`, which the next run removes, and no stamp, so the next run rebuilds. |
 | AC-6 | `packages/cli` has no `pretest`. Removed in this story, not by an earlier one. |
 
 Fixture hashes (AC-4), unchanged, newest first:
@@ -97,6 +98,26 @@ a2e4398799a24fbe374af5f8bedeb0fd51cd4d40
 ```
 
 `pnpm lint` and `pnpm typecheck` both exit 0.
+
+## Review round
+
+Codex review raised three findings, all real, all fixed:
+
+- **P1, the lock could be released twice.** A signal handler removed the lock
+  and then called `exit`, which ran the `EXIT` trap and removed it again — and
+  between those two removals another builder can legitimately own the lock,
+  which the second removal would delete out from under it. Release now happens
+  in one function that disarms every trap first.
+- **P2, the concurrency test did not exercise the build.** Under the root
+  `pnpm test` the `pretest` had already produced a valid stamp, so all six
+  processes took the no-op path and the test would have passed with the lock
+  removed. The builders now run against a throwaway copy of the script in a
+  temp directory — which forces the real first-time build *and* keeps the test
+  from deleting the fixture the rest of the workspace is reading. Verified red
+  against the pre-change builder.
+- **P2, the fallback timeout was ten times too long.** Where `sleep` rejects
+  fractional seconds the nap is 1 s, and the iteration limit stayed at 600. The
+  limit now follows the nap, so the documented ~1 minute holds either way.
 
 ## Files
 

@@ -46,21 +46,38 @@ mkdir -p "$GEN_DIR"
 # directory and not a file. Waiting is bounded: a build takes about a second,
 # so a caller that has waited a minute is looking at a leaked lock, not a slow
 # peer, and says so instead of hanging a test run forever.
-if sleep 0.1 2>/dev/null; then NAP=0.1; else NAP=1; fi
 waited=0
+NAP=0.1
+LIMIT=600
 until mkdir "$LOCK_DIR" 2>/dev/null; do
+  if [ "$waited" -eq 0 ]; then
+    # Probed on first contention only, so the uncontended path pays nothing:
+    # sub-second sleeps are ubiquitous but not POSIX. The iteration limit
+    # follows the nap, so the wait is about a minute either way.
+    if ! sleep 0.1 2>/dev/null; then NAP=1; LIMIT=60; fi
+  else
+    sleep "$NAP"
+  fi
   waited=$((waited + 1))
-  if [ "$waited" -gt 600 ]; then
+  if [ "$waited" -gt "$LIMIT" ]; then
     echo "build-fixture-repo.sh: timed out waiting for $LOCK_DIR." >&2
     echo "If no build is running, remove that directory and retry." >&2
     exit 1
   fi
-  sleep "$NAP"
 done
-trap 'rm -rf "$LOCK_DIR"' EXIT
-trap 'rm -rf "$LOCK_DIR"; exit 130' INT
-trap 'rm -rf "$LOCK_DIR"; exit 143' TERM
-trap 'rm -rf "$LOCK_DIR"; exit 129' HUP
+
+# The lock is released exactly once. A signal handler disarms the EXIT trap
+# before releasing, because otherwise it would release, exit, and release
+# again — and between those two releases another builder can legitimately take
+# the lock, which the second release would then delete out from under it.
+release() {
+  trap - EXIT INT TERM HUP
+  rm -rf "$LOCK_DIR"
+}
+trap release EXIT
+trap 'release; exit 130' INT
+trap 'release; exit 143' TERM
+trap 'release; exit 129' HUP
 
 # Already built by whoever held the lock before us, and built by *this* version
 # of the script: print the HEAD hash — the contract every caller reads — and

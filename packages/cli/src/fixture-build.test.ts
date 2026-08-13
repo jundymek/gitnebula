@@ -14,13 +14,28 @@
 // This lives in `cli` because it is a workspace-level fact and `cli` is the
 // package that already reaches across the whole workspace.
 import { execFile, execFileSync } from "node:child_process";
-import { readdirSync, readFileSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
-import { workspaceRoot } from "./test-support.js";
+import {
+  ensureFixtureRepo,
+  fixtureRepo,
+  makeTempDir,
+  removeAll,
+  workspaceRoot,
+} from "./test-support.js";
+
+const temps: string[] = [];
+afterEach(() => removeAll(temps));
 
 const execFileAsync = promisify(execFile);
 
@@ -45,11 +60,27 @@ function workspaceManifests(): { name: string; manifest: PackageManifest }[] {
     });
 }
 
+function head(repo: string): string {
+  return execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], {
+    encoding: "utf8",
+  }).trim();
+}
+
 describe("fixture repository build (story 3.6)", () => {
-  it("survives concurrent callers, which is what `pnpm -r test` does", async () => {
+  it("survives concurrent callers building from nothing", async () => {
+    // The builders are pointed at a throwaway copy of the script, which
+    // derives its paths from its own location. Two reasons: they must go
+    // through the real build rather than the already-built no-op, and they
+    // must not delete the fixture the rest of the workspace is reading — the
+    // very failure this story exists to remove.
+    const sandbox = makeTempDir(temps, "gitnebula-fixture-race-");
+    const scriptCopy = join(sandbox, BUILDER);
+    copyFileSync(buildScript, scriptCopy);
+    mkdirSync(join(sandbox, ".generated"));
+
     const runs = await Promise.all(
       Array.from({ length: 6 }, () =>
-        execFileAsync("sh", [buildScript], { encoding: "utf8" }),
+        execFileAsync("sh", [scriptCopy], { encoding: "utf8" }),
       ),
     );
 
@@ -57,18 +88,16 @@ describe("fixture repository build (story 3.6)", () => {
     expect(new Set(heads).size).toBe(1);
     expect(heads[0]).toMatch(/^[0-9a-f]{40}$/);
 
-    // And the repository they raced over is a readable one afterwards.
-    const head = execFileSync(
-      "git",
-      [
-        "-C",
-        join(workspaceRoot, "test-fixtures", ".generated", "history-repo"),
-        "rev-parse",
-        "HEAD",
-      ],
-      { encoding: "utf8" },
-    ).trim();
-    expect(head).toBe(heads[0]);
+    // The repository they raced over is readable afterwards, no lock is left
+    // behind, and it is the same history the workspace fixture has (AD-4).
+    const built = join(sandbox, ".generated", "history-repo");
+    expect(head(built)).toBe(heads[0]);
+    expect(existsSync(join(sandbox, ".generated", "history-repo.lock"))).toBe(
+      false,
+    );
+
+    ensureFixtureRepo();
+    expect(heads[0]).toBe(head(fixtureRepo));
   });
 
   it("has exactly one package script invoking the builder: the root pretest", () => {
