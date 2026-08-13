@@ -641,12 +641,17 @@ export class CanvasGraphEngine implements GraphEngine {
     // would fling the cloud across the map behind it.
     if (!layout || !graph || !layout.settled) return;
 
-    const candidates: UnfoldCandidate[] = layout.nodes.map((node) => ({
-      id: node.id,
-      x: node.x,
-      y: node.y,
-      radius: node.radius,
-    }));
+    // Modules only. The layout also carries the repository's root files (4.7),
+    // and they have no members to unfold into — asking would build an empty
+    // wake and emit an `unfold` for a node that never folds.
+    const candidates: UnfoldCandidate[] = layout.nodes
+      .filter((node) => graph.nodes[node.graphIndex]!.kind === "module")
+      .map((node) => ({
+        id: node.id,
+        x: node.x,
+        y: node.y,
+        radius: node.radius,
+      }));
     const wanted = wantedUnfolds(candidates, this.camera, this.viewport);
     // A pinned module stays open even below the threshold: it is the target of
     // a flight in progress, and collapsing it would destroy the very node the

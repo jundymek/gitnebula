@@ -64,7 +64,7 @@ development_status:
   # carry parent: null (story 2.1's deliberate decision) and the Viewer draws
   # only module members, so they never appear — 82% of that repository's lines.
   # No AC covers it. Unassigned — the wave is the maintainer's call.
-  4.7-viz-root-files: backlog
+  4.7-viz-root-files: review
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"

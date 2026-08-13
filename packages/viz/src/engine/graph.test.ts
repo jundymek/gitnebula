@@ -57,12 +57,48 @@ describe("buildGraph", () => {
     }
   });
 
+  // Story 4.7. Repository-root files carry `parent: null` (story 2.1's
+  // decision) and are members of no module, so they are top-level nodes: they
+  // enter the module-level layout and are drawn at every zoom level.
+  it("collects repository-root files as top-level nodes", () => {
+    const graph = buildGraph(loadContractFixture("root-files"));
+    const ids = (indices: readonly number[]) =>
+      indices.map((index) => graph.nodes[index]!.id).sort();
+
+    expect(ids(graph.rootFileIndices)).toEqual([
+      "setup.py",
+      "test_proxy.py",
+      "version.py",
+    ]);
+    // The module set stays modules alone — it is what feeds ADR-0006's unfold
+    // candidates, and a root file has no members to unfold into.
+    expect(ids(graph.moduleIndices)).toEqual(["fp/"]);
+    expect(ids(graph.topLevelIndices)).toEqual([
+      "fp/",
+      "setup.py",
+      "test_proxy.py",
+      "version.py",
+    ]);
+    // A root file is nobody's member, and it does not become a module's.
+    expect(graph.membersByModule.get("fp/")).toHaveLength(2);
+  });
+
+  it("keeps a root file's import edges in both directions", () => {
+    const graph = buildGraph(loadContractFixture("root-files"));
+    expect(graph.neighboursById.get("setup.py")).toEqual(
+      expect.arrayContaining(["fp/proxy.py", "version.py"]),
+    );
+    // A module's file importing a root file — the other direction of AC-3.
+    expect(graph.neighboursById.get("version.py")).toContain("fp/proxy.py");
+  });
+
   it("survives the edge-case fixtures the contract ships", () => {
     for (const name of [
       "empty-graph",
       "single-module",
       "module-zero-files",
       "zero-history",
+      "root-files",
     ]) {
       const graph = buildGraph(loadContractFixture(name));
       expect(graph.nodes.every((node) => Number.isFinite(node.radius))).toBe(

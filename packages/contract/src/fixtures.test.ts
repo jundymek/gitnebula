@@ -27,6 +27,7 @@ describe("contract fixtures", () => {
       "cyclic-imports.json",
       "empty-graph.json",
       "module-zero-files.json",
+      "root-files.json",
       "single-module.json",
       "synthetic-100x2000.json",
       "zero-history.json",
