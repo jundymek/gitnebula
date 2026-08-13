@@ -55,12 +55,15 @@ pnpm build
 # terminal 1 — serve the real map of this repository
 node packages/cli/dist/gitnebula.js . --no-open
 
-# terminal 2 — record it (DEMO_URL must match the port printed above)
+# terminal 2 — record it (DEMO_URL must match the port printed above).
+# The script prints the path of the WebM it wrote: DEMO_OUT/demo.webm, one
+# fixed name, so re-recording into the same directory replaces the take
+# instead of leaving a second file behind for the glob below to trip on.
 DEMO_URL=http://127.0.0.1:4137/ DEMO_OUT=/tmp/gitnebula-demo \
   node scripts/record-demo.mjs
 
 # encode the committed asset
-ffmpeg -y -i /tmp/gitnebula-demo/*.webm \
+ffmpeg -y -i /tmp/gitnebula-demo/demo.webm \
   -filter_complex "fps=8,scale=720:-1:flags=lanczos,split[a][b];\
 [a]palettegen=max_colors=64:stats_mode=diff[p];\
 [b][p]paletteuse=dither=none:diff_mode=rectangle" \

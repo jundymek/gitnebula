@@ -12,14 +12,16 @@
  *     node packages/cli/dist/gitnebula.js . --no-open     # terminal 1
  *     DEMO_URL=http://127.0.0.1:4137/ node scripts/record-demo.mjs
  *
- * It writes a WebM to `--out` (default: a temp dir it prints); ffmpeg turns
- * that into the committed GIF. Node positions are resolved through the
+ * It writes `demo.webm` into `DEMO_OUT` (default: a fresh temp dir) and prints
+ * that path; ffmpeg turns it into the committed GIF. A fixed name, deliberately:
+ * re-running into the same directory must not leave two recordings behind for a
+ * glob to pick up. Node positions are resolved through the
  * engine's public `pick()` rather than hardcoded coordinates, because the
  * layout is seeded per repository and a fixed (x, y) would point at empty
  * space the moment the demo is re-recorded on another checkout.
  */
 import { createRequire } from "node:module";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, renameSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -191,9 +193,18 @@ async function main() {
   await page.locator("#mode-structure").click();
   await wait(1_500);
 
+  // Playwright names its recording after the page's GUID and only finalizes
+  // it on close. Renaming it to a fixed name means the encode command can
+  // point at ONE file: a run-per-random-name directory turns `*.webm` into
+  // several inputs on the second run, and ffmpeg reads the extras as output
+  // arguments.
+  const video = page.video();
   await context.close();
   await browser.close();
-  console.log(`video written under ${OUT_DIR}`);
+  const recorded = video ? await video.path() : null;
+  const target = path.join(OUT_DIR, "demo.webm");
+  if (recorded && recorded !== target) renameSync(recorded, target);
+  console.log(target);
 }
 
 await main();
