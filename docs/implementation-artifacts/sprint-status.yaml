@@ -39,7 +39,7 @@ development_status:
   # No AC covers it. Unassigned — the wave is the maintainer's call.
   3.8-viz-search-path-tooltip: done
   # Epic 4 — Ship It (-> M3)
-  4.1-build-bundle: done
+  4.1-build-bundle: review
   4.2-ci-pages-recipe: backlog
   4.3-repo-quality: review
   4.4-dod-validation: backlog
