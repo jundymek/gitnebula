@@ -130,9 +130,11 @@ pnpm dlx tsx <script>.mts <analysis>.json   # calls validateAnalysis from @gitne
 - **The checklist is prefilled and left unticked.** AC-4 makes that an owner
   gate. Where a line has an automated counterpart the number is quoted next to
   it, so the maintainer's walk is a judgement call rather than a re-measurement.
-- **Only this story's `sprint-status.yaml` row is flipped.** The other Epic 4
-  rows belong to their owners; the report describes their observed state without
-  editing them.
+- **Only this story's `sprint-status.yaml` row is flipped**, and to `review`,
+  not `done`: in this repository `done` means merged and is written at epic
+  closure by the supervisor (the file's history shows both moves). The other
+  Epic 4 rows belong to their owners; the report describes their observed state
+  without editing them.
 
 ## What the run found
 

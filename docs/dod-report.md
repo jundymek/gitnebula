@@ -259,6 +259,7 @@ this story could fail:
 | ---- | ------ | --- |
 | green CI run on GitHub Actions | **not available** | Actions billing is disabled on the account; `ci.yml` ships as `workflow_dispatch`-only by the maintainer's decision, and story `4.2-ci-pages-recipe` was deliberately not launched in this cohort |
 | map-of-itself published on GitHub Pages | **not available** | same — publishing is 4.2's deliverable |
+| `npx gitnebula` against the real registry | **not available** | the package is unpublished and still `private` / `@gitnebula/cli` / 0.0.0. Story `4.5-npm-release` (specced by the epic supervisor on 2026-08-13, row `backlog`) covers it. The tarball proof above is how far this report can go without it |
 
 They are recorded here rather than filed as issues because they are a
 maintainer decision with a known cause, not a defect discovered by this run.
@@ -345,7 +346,7 @@ streamlit"*.
 
 | brief §10 DoD item | verdict |
 | ------------------ | ------- |
-| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ 1.12 / 0.93 / 2.79 s, measured through the packed tarball installed into an empty directory — the `npx` path minus the registry download |
+| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ for the artefact — 1.12 / 0.93 / 2.79 s through the packed tarball installed into an empty directory. The literal `npx gitnebula` resolves to nothing yet: the package is `private`, named `@gitnebula/cli` and versioned 0.0.0, which is story **4.5-npm-release** (specced 2026-08-13, `backlog`) |
 | 2. Pan/zoom smooth at 100 modules / 2,000 files | ✅ 59 fps sustained headed, floor 55 |
 | 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |
@@ -365,10 +366,17 @@ story's to close:**
    this report that depended on them — the cold-install timings, the bundle
    size, the zero-external-requests check, the demo GIF — is measured against
    the merged result rather than promised. `4.2-ci-pages-recipe` is consciously
-   deferred, which leaves DoD item 6 partial. Deferring 4.2 is a maintainer decision with a known cause (Actions
-   billing), so it is a *scoping* condition on M3, not a defect: if M3 is to be
-   declared with CI off and no Pages, that should be said out loud in the
-   milestone rather than inferred from this report.
+   deferred, which leaves DoD item 6 partial. Deferring 4.2 is a maintainer
+   decision with a known cause (Actions billing), so it is a *scoping*
+   condition on M3, not a defect: if M3 is to be declared with CI off and no
+   Pages, that should be said out loud in the milestone rather than inferred
+   from this report.
+3. **`4.5-npm-release`, specced on 2026-08-13 and still `backlog`**, decides
+   whether the front door in the README is real. Nothing in this report depends
+   on it — the tarball measured here is the artefact 4.5 would publish — but
+   M3's claim that `npx gitnebula` works is a claim about the registry, and
+   until 4.5 lands the honest form of that claim is the one in the DoD table
+   above.
 
 Every automatable threshold in the MVP definition of done passes with margin —
 the smallest is the frame-rate floor at 1.07×, and it is a vsync ceiling rather
