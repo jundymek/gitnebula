@@ -50,6 +50,14 @@ PERF_HEADED=1 pnpm --filter @gitnebula/viz perf   # against a real display
   for a renderer that has stopped drawing, and 1.4's hardest-won lesson is that
   such a run looks entirely normal.
 
+- **The run starts its own dev server and never reuses one.** With several
+  agent worktrees on one machine, attaching to a server someone else started
+  measures their checkout and reports a clean pass for this one. A port
+  collision therefore fails loudly; `PERF_PORT` is how concurrent worktrees
+  coexist. Every number below was re-confirmed under that rule and did not
+  move, and the supervisor's independent run (83 sustained in phase `c`) lands
+  inside the spread recorded here.
+
 **Machine**: Apple M4 Pro, macOS 26.5.2, Node 22.20.0, Playwright 1.62.1 /
 Chromium 151.0.7922.34. Canvas 1440 × 845 CSS px, `devicePixelRatio` 1.
 

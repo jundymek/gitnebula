@@ -80,6 +80,12 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
       not noise.
 - [x] The readable report is written to `packages/viz/perf/report/` and printed
       to the console at the end of the run.
+- [x] The run refuses to attach to a dev server it did not start: with a vite
+      already on 4318 the harness fails with
+      `http://localhost:4318 is already used` rather than measuring whatever
+      that server was serving. **Result:** loud failure, as intended.
+- [x] `PERF_PORT=4322 pnpm --filter @gitnebula/viz perf` — 8 passed, so
+      concurrent worktrees can each measure their own tree.
 - [ ] **The CI job actually running on GitHub.** Not executed: this repository's
       workflows are `workflow_dispatch`-only by the maintainer's standing
       decision, and an agent does not dispatch them. The workflow file is
@@ -112,7 +118,7 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
 
 ## Summary
 
-Ran 21 of 24 checks. The three left for a human are the by-hand button click
+Ran 23 of 26 checks. The three left for a human are the by-hand button click
 with an OS-level download, the CI job actually running on GitHub, and a
 screen-reader pass — none of which can be executed headlessly in this worktree,
 and each stated above with its reason.

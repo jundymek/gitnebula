@@ -63,6 +63,7 @@ guards are carried over, and a fourth was added for this harness:
 | fixture assertion (2,100 nodes / 100 modules) | measuring something that is not the yardstick |
 | Settled reached | the pan phases would measure a map still in motion |
 | **render counting** (new) | rAF keeps firing at full rate for a renderer that has stopped drawing — frames alone would report a healthy fps for a blank canvas |
+| **exclusive dev server** (new) | attaching to a server another worktree already started measures *that* checkout and reports a clean pass for the code under review here |
 
 The camera script is derived from the graph's **measured** extent — the camera
 the engine chose when it framed the graph — never a guessed world radius. 1.4
@@ -72,6 +73,26 @@ units away, at a perfectly respectable frame rate, over an empty screen.
 The harness drives the real Viewer through one published handle
 (`src/harness-handle.ts`), not a stand-in simulation. That is the whole point
 of productionising 1.4: the number now describes what ships.
+
+**Which server the run measures is part of that.** Playwright's convenient
+setting is `reuseExistingServer: !process.env.CI`, and it is how this config was
+first written. With several agent worktrees on one machine it is also a way to
+measure someone else's code and call it evidence: whoever holds the port owns
+the server, and an attaching run reports a clean pass over a checkout that is
+not the one under test. That happened during review of this branch — a green
+8-passed run traced to another worktree entirely. It is the render-counter
+failure one level up, so the fix has the same shape: the run starts its own
+server and never reuses one, a port collision fails loudly through
+`--strictPort` instead of quietly producing the wrong number, and concurrent
+worktrees coexist by picking a port:
+
+```bash
+PERF_PORT=4319 pnpm --filter @gitnebula/viz perf
+```
+
+Both halves are verified: with a server already on 4318 the run now fails with
+`http://localhost:4318 is already used`, and the same run on `PERF_PORT=4322`
+passes 8/8.
 
 ### Pixel parity without a golden image
 

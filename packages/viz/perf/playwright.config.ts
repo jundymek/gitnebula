@@ -14,7 +14,13 @@ import { defineConfig, devices } from "@playwright/test";
  * number would then measure the contention.
  */
 
-const PORT = 4318;
+/**
+ * Overridable, because this repository is developed in several parallel
+ * worktrees and any of them can be holding the default port:
+ *
+ *     PERF_PORT=4319 pnpm --filter @gitnebula/viz perf
+ */
+const PORT = Number(process.env.PERF_PORT ?? 4318);
 const BASE_URL = `http://localhost:${PORT}`;
 
 export default defineConfig({
@@ -48,7 +54,22 @@ export default defineConfig({
     command: `pnpm vite --port ${PORT} --strictPort`,
     cwd: "..",
     url: BASE_URL,
-    reuseExistingServer: !process.env.CI,
+    // Never reuse a server this run did not start.
+    //
+    // The convenient setting is `!process.env.CI`, and it is how this file was
+    // first written. It is also a way to measure someone else's code and call
+    // it evidence: with several agent worktrees on one machine, whoever holds
+    // the port owns the server, and an attaching run reports a clean pass over
+    // a working tree that is not the one under test. That happened during
+    // review of this branch — a green 8-passed run traced by `lsof` to another
+    // checkout entirely.
+    //
+    // It is the same failure the render counter in `instrument.ts` exists to
+    // catch, one level up: the harness kept measuring, just not this code. So
+    // a port collision now fails loudly (`--strictPort`) instead of quietly
+    // producing the wrong number, and `PERF_PORT` is how concurrent worktrees
+    // coexist.
+    reuseExistingServer: false,
     timeout: 120_000,
   },
 });
