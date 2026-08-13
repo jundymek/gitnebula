@@ -111,6 +111,12 @@ export function createSearchBox(actions: SearchActions): SearchBox {
       const name = document.createElement("span");
       name.className = "search-result-name";
       name.textContent = node.path;
+      // The span clips long paths from the front, so the directories a result
+      // lives in are on screen but unreadable. The title puts them back within
+      // reach without touching the truncation. It sits on the span rather than
+      // on the `role=option` ancestor: the option's accessible name comes from
+      // its content, and a title there would only have it read out twice.
+      name.title = node.path;
       const kind = document.createElement("span");
       kind.className = "search-result-kind";
       kind.textContent = node.kind;
