@@ -293,11 +293,15 @@ measurement.
 
 ### Repo quality (FR-25 / SM-7)
 
-- [ ] README demo GIF actually shows the wow in ≤ 30 s — *story 4.3's
-      deliverable*
+- [ ] README demo GIF actually shows the wow in ≤ 30 s — *story 4.3 landed it:
+      [`docs/assets/demo.gif`](assets/demo.gif), 197 frames, **24.63 s**
+      measured, 720 × 405, 3.7 MB. The duration clears the budget; whether it
+      shows the wow is the judgement call*
 - [ ] Map-of-itself on Pages is current with master — **blocked: Pages
       publishing is story 4.2, not launched this cohort (see AC-3 table)**
-- [ ] A newcomer can go README → `npx gitnebula` → map without further docs
+- [ ] A newcomer can go README → `npx gitnebula` → map without further docs —
+      *the README and `CONTRIBUTING.md` landed with story 4.3 (PR #36); the
+      `npx` path itself is story 4.1's cold-install test*
 
 ### Sign-off
 
@@ -318,7 +322,7 @@ streamlit"*.
 | 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |
 | 5. `analysis.json` validates, `description`/`descriptionSource` present and nullable | ✅ all three documents valid at `schemaVersion 1.0` |
-| 6. Repo: README demo, map of itself, MIT license, CI with tests, CONTRIBUTING.md | ⚠️ **partial** — LICENSE and CONTRIBUTING.md are in the tree; README demo is story 4.3; CI exists as `ci.yml` but runs only on `workflow_dispatch`, and Pages publishing (4.2) was not launched |
+| 6. Repo: README demo, map of itself, MIT license, CI with tests, CONTRIBUTING.md | ⚠️ **partial** — MIT LICENSE, README and CONTRIBUTING.md are in the tree, and the 24.63 s demo GIF landed with story 4.3 (PR #36, in this base). Missing: a green CI run (`ci.yml` exists but is `workflow_dispatch`-only) and the map-of-itself on Pages — both story 4.2, not launched |
 | 7. Runs on 3 popular public repos without crashing, visually sensible result | ✅ crash-free on all three; "visually sensible" is the owner's line above |
 
 ### Verdict
@@ -328,9 +332,11 @@ story's to close:**
 
 1. **The maintainer's checklist walk** (the section above). It is prepared and
    unticked by design — it is the owner gate, and no agent may tick it.
-2. **Epic 4's other rows landing**: `4.1-build-bundle` and `4.3-repo-quality`
-   merged; `4.2-ci-pages-recipe` consciously deferred, which leaves DoD item 6
-   partial. Deferring 4.2 is a maintainer decision with a known cause (Actions
+2. **Epic 4's other rows landing**: `4.3-repo-quality` is merged into this base
+   (PR #36) and is accounted for above; `4.1-build-bundle` still has to land,
+   and it carries two of this report's rows — the cold-install proof and the
+   zero-external-requests check. `4.2-ci-pages-recipe` is consciously deferred,
+   which leaves DoD item 6 partial. Deferring 4.2 is a maintainer decision with a known cause (Actions
    billing), so it is a *scoping* condition on M3, not a defect: if M3 is to be
    declared with CI off and no Pages, that should be said out loud in the
    milestone rather than inferred from this report.
