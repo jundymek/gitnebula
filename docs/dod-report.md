@@ -43,8 +43,12 @@ Reproduce a row with:
 
 ```bash
 git clone https://github.com/<org>/<repo>.git && git -C <repo> checkout <sha>
-gitnebula <repo> --no-serve -o <repo>.json
+node packages/cli/dist/gitnebula.js <repo> --no-serve -o <repo>.json
 ```
+
+(That second line is the exact invocation used; see the note on it below — on
+this base it needs the grammar `.wasm` present at `packages/assets/`, which is
+story 4.1's packaging step.)
 
 ## Per-repo definition of done (AC-1)
 
@@ -63,7 +67,19 @@ budget.**
 
 ### What each column means
 
-- **Wall clock** — `gitnebula <repo> --no-serve`, the full pipeline. Per-stage
+- **How the CLI was invoked, precisely.** The measured runs are
+  `node packages/cli/dist/gitnebula.js …` — the tsup-built binary from this
+  worktree, not an installed package, and **not `npx`**. On this base the built
+  binary cannot run at all without help: it resolves the tree-sitter grammar at
+  `packages/assets/tree-sitter-python.wasm`, which nothing puts there yet — that
+  prepack step is story 4.1's AD-11 task. The runs used a local, uncommitted
+  copy of the two `.wasm` files at that path, removed afterwards. So these
+  numbers measure **the pipeline as it will ship**, and they do **not** prove
+  the cold-start path: a clean checkout cannot reproduce the command as written
+  until 4.1 lands. The cold-install proof is 4.1's own `npm pack` test (its
+  AC-4); this report treats the `npx` half of brief §10.1 as *carried by 4.1*,
+  and says so again in the M3 table.
+- **Wall clock** — the full pipeline, `--no-serve`. Per-stage
   numbers and the three raw runs are in
   [`docs/dev/epic-4/4.4-dod-validation/PERFORMANCE.md`](dev/epic-4/4.4-dod-validation/PERFORMANCE.md).
 - **Crash-free** — exit code 0 and no aborted stage. Per-item failures are
@@ -235,7 +251,8 @@ measurement.
 ### Per demo repo
 
 - [ ] Map loads crash-free from `npx gitnebula` — *measured: 1.19 s / 0.95 s /
-      2.69 s, all exit 0 (SM-1 budget 60 s)*
+      2.69 s, all exit 0 (SM-1 budget 60 s), through the built binary rather
+      than `npx`; the cold-install path is story 4.1's AC-4*
 - [ ] The module map is visually sensible: recognizable top-level structure, no
       absurd giant/orphan nodes, no obviously wrong layer colours (FR-9) —
       *evidence:* [fastapi](dev/epic-4/4.4-dod-validation/map-fastapi.png) ·
@@ -296,7 +313,7 @@ streamlit"*.
 
 | brief §10 DoD item | verdict |
 | ------------------ | ------- |
-| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ 1.19 / 0.95 / 2.69 s |
+| 1. `npx gitnebula` on a medium repo < 60 s, working map | ⚠️ **the runtime is proved, the `npx` path is not** — 1.19 / 0.95 / 2.69 s measured through the built binary; cold install from a package tarball is story 4.1's AC-4 |
 | 2. Pan/zoom smooth at 100 modules / 2,000 files | ✅ 59 fps sustained headed, floor 55 |
 | 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |
