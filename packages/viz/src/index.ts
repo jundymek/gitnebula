@@ -7,7 +7,12 @@ export const packageName = "@gitnebula/viz";
 export const contractEdge = contractPackageName;
 
 export { boot } from "./app.js";
-export { ANALYSIS_URL, checkVersion, loadAnalysis } from "./loader.js";
+export {
+  ANALYSIS_URL,
+  FILE_PROTOCOL_HINT,
+  checkVersion,
+  loadAnalysis,
+} from "./loader.js";
 export type { LoadFailure, LoadFailureKind, LoadResult } from "./loader.js";
 export { renderErrorScreen } from "./error-screen.js";
 

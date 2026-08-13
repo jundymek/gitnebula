@@ -4,14 +4,27 @@
 //
 // `run` returns an exit code instead of calling `process.exit`, so the failure
 // paths are testable without spawning a process.
+import { existsSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
+
 import { Command, CommanderError } from "commander";
 
 import { openBrowser as defaultOpenBrowser } from "./browser.js";
+import {
+  DEFAULT_BUNDLE_DIR,
+  assembleBundle,
+  describeViewerSize,
+  measureViewer,
+  missingViewerError,
+  prepareBundleDir,
+} from "./bundle.js";
 import { cloneRepository, isRemoteTarget, type Checkout } from "./clone.js";
 import { DEFAULT_WINDOW_DAYS } from "./config.js";
+import { DEFAULT_OUTPUT_FILENAME } from "./emit.js";
 import { StageError, describeThrown } from "./errors.js";
 import { runPipeline, type RunPipelineOptions } from "./pipeline.js";
 import { createReporter, type Reporter } from "./progress.js";
+import { resolveRepo } from "./repo.js";
 import {
   awaitShutdown,
   missingDistError,
@@ -52,23 +65,13 @@ interface ParsedFlags {
   readonly open?: boolean;
 }
 
-export function createProgram(write: (chunk: string) => void): Command {
-  const program = new Command();
-
-  program
-    .name("gitnebula")
-    .description(
-      "Turn a git repository into an interactive architecture map. Analyzes the repository and writes analysis.json.",
-    )
-    .argument(
-      "[path|url]",
-      "repository to analyze; defaults to the current directory",
-      ".",
-    )
-    .option(
-      "-o, --out <path>",
-      "where to write analysis.json (default: ./analysis.json)",
-    )
+/**
+ * The flags both the default command and `build` take. Declared once: two
+ * copies of `--window-days` that drift apart is a bug report about the
+ * pipeline behaving differently depending on how it was invoked.
+ */
+function addAnalysisOptions(command: Command): Command {
+  return command
     .option(
       "-e, --exclude <glob>",
       "additional exclusion glob; repeatable, added to the defaults and to .gitnebula.yml",
@@ -80,20 +83,90 @@ export function createProgram(write: (chunk: string) => void): Command {
       "hot spot cutoff on the normalized churn scale, 0..1",
     )
     .option(
-      "--no-serve",
-      "write analysis.json and exit, instead of serving the map on 127.0.0.1",
-    )
-    .option("--no-open", "serve the map but do not open a browser")
-    .option(
       "--window-anchor <iso>",
       "TEST ONLY — pin the instant the analysis window is measured back from, e.g. 2026-01-01T00:00:00Z. Makes snapshot output stable across days; it never changes analyzedAt.",
-    )
+    );
+}
+
+/**
+ * Which command ran and what it parsed.
+ *
+ * Both commands report through an action handler, and the default command's is
+ * not optional: once a subcommand exists, commander reads an operand it does
+ * not recognise as an unknown *command* unless the parent has an action of its
+ * own. Without it, `gitnebula ./some/repo` becomes a usage error.
+ */
+interface Invocation {
+  readonly kind: "analyze" | "build";
+  readonly target: string;
+  readonly flags: ParsedFlags;
+}
+
+export function createProgram(
+  write: (chunk: string) => void,
+  onInvoke: (invocation: Invocation) => void = () => {},
+): Command {
+  const program = new Command();
+
+  addAnalysisOptions(
+    program
+      .name("gitnebula")
+      .description(
+        "Turn a git repository into an interactive architecture map. Analyzes the repository and writes analysis.json.",
+      )
+      .argument(
+        "[path|url]",
+        "repository to analyze; defaults to the current directory",
+        ".",
+      )
+      .option(
+        "-o, --out <path>",
+        "where to write analysis.json (default: ./analysis.json)",
+      )
+      .option(
+        "--no-serve",
+        "write analysis.json and exit, instead of serving the map on 127.0.0.1",
+      )
+      .option("--no-open", "serve the map but do not open a browser"),
+  )
     .allowExcessArguments(false)
+    // Without this, `gitnebula build -o site` writes the bundle to
+    // `./gitnebula-bundle` and says nothing: the parent declares `-o` too, and
+    // commander hands a shared short flag to the parent, leaving the
+    // subcommand's `--out` unset. Positional parsing puts each option with the
+    // command it was typed after, which is the only reading a user has in
+    // mind. Found by a test asserting where `-o` actually put the files.
+    .enablePositionalOptions()
     .exitOverride()
     .configureOutput({
       writeOut: write,
       writeErr: write,
+    })
+    .action((target: string, flags: ParsedFlags) => {
+      onInvoke({ kind: "analyze", target, flags });
     });
+
+  // FR-23: the static bundle. A subcommand rather than a flag on the default
+  // command, because it answers a different question — not "show me this
+  // repository" but "give me a directory I can publish".
+  addAnalysisOptions(
+    program
+      .command("build")
+      .description(
+        `write a static, self-contained bundle — index.html + ${DEFAULT_OUTPUT_FILENAME} — hostable on any static server`,
+      )
+      .argument(
+        "[path|url]",
+        "repository to analyze; defaults to the current directory",
+        ".",
+      )
+      .option(
+        "-o, --out <dir>",
+        `directory to write the bundle into (default: ./${DEFAULT_BUNDLE_DIR})`,
+      ),
+  ).action((target: string, flags: ParsedFlags) => {
+    onInvoke({ kind: "build", target, flags });
+  });
 
   return program;
 }
@@ -111,14 +184,15 @@ export async function run(
 ): Promise<number> {
   const write =
     options.write ?? ((chunk: string) => void process.stderr.write(chunk));
-  const program = createProgram(write);
 
-  let target: string;
-  let flags: ParsedFlags;
+  // Written by whichever command's action commander runs during `parse`.
+  let parsed: Invocation | null = null;
+  const program = createProgram(write, (invocation) => {
+    parsed = invocation;
+  });
+
   try {
     program.parse([...argv], { from: "user" });
-    target = program.processedArgs[0] as string;
-    flags = program.opts<ParsedFlags>();
   } catch (error) {
     if (error instanceof CommanderError) {
       // `--help` and `--version` come through here as a successful stop.
@@ -126,6 +200,13 @@ export async function run(
     }
     throw error;
   }
+  const invocation = parsed as Invocation | null;
+  // `--help` on a subcommand can stop the parse without either action having
+  // run; there is nothing left to do and nothing went wrong.
+  if (invocation === null) return 0;
+
+  const { target, flags } = invocation;
+  const bundling = invocation.kind === "build";
 
   const cwd = options.cwd ?? process.cwd();
   const reporter = options.reporter ?? createReporter();
@@ -154,17 +235,45 @@ export async function run(
       );
     }
 
+    const repoTarget = checkout === null ? target : checkout.root;
+
+    // Resolved before the analysis, not after it: a `build` that spends a
+    // minute analyzing and only then discovers it has no viewer to copy has
+    // wasted the minute and told the user nothing they could not have been
+    // told first.
+    const bundle = bundling
+      ? planBundle(repoTarget, cwd, flags, options)
+      : null;
+
     const pipelineOptions: RunPipelineOptions = {
-      target: checkout === null ? target : checkout.root,
+      target: repoTarget,
       cwd,
       reporter,
       ...(options.now === undefined ? {} : { now: options.now }),
-      ...(flags.out === undefined ? {} : { out: flags.out }),
+      ...(bundle === null
+        ? flags.out === undefined
+          ? {}
+          : { out: flags.out }
+        : { out: bundle.analysisPath }),
       ...(flags.windowAnchor === undefined
         ? {}
         : { windowAnchor: flags.windowAnchor }),
       flags: {
-        ...(flags.exclude === undefined ? {} : { excludes: flags.exclude }),
+        // The bundle's own output directory is excluded when it sits inside
+        // the repository being mapped. Without it, the second `gitnebula
+        // build` in a repository maps the first one's output: the node count
+        // grows by the bundle's two files on every run, and the map acquires
+        // an `index.html` that is the viewer drawing it.
+        ...(flags.exclude === undefined && bundle?.selfExclude === undefined
+          ? {}
+          : {
+              excludes: [
+                ...(flags.exclude ?? []),
+                ...(bundle?.selfExclude === undefined
+                  ? []
+                  : [bundle.selfExclude]),
+              ],
+            }),
         ...(flags.windowDays === undefined ? {} : { windowDays }),
         ...(flags.hotspotThreshold === undefined
           ? {}
@@ -176,6 +285,28 @@ export async function run(
             }),
       },
     };
+
+    if (bundle !== null) {
+      await runPipeline(pipelineOptions);
+      assembleBundle(bundle.vizDist, bundle.outDir);
+
+      const size = measureViewer(bundle.outDir);
+      // AC-2 wants the number printed, not merely checked. It is printed on
+      // the way past whether or not it is over budget; the abort below only
+      // decides whether the run continues.
+      write(`${describeViewerSize(size)}\n`);
+      if (!size.withinBudget) {
+        throw new StageError(
+          "bundle",
+          `the viewer is over ADR-0004's ${size.budget}-byte gzipped budget at ${size.gzipped} bytes`,
+          "find what grew — a webfont, an inlined fixture, a new dependency — and take it back out; the budget is a product requirement, not a lint",
+        );
+      }
+      write(
+        `bundle written to ${bundle.outDir} — serve it with any static server (e.g. \`npx serve ${bundle.outDir}\`)\n`,
+      );
+      return 0;
+    }
 
     const result = await runPipeline(pipelineOptions);
 
@@ -195,6 +326,85 @@ export async function run(
     // the pipeline threw halfway through.
     checkout?.dispose();
   }
+}
+
+interface BundlePlan {
+  readonly outDir: string;
+  readonly analysisPath: string;
+  readonly vizDist: string;
+  /**
+   * Exclusion glob for the output directory, when it lies inside the
+   * repository being analyzed; undefined when it does not (an absolute path
+   * elsewhere, or URL mode's temp checkout).
+   */
+  readonly selfExclude?: string;
+}
+
+/**
+ * Decides everything about a `build` run that can be decided before any work
+ * happens: where it goes, what it copies, and whether the analysis is needed
+ * at all (AC-1).
+ *
+ * @throws {StageError} stage `bundle` when the viewer has not been built or
+ * the output directory cannot be created.
+ */
+function planBundle(
+  repoTarget: string,
+  cwd: string,
+  flags: ParsedFlags,
+  options: RunOptions,
+): BundlePlan {
+  const vizDist = options.vizDist ?? resolveVizDist(import.meta.url);
+  // The `existsSync` is not redundant with the resolver: a dist passed in
+  // explicitly, or one emptied since the resolver last looked, would otherwise
+  // be copied as nothing and surface as "the bundle directory holds
+  // analysis.json" — a true statement about the wrong problem.
+  if (vizDist === null || !existsSync(join(vizDist, "index.html"))) {
+    throw missingViewerError();
+  }
+
+  const outDir = resolve(cwd, flags.out ?? DEFAULT_BUNDLE_DIR);
+  prepareBundleDir(outDir);
+  const analysisPath = join(outDir, DEFAULT_OUTPUT_FILENAME);
+
+  // The same preflight the pipeline's `repo` stage runs, and cheap. Asking it
+  // here is what makes the self-exclusion below possible: the answer is
+  // relative to the working-tree root, not to wherever the command was typed.
+  //
+  // Both sides are resolved through symlinks first, exactly as serve.ts does
+  // for the same reason: on macOS a temp directory is `/var/…` to the caller
+  // and `/private/var/…` to git, and the textual comparison below would then
+  // read a directory inside the repository as being outside it — leaving the
+  // bundle in its own map with nothing to show for the check.
+  const repoRoot = realpathSync(resolveRepo(resolve(cwd, repoTarget)).root);
+  const inside = relative(repoRoot, realpathSync(outDir));
+  if (inside === "") {
+    throw new StageError(
+      "bundle",
+      "the bundle cannot be written to the repository root",
+      "pass -o with a subdirectory, or a path outside the repository — a bundle directory holds exactly two files and would have to empty the repository to hold them",
+    );
+  }
+
+  // "Outside" is `..` itself or a path that steps up through it — not merely
+  // anything spelled with two leading dots. `-o ..site` is a directory named
+  // `..site` sitting *inside* the repository, and reading it as outside would
+  // quietly drop its exclusion and put the bundle back in its own map.
+  const escapes = inside === ".." || inside.startsWith(`..${sep}`);
+  const selfExclude =
+    escapes || isAbsolute(inside)
+      ? undefined
+      : // picomatch matches a directory entry against the directory itself and
+        // prunes the subtree (scanner/excludes.ts). Posix separators, because
+        // the scanner matches repository-relative paths in that form.
+        inside.split(sep).join("/");
+
+  return {
+    outDir,
+    analysisPath,
+    vizDist,
+    ...(selfExclude === undefined ? {} : { selfExclude }),
+  };
 }
 
 /**

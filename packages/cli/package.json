@@ -2,29 +2,38 @@
   "name": "@gitnebula/cli",
   "version": "0.0.0",
   "private": true,
+  "description": "Turn any git repository into an interactive architecture map.",
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "gitnebula": "./dist/gitnebula.js"
+    "gitnebula": "./dist/bin/gitnebula.js"
   },
-  "exports": {
-    ".": "./src/index.ts"
+  "files": [
+    "dist",
+    "assets",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20.19"
   },
   "scripts": {
     "build": "tsup",
+    "prepack": "node scripts/prepack.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "commander": "^14.0.3",
+    "open": "^11.0.0",
+    "typescript": "^5.9.3",
+    "web-tree-sitter": "^0.26.12",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
     "@gitnebula/contract": "workspace:*",
     "@gitnebula/deps": "workspace:*",
     "@gitnebula/githist": "workspace:*",
     "@gitnebula/scanner": "workspace:*",
-    "commander": "^14.0.3",
-    "open": "^11.0.0",
-    "typescript": "catalog:",
-    "yaml": "^2.9.0"
-  },
-  "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "^8.5.1",
     "vitest": "catalog:"
