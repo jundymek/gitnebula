@@ -112,8 +112,15 @@ EOF
 
 write core/helpers.py <<'EOF'
 import os.path
+# The only file answering this name is a stub: a real target, never a source.
+from core import typing_only
 
 BASE = os.path.sep
+print(typing_only)
+EOF
+
+write core/typing_only.pyi <<'EOF'
+VERSION: str
 EOF
 
 # --- a source root that is not the repo root: `lib/pkg` is imported as `pkg`,

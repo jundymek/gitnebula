@@ -25,6 +25,14 @@ export interface PythonResolver {
 
 const PY = ".py";
 const INIT = "__init__.py";
+/**
+ * Stub extensions. A `.pyi` is never parsed as a source — it would state the
+ * same imports its module already states — but it is a real target: a
+ * stubs-only distribution has nothing else to point at. Modules always win over
+ * stubs of the same name, which is also what a type checker does.
+ */
+const PYI = ".pyi";
+const INIT_PYI = "__init__.pyi";
 
 function dirOf(filePath: string): string {
   const cut = filePath.lastIndexOf("/");
@@ -46,10 +54,11 @@ function join(base: string, tail: string): string {
  * `__init__.py` anywhere and still imports its own files by name.
  */
 function sourceRootsOf(pythonFiles: readonly string[]): string[] {
+  const isPackageMarker = (file: string): boolean =>
+    [INIT, INIT_PYI].some((name) => file === name || file.endsWith(`/${name}`));
+
   const packageDirs = new Set(
-    pythonFiles
-      .filter((file) => file.endsWith(`/${INIT}`) || file === INIT)
-      .map((file) => dirOf(file)),
+    pythonFiles.filter(isPackageMarker).map((file) => dirOf(file)),
   );
 
   const roots = new Set<string>([""]);
@@ -77,25 +86,38 @@ export function createPythonResolver(
   const files = new Set<string>(universeFiles);
 
   const pythonFiles = [...files].filter((file) => file.endsWith(PY)).sort();
-  const sourceRoots = sourceRootsOf(pythonFiles);
+  const stubFiles = [...files].filter((file) => file.endsWith(PYI)).sort();
+  // A stub package (`__init__.pyi`) marks a package just as a module does, so
+  // the root detection sees both kinds.
+  const sourceRoots = sourceRootsOf([...pythonFiles, ...stubFiles].sort());
+
+  /** The dotted module a root-relative path names, or "" for the root itself. */
+  const dottedOf = (inRoot: string): string => {
+    for (const marker of [INIT, INIT_PYI]) {
+      if (inRoot === marker) return "";
+      if (inRoot.endsWith(`/${marker}`))
+        return inRoot
+          .slice(0, -(marker.length + 1))
+          .split("/")
+          .join(".");
+    }
+    const extension = inRoot.endsWith(PY) ? PY : PYI;
+    return inRoot.slice(0, -extension.length).split("/").join(".");
+  };
 
   const byDotted = new Map<string, string>();
-  for (const root of sourceRoots) {
-    const prefix = root === "" ? "" : `${root}/`;
-    for (const file of pythonFiles) {
-      if (!file.startsWith(prefix)) continue;
-      const inRoot = file.slice(prefix.length);
-      if (inRoot === "") continue;
-      const dotted = (
-        inRoot === INIT
-          ? ""
-          : inRoot.endsWith(`/${INIT}`)
-            ? inRoot.slice(0, -(INIT.length + 1))
-            : inRoot.slice(0, -PY.length)
-      )
-        .split("/")
-        .join(".");
-      if (dotted !== "" && !byDotted.has(dotted)) byDotted.set(dotted, file);
+  // Modules first, stubs second: a `.py` always wins over a `.pyi` of the same
+  // dotted name, whichever root each came from.
+  for (const group of [pythonFiles, stubFiles]) {
+    for (const root of sourceRoots) {
+      const prefix = root === "" ? "" : `${root}/`;
+      for (const file of group) {
+        if (!file.startsWith(prefix)) continue;
+        const inRoot = file.slice(prefix.length);
+        if (inRoot === "") continue;
+        const dotted = dottedOf(inRoot);
+        if (dotted !== "" && !byDotted.has(dotted)) byDotted.set(dotted, file);
+      }
     }
   }
 
@@ -105,15 +127,17 @@ export function createPythonResolver(
     module: readonly string[],
   ): string | undefined => {
     const target = module.reduce((acc, segment) => join(acc, segment), base);
-    if (module.length === 0) {
-      // `from . import x` with the dots alone: the package itself.
-      const init = join(target, INIT);
-      return files.has(init) ? init : undefined;
-    }
-    const asModule = `${target}${PY}`;
-    if (files.has(asModule)) return asModule;
-    const asPackage = join(target, INIT);
-    return files.has(asPackage) ? asPackage : undefined;
+    const candidates =
+      module.length === 0
+        ? // `from . import x` with the dots alone: the package itself.
+          [join(target, INIT), join(target, INIT_PYI)]
+        : [
+            `${target}${PY}`,
+            join(target, INIT),
+            `${target}${PYI}`,
+            join(target, INIT_PYI),
+          ];
+    return candidates.find((candidate) => files.has(candidate));
   };
 
   return {

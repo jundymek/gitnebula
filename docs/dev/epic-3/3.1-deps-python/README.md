@@ -101,8 +101,11 @@ makes it a pure function of `(universe, import)` and trivially deterministic.
   **`from __future__ import annotations`** is a real stdlib import and is counted
   external — the grammar gives it its own node type, and leaving it out would
   quietly under-count.
-- **`.pyi` stubs are targets, never parsed sources**: a stub beside its module
-  states the same imports twice (DECISIONS D4).
+- **`.pyi` stubs are targets, never parsed sources.** Parsing a stub beside its
+  module would state the same imports twice, but a stub is a real destination:
+  where nothing else answers a name, `pkg/thing.pyi` (or `pkg/__init__.pyi`) is
+  the edge. A module always beats a stub of the same dotted name, which is what
+  a type checker does too (DECISIONS D4).
 
 Nothing throws. A file with syntax errors contributes no edges and one
 `unparsable-file` warning, and the stage completes (AC-4).
