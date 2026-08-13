@@ -39,16 +39,26 @@ development_status:
   # No AC covers it. Unassigned — the wave is the maintainer's call.
   3.8-viz-search-path-tooltip: done
   # Epic 4 — Ship It (-> M3)
-  4.1-build-bundle: review
+  4.1-build-bundle: done
+  # Deferred by the maintainer on 2026-08-13, before the wave launched: GitHub
+  # Actions billing is broken on this account, so 4.2's AC-2/AC-3/AC-4 — all of
+  # which need a green Actions run and a live Pages deploy — are unrunnable.
+  # Not a coverage gap and not an agent failure; it is why DoD item 6 is
+  # partial in docs/dod-report.md and why M3 does not fully close with Epic 4.
   4.2-ci-pages-recipe: backlog
-  4.3-repo-quality: review
-  4.4-dod-validation: review
+  4.3-repo-quality: done
+  4.4-dod-validation: done
   # Added 2026-08-13 by the epic/4-build-bundle supervisor, out of supervision
   # rather than planning: nothing in the repo covers publishing, and
   # packages/cli is still private, named @gitnebula/cli and versioned 0.0.0,
   # while the README leads with `npx gitnebula`. Unassigned — the wave is the
   # maintainer's call.
   4.5-npm-release: backlog
+  # Added 2026-08-13 by the epic/4-build-bundle supervisor at epic closure, on
+  # the maintainer's instruction: 4.1 moved the binary to dist/bin/gitnebula.js
+  # and three top-level docs still name the old path, so the one command a
+  # visitor can run today fails. Unassigned — the wave is the maintainer's call.
+  4.6-docs-path-drift: backlog
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
