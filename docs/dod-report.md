@@ -363,18 +363,22 @@ streamlit"*.
 
 | brief §10 DoD item | verdict |
 | ------------------ | ------- |
-| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ for the artefact — 1.82 / 1.63 / 3.35 s through `npx` from the packed tarball. `npx gitnebula` **by name** resolves to nothing yet: the package is `private`, named `@gitnebula/cli` and versioned 0.0.0, which is story **4.5-npm-release** (specced 2026-08-13, `backlog`) |
+| 1. `npx gitnebula` on a medium repo < 60 s, working map | ⚠️ **partial** — the artefact is proved: 1.82 / 1.63 / 3.35 s through `npx` from the packed tarball, npx's own resolution and startup included. The command the DoD names, `npx gitnebula`, resolves to nothing: the package is `private`, `@gitnebula/cli`, 0.0.0. Closes when story **4.5-npm-release** (specced 2026-08-13, `backlog`) publishes it |
 | 2. Pan/zoom smooth at 100 modules / 2,000 files | ✅ 59 fps sustained headed, floor 55 |
-| 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
+| 3. The full section-5 flow works | ⚠️ **half measured** — every mechanism is covered by automated tests across epics 2–3 and re-run green here; whether the flow *feels* right is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |
 | 5. `analysis.json` validates, `description`/`descriptionSource` present and nullable | ✅ all three documents valid at `schemaVersion 1.0` |
 | 6. Repo: README demo, map of itself, MIT license, CI with tests, CONTRIBUTING.md | ⚠️ **partial** — MIT LICENSE, README and CONTRIBUTING.md are in the tree, and the 24.63 s demo GIF landed with story 4.3 (PR #36, in this base). Missing: a green CI run (`ci.yml` exists but is `workflow_dispatch`-only) and the map-of-itself on Pages — both story 4.2, not launched |
-| 7. Runs on 3 popular public repos without crashing, visually sensible result | ✅ crash-free on all three; "visually sensible" is the owner's line above |
+| 7. Runs on 3 popular public repos without crashing, visually sensible result | ⚠️ **half measured** — crash-free on all three, exit 0 in every run. "Visually sensible" is an owner gate and is **unticked**; the three PNG exports are the evidence prepared for it |
 
 ### Verdict
 
-**GO for the epic → master merge, conditional on two things that are not this
-story's to close:**
+**GO for the epic → master merge, conditional on three things that are not this
+story's to close.** Four of the brief's seven DoD items are green outright
+(2, 4, 5, and the crash-free half of 7); items 1, 3, 6 and 7 are partial, and
+every one of them is partial for a reason outside this report: an unpublished
+package, a deferred story, or a judgement only the owner can make. None is
+partial because a number came back short.
 
 1. **The maintainer's checklist walk** (the section above). It is prepared and
    unticked by design — it is the owner gate, and no agent may tick it.
@@ -399,3 +403,9 @@ Every automatable threshold in the MVP definition of done passes with margin —
 the smallest is the frame-rate floor at 1.07×, and it is a vsync ceiling rather
 than a limit of the renderer. The numbers are not close to their budgets
 anywhere else, which is the honest reading of "done".
+
+The distinction this report keeps insisting on is worth stating once more at the
+end: **passing a threshold and closing a DoD item are not the same event.** The
+thresholds are this story's job and they are met. Four of the items also need a
+publish, a workflow run, or a person to look at the map, and no measurement can
+stand in for those.
