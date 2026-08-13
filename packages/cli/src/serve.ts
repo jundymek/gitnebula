@@ -11,7 +11,7 @@
 // listening and hands back a `close` that actually finishes — open keep-alive
 // sockets are tracked and destroyed, or Ctrl+C would wait on a browser that is
 // still holding a connection.
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, realpathSync, statSync } from "node:fs";
 import {
   createServer,
   type IncomingMessage,
@@ -111,13 +111,25 @@ export function resolveDistFile(
 
   const root = resolve(distDir);
   const candidate = resolve(root, relative);
-  if (candidate !== root && !candidate.startsWith(root + sep)) return null;
+  if (!isInside(root, candidate)) return null;
 
   try {
-    return statSync(candidate).isFile() ? candidate : null;
+    if (!statSync(candidate).isFile()) return null;
+    // Re-checked after following symlinks: a link *inside* the dist pointing
+    // out of it would otherwise pass the textual check and be served. Both
+    // sides are resolved, or a dist reached through a symlinked path (macOS's
+    // /tmp → /private/tmp) would fail against itself.
+    return isInside(realpathSync(root), realpathSync(candidate))
+      ? candidate
+      : null;
   } catch {
     return null;
   }
+}
+
+/** True when `candidate` is `root` itself or lives under it. */
+function isInside(root: string, candidate: string): boolean {
+  return candidate === root || candidate.startsWith(root + sep);
 }
 
 /**

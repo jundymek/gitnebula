@@ -2,7 +2,7 @@
 // the story is what the network layer does, so a mocked http module would
 // prove nothing about the bound address or the 404s.
 import { EventEmitter } from "node:events";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, symlinkSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { networkInterfaces } from "node:os";
 import { join } from "node:path";
@@ -322,3 +322,16 @@ function localExternalAddress(): string | null {
   }
   return null;
 }
+
+describe("a symlink is not a way out of the dist (AC-2)", () => {
+  it("refuses a link inside the dist that points outside it", () => {
+    const dist = makeDist();
+    const outside = escapeTargetOutside(dist);
+    symlinkSync(outside.absolute, join(dist, "escape.txt"));
+
+    expect(resolveDistFile(dist, "/escape.txt")).toBeNull();
+    // The plain file next to it still resolves — the guard is about where the
+    // link lands, not about links existing.
+    expect(resolveDistFile(dist, "/index.html")).toBe(join(dist, "index.html"));
+  });
+});
