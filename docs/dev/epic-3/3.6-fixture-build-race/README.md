@@ -115,6 +115,18 @@ Codex review raised three findings, all real, all fixed:
   temp directory — which forces the real first-time build *and* keeps the test
   from deleting the fixture the rest of the workspace is reading. Verified red
   against the pre-change builder.
+- **P2 (second round), the swap is not atomic for a concurrent reader.**
+  Correct: POSIX has no atomic directory replacement, so between the two
+  renames the live name is briefly absent. Partly fixed, partly accepted. The
+  fix: the old stamp is no longer deleted before a rebuild, so an interrupted
+  build leaves the previous repository *and* a matching stamp, and the next
+  caller no-ops instead of rebuilding under a reader's feet. What remains: the
+  window is only reachable while a reader holds a repository this script has
+  decided to replace, which means the stamp stopped matching mid-run — someone
+  edited the builder while tests were running. The alternatives (a symlink
+  swap, which changes what `git rev-parse --show-toplevel` reports, or
+  reader-side retry in four packages) cost more than that. Recorded in the
+  script's own comment so the claim there is not broader than the truth.
 - **P2, the fallback timeout was ten times too long.** Where `sleep` rejects
   fractional seconds the nap is 1 s, and the iteration limit stayed at 600. The
   limit now follows the nap, so the documented ~1 minute holds either way.

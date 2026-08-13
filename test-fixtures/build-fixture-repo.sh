@@ -89,9 +89,10 @@ if [ -f "$STAMP_FILE" ] && [ "$(cat "$STAMP_FILE")" = "$STAMP" ]; then
   fi
 fi
 
-# A rebuild invalidates the stamp first: an interrupted build must not leave a
-# stamp claiming the repository is good.
-rm -f "$STAMP_FILE"
+# The old stamp is deliberately left in place until the new repository is
+# swapped in. An interrupted rebuild then leaves the previous repository and
+# its stamp intact and consistent, so the next caller no-ops on a fixture that
+# is still good instead of rebuilding under a reader's feet.
 rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
 
@@ -168,10 +169,13 @@ commit "2025-06-30T08:00:00Z" "$BOB_N" "$BOB_E" "add normalize helper"
 
 HEAD_HASH=$(G rev-parse HEAD)
 
-# Swap the finished build over the live directory. A reader holding paths under
-# the old directory keeps reading a complete repository until it lets go; a
-# reader arriving after the rename gets the new one. Neither ever sees a
-# directory mid-build.
+# Swap the finished build over the live directory: two renames, never a
+# half-built tree under the live name. POSIX has no atomic directory
+# replacement, so the live name is briefly absent between them. That window is
+# only reachable while a reader holds a repository this script has decided to
+# replace, which means the stamp stopped matching mid-run — i.e. someone edited
+# this script while tests were running. Every ordinary path (first build,
+# interrupted build, a valid fixture) either has no reader or does not rebuild.
 rm -rf "$FINAL_DIR.previous"
 if [ -d "$FINAL_DIR" ]; then
   mv "$FINAL_DIR" "$FINAL_DIR.previous"
