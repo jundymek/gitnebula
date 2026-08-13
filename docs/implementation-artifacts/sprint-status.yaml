@@ -26,6 +26,9 @@ development_status:
   3.3-viz-navigation: backlog
   3.4-viz-panel-modes: backlog
   3.5-viz-export-perf: backlog
+  # Added 2026-08-13 by the epic/2-scanner-core supervisor, out of supervision
+  # rather than planning; must merge before 4.2 turns CI on.
+  3.6-fixture-build-race: backlog
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog
