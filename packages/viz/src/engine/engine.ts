@@ -86,6 +86,13 @@ interface CameraFlight {
   startMs: number | null;
   readonly durationMs: number;
   /**
+   * Modules this flight holds unfolded against the viewport rule. Owned per
+   * flight rather than globally: a second search cancels the first flight, and
+   * a shared pin set would let the cancelled flight's cleanup release the pin
+   * the new flight depends on.
+   */
+  readonly pins: readonly string[];
+  /**
    * Resolved with `true` on arrival and `false` when the flight was cancelled.
    * A cancelled flight must not run its caller's arrival effects — panning
    * during a search flight would otherwise still select the node the user
@@ -122,6 +129,14 @@ export class CanvasGraphEngine implements GraphEngine {
    * its own module id, so a module's cloud is the same however it got here.
    */
   private readonly memberLayouts = new Map<string, MemberLayout>();
+  /**
+   * Modules held unfolded regardless of the viewport rule, for the duration of
+   * a fly-to that needs one of their files to exist. Without this the very next
+   * `updateUnfolds` — which runs per animated frame — collapses the module
+   * `ensureUnfolded` just opened, because the camera has not climbed past
+   * `UNFOLD_ZOOM` yet. Reported from story 3.4's manual testing.
+   */
+  private readonly pinnedUnfolds = new Set<string>();
   /** Search-arrival pulse: the node, and the frame clock when it started. */
   private pulseId: string | null = null;
   private pulseStartMs: number | null = null;
@@ -335,7 +350,24 @@ export class CanvasGraphEngine implements GraphEngine {
     const flight = this.flight;
     if (!flight) return;
     this.flight = null;
+    this.releasePins(flight.pins);
     flight.resolve(false);
+  }
+
+  /**
+   * Drop one flight's pins and re-apply the viewport rule, so a module held
+   * open for a flight collapses as soon as that flight ends. Done here rather
+   * than in the awaiting caller because that resumes a microtask later, which
+   * leaves the map briefly disagreeing with ADR-0006 — and because the caller
+   * would clear pins belonging to whichever flight replaced it.
+   */
+  private releasePins(pins: readonly string[]): void {
+    if (pins.length === 0) return;
+    let changed = false;
+    for (const moduleId of pins) {
+      if (this.pinnedUnfolds.delete(moduleId)) changed = true;
+    }
+    if (changed) this.updateUnfolds();
   }
 
   fit(options: FitOptions = {}): Promise<void> {
@@ -361,6 +393,14 @@ export class CanvasGraphEngine implements GraphEngine {
     if (!node) return;
     this.cameraTakenByUser = true;
 
+    // Retire any flight already in the air BEFORE taking out this one's pin.
+    // `pinnedUnfolds` is a set, so two searches for files in the same module
+    // share one entry: acquiring first and cancelling second would have the
+    // outgoing flight delete the very entry the incoming one depends on, and
+    // the module would collapse mid-flight. Cancelling first makes the later
+    // `cancelFlight()` inside `animateCameraTo` a no-op.
+    this.cancelFlight();
+
     // The search box works from the first frame, but the layout keeps moving
     // for 2–3 s. Aiming at a node that is still drifting means arriving where
     // it *was*: the target is captured once, and 620 ms later the node has
@@ -374,8 +414,10 @@ export class CanvasGraphEngine implements GraphEngine {
     // A file inside a collapsed module has no position of its own yet, so the
     // module is unfolded first and the wake run to Settled — the target must
     // exist before we can aim at it (AC-3).
+    const pins: string[] = [];
     if (node.kind === "file" && node.parent !== null) {
       this.ensureUnfolded(node.parent);
+      pins.push(node.parent);
     }
 
     const zoom =
@@ -392,11 +434,12 @@ export class CanvasGraphEngine implements GraphEngine {
     if (this.reducedMotion || durationMs <= 0) {
       // Reduced motion jumps; there is no arrival to pulse (UX-DR11).
       this.setCamera(target);
+      this.releasePins(pins);
       this.setSelected(id);
       return;
     }
 
-    const arrived = await this.animateCameraTo(target, durationMs);
+    const arrived = await this.animateCameraTo(target, durationMs, pins);
     // Cancelled — the user panned, zoomed, searched again, or reloaded while
     // this flight was in the air. Selecting now would open a panel on a node
     // they steered away from.
@@ -426,6 +469,7 @@ export class CanvasGraphEngine implements GraphEngine {
    * this call rather than several frames later.
    */
   private ensureUnfolded(moduleId: string): void {
+    this.pinnedUnfolds.add(moduleId);
     if (this.memberLayouts.has(moduleId)) return;
     const anchor = this.layout?.nodes.find((node) => node.id === moduleId);
     if (!anchor) return;
@@ -467,7 +511,10 @@ export class CanvasGraphEngine implements GraphEngine {
   private animateCameraTo(
     target: CameraState,
     durationMs: number,
+    pins: readonly string[] = [],
   ): Promise<boolean> {
+    // Cancels whatever was already in the air — releasing only *that* flight's
+    // pins, so the ones this new flight depends on survive.
     this.cancelFlight();
     return new Promise<boolean>((resolve) => {
       this.flight = {
@@ -475,6 +522,7 @@ export class CanvasGraphEngine implements GraphEngine {
         to: target,
         startMs: null,
         durationMs,
+        pins,
         resolve,
       };
     });
@@ -600,6 +648,10 @@ export class CanvasGraphEngine implements GraphEngine {
       radius: node.radius,
     }));
     const wanted = wantedUnfolds(candidates, this.camera, this.viewport);
+    // A pinned module stays open even below the threshold: it is the target of
+    // a flight in progress, and collapsing it would destroy the very node the
+    // camera is flying toward.
+    for (const moduleId of this.pinnedUnfolds) wanted.add(moduleId);
     const transition = unfoldTransition(
       new Set(this.memberLayouts.keys()),
       wanted,
@@ -675,6 +727,7 @@ export class CanvasGraphEngine implements GraphEngine {
   }
 
   private clearUnfolds(): void {
+    this.pinnedUnfolds.clear();
     for (const wake of this.memberLayouts.values()) wake.stop();
     this.memberLayouts.clear();
   }
@@ -791,6 +844,9 @@ export class CanvasGraphEngine implements GraphEngine {
     this.emitter.emit("camera", { camera: this.camera });
     if (t >= 1) {
       this.flight = null;
+      // Arrived: the viewport rule takes over again, and at the arrival zoom
+      // the module stays open on its own merits.
+      this.releasePins(flight.pins);
       flight.resolve(true);
     }
   }

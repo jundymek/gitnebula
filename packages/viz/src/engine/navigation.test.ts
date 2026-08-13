@@ -377,6 +377,105 @@ describe("AC-3 — search fly-to", () => {
     expect(engine.getSelected()?.id).toBe(file.id);
   });
 
+  it("keeps the target's module unfolded for the whole flight", async () => {
+    // Reported from story 3.4's manual testing: searching a file appeared to do
+    // nothing — the module never opened and the panel stayed shut.
+    //
+    // `ensureUnfolded` opens the module outside the viewport rule so the target
+    // file exists to aim at, but `updateUnfolds` runs on every animated frame,
+    // and at the start of a flight the camera is still below UNFOLD_ZOOM — so
+    // the next frame collapsed the module again and destroyed the node the
+    // camera was flying toward. On a fast machine it self-heals by arrival,
+    // which is why the suite missed it; under any frame throttling the module
+    // stays shut for the whole visible flight.
+    settledEngine();
+    const file = engine.nodes.find(
+      (node) => node.kind === "file" && node.parent !== null,
+    )!;
+
+    const flight = engine.flyTo(file.id);
+    expect(engine.isUnfolded(file.parent!)).toBe(true);
+
+    // The frame that used to undo it, and a few more still below the threshold.
+    run(4);
+    expect(engine.getCamera().k).toBeLessThan(UNFOLD_ZOOM);
+    expect(engine.isUnfolded(file.parent!)).toBe(true);
+
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await flight;
+    expect(engine.isUnfolded(file.parent!)).toBe(true);
+    expect(engine.getSelected()?.id).toBe(file.id);
+  });
+
+  it("lets a pinned module collapse once the flight is cancelled", () => {
+    // The pin must not outlive the flight, or a module stays open at a zoom
+    // where ADR-0006 says everything is collapsed.
+    settledEngine();
+    const file = engine.nodes.find(
+      (node) => node.kind === "file" && node.parent !== null,
+    )!;
+
+    void engine.flyTo(file.id);
+    run(2);
+    expect(engine.isUnfolded(file.parent!)).toBe(true);
+
+    engine.panBy(10, 10); // the user takes over — flight cancelled
+    run(2);
+    expect(engine.getCamera().k).toBeLessThan(UNFOLD_ZOOM);
+    expect(engine.unfoldedModules()).toEqual([]);
+  });
+
+  it("does not let a cancelled flight release the new flight's pin", async () => {
+    // Pins are owned per flight. When they were a single shared set, searching
+    // a second file cancelled the first flight, and that cancellation cleared
+    // every pin — including the one the *new* flight had just taken out, so the
+    // second search collapsed its own target's module mid-flight.
+    settledEngine();
+    const files = engine.nodes.filter(
+      (node) => node.kind === "file" && node.parent !== null,
+    );
+    const first = files[0]!;
+    const second = files.find((node) => node.parent !== first.parent)!;
+
+    const flightA = engine.flyTo(first.id);
+    run(2);
+    const flightB = engine.flyTo(second.id); // cancels A
+    run(2);
+
+    expect(engine.getCamera().k).toBeLessThan(UNFOLD_ZOOM);
+    // B's module must still be open; A's is free to close.
+    expect(engine.isUnfolded(second.parent!)).toBe(true);
+
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await Promise.all([flightA, flightB]);
+    expect(engine.getSelected()?.id).toBe(second.id);
+  });
+
+  it("keeps the pin when both searches target the same module", async () => {
+    // Codex P1 on the first cut of the pin fix. `pinnedUnfolds` is a set, so
+    // two files in the SAME module share one entry: acquiring the new pin
+    // before cancelling the old flight had the outgoing flight delete the very
+    // entry the incoming one needed, and the module collapsed mid-flight. The
+    // sibling-module test above could not see this — it picked different
+    // parents on purpose.
+    settledEngine();
+    const moduleId = engine.nodes.find((node) => node.kind === "module")!.id;
+    const siblings = engine.nodes.filter((node) => node.parent === moduleId);
+    expect(siblings.length).toBeGreaterThan(1);
+
+    const flightA = engine.flyTo(siblings[0]!.id);
+    run(2);
+    const flightB = engine.flyTo(siblings[1]!.id); // same module
+    run(4);
+
+    expect(engine.getCamera().k).toBeLessThan(UNFOLD_ZOOM);
+    expect(engine.isUnfolded(moduleId)).toBe(true);
+
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await Promise.all([flightA, flightB]);
+    expect(engine.getSelected()?.id).toBe(siblings[1]!.id);
+  });
+
   it("takes 620ms +/- 50ms to arrive", async () => {
     settledEngine();
     const module = engine.nodes.filter((n) => n.kind === "module")[5]!;
