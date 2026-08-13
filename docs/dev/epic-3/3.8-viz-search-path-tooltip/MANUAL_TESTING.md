@@ -98,7 +98,7 @@ The CLI prints the URL it is serving on (a free port on `127.0.0.1`; it was
 - [x] Every option has a non-empty accessible name (step 8).
 - [x] The name separates path from kind — without it the spans run together as
       `assemble.tsfile`. *Observed: `packages/cli/src/assemble.ts, file`.*
-- [ ] Spoken VoiceOver announcement (step 9 above).
+- [x] Spoken VoiceOver announcement (step 9 above).
 
 ## Outcome
 
