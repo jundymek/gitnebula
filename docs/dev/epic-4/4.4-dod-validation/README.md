@@ -86,8 +86,14 @@ and ~10 MB, which is not a thing to put in a repository three times.
 
 ```bash
 sandbox-exec -p '(version 1)(allow default)(deny network*)' \
-  /usr/bin/env node packages/cli/dist/gitnebula.js <repo> --no-serve -o <out>.json
+  /usr/bin/env /tmp/cold/app/node_modules/.bin/gitnebula \
+  <repo> --no-serve -o <out>.json
 ```
+
+Through the tarball-installed binary, like every other recorded run — the
+worktree's own `dist` cannot analyse a Python repository at all (see the note
+above), so a reproduction command pointing at it would fail on two of the three
+demo repos.
 
 The sandbox was verified in both directions first — `curl` and `git ls-remote`
 fail inside it and succeed outside — because an offline test that silently still

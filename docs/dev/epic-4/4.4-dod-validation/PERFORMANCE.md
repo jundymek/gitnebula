@@ -66,7 +66,10 @@ npx -y -p /tmp/cold/gitnebula-cli-0.0.0.tgz gitnebula <repo> --no-serve -o <out>
 | excalidraw | 930 | 245,523 | 78 | 1.63 s | 1.69 s | 1.60 s | **1.63 s** | 60 s |
 | streamlit | 2,516 | 548,971 | 644 | 3.31 s | 3.35 s | 3.38 s | **3.35 s** | 60 s |
 
-The tightest margin is streamlit's, at **18× under budget**.
+The slowest run is streamlit's, at **18× under budget** — the widest margin of
+any budget in this story, not the tightest. The tightest is the frame-rate floor
+at 1.07×, then the contract size at 2.3× (see the report's summary of where the
+margins actually are).
 
 The npx cache is warm: the first invocation, which unpacked and linked the
 tarball, took 2.38 s on excalidraw against a 1.63 s median afterwards, so

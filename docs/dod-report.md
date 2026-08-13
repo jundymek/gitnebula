@@ -64,23 +64,32 @@ installed binary: 2.65 / 2.81 / 2.79 s), which is why the median is reported
 rather than the best. Clone time is excluded — SM-1 is about analysing a
 repository you have.
 
-| repo | `npx` wall clock (≤ 60 s) | installed binary | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
-| ---- | ------------------------- | ---------------- | ---------- | ------------------------ | -------------------------- | ------ |
+| repo | `npx` **from the tarball** (≤ 60 s) | installed binary | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
+| ---- | ---------------------------------- | ---------------- | ---------- | ------------------------ | -------------------------- | ------ |
 | fastapi | **1.82 s** ✅ | 1.12 s | ✅ exit 0 | **1.32 MiB** ✅ | **0.00%** ✅ | ✅ valid |
 | excalidraw | **1.63 s** ✅ | 0.93 s | ✅ exit 0 | **0.94 MiB** ✅ | **6.34%** ✅ | ✅ valid |
 | streamlit | **3.35 s** ✅ | 2.79 s | ✅ exit 0 | **2.16 MiB** ✅ | **3.74%** ✅ | ✅ valid |
 
-**All 15 threshold cells pass. The tightest margin is streamlit's runtime, 18×
-under budget.**
+**Every cell above clears its budget.** Read the ticks precisely: they say the
+measured command came in under the threshold, not that the DoD item is closed —
+the M3 table at the end of this report is where items close, and item 1 is
+partial there.
 
-The headline column is `npx` itself — `npx -p <tarball> gitnebula <repo>` — so
-the number includes npx's own resolution and startup, which cost ~0.6–0.7 s on
-top of the binary. **One thing in that command is not the real one**: the
-package comes from the local tarball rather than the registry, because
-gitnebula is not published yet (story `4.5-npm-release`, `backlog`). Registry
-download is network time SM-1 does not own, but the substitution is stated here
-rather than left for a reader to discover — this report cannot claim
-`npx gitnebula` end to end until 4.5 lands.
+The headline column is `npx` itself — `npx -y -p <tarball> gitnebula <repo>`,
+npx cache warm — so the number includes npx's own resolution and startup, which
+cost ~0.6–0.7 s on top of the binary. **The package comes from the local
+tarball, not the registry**, because gitnebula is unpublished (`private`,
+`@gitnebula/cli`, 0.0.0 — story `4.5-npm-release`, `backlog`). `npx gitnebula`
+by name fails at package resolution today; that is why the column names the
+tarball and why DoD item 1 is partial rather than green.
+
+**Where the margins actually are.** Runtime is the widest, not the tightest:
+18× under budget at worst. The tightest cell in this table is streamlit's
+`analysis.json` at 2.16 of 5 MB — **2.3×** — followed by its unresolved-import
+rate at 3.74% of 20% (5.3×). Tighter still, in the global checks below, is the
+frame rate: 59 sustained against a floor of 55, **1.07×**, and that one is a
+vsync ceiling rather than a shortfall. If any budget here is worth watching as
+repositories grow, it is the contract size on the largest repo, not the clock.
 
 ### What each column means
 
@@ -399,10 +408,12 @@ partial because a number came back short.
    until 4.5 lands the honest form of that claim is the one in the DoD table
    above.
 
-Every automatable threshold in the MVP definition of done passes with margin —
-the smallest is the frame-rate floor at 1.07×, and it is a vsync ceiling rather
-than a limit of the renderer. The numbers are not close to their budgets
-anywhere else, which is the honest reading of "done".
+Every automatable threshold in the MVP definition of done passes with margin.
+The two worth remembering are the narrow ones: the frame-rate floor at 1.07×,
+which is a vsync ceiling rather than a limit of the renderer, and the contract
+size at 2.3× on the largest repo, which is the one number that grows with the
+repository a user points at. Everything else has an order of magnitude to
+spare.
 
 The distinction this report keeps insisting on is worth stating once more at the
 end: **passing a threshold and closing a DoD item are not the same event.** The
