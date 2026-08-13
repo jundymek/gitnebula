@@ -46,4 +46,11 @@ export interface ChromeState {
   readonly languages: Readonly<Record<string, number>>;
   /** True while the layout is settling; the replay control reads it. */
   readonly settling: boolean;
+  // ---- story 3.3 (navigation) — appended, nothing above is reshaped -------
+  /** Node currently under the pointer, or null (FR-17). */
+  readonly hoveredId: string | null;
+  /** Node the engine last selected — a click, or a search arrival (FR-18). */
+  readonly selectedId: string | null;
+  /** How many modules are unfolded right now (ADR-0006). */
+  readonly unfolded: number;
 }

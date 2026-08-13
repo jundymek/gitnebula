@@ -89,3 +89,15 @@ export const FIT_PADDING_PX = 90;
 export const FLY_DURATION_MS = 620;
 export const FLY_ZOOM_MODULE = 2.0;
 export const FLY_ZOOM_FILE = 3.0;
+
+/**
+ * How long a search target pulses after the camera arrives (story 3.3).
+ *
+ * The pulse answers "which of these did I just land on?" — at 2.0× a module
+ * arrives among neighbours, and the flight alone does not say which node was
+ * the target. Suppressed under reduced motion, where the camera jumps and
+ * there is no arrival to mark.
+ */
+export const PULSE_DURATION_MS = 900;
+/** Peak extra radius of the arrival pulse ring, in screen px. */
+export const PULSE_MAX_RADIUS_PX = 26;

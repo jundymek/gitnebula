@@ -24,6 +24,13 @@ export {
 
 export { SETTLE_DISPLACEMENT_PX, SETTLE_FRAMES } from "./settle.js";
 
+/**
+ * The search box's ranking (story 3.3). It lives engine-side because it is
+ * pure scoring over node ids with no DOM in it, and chrome reaches it through
+ * this barrel like everything else.
+ */
+export { fuzzySearch, scoreMatch, type FuzzyMatch } from "./fuzzy.js";
+
 export { hashString, seedFor } from "./prng.js";
 
 export type {

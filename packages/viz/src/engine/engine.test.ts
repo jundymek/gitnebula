@@ -260,9 +260,8 @@ describe("CanvasGraphEngine — AC-7 interface completeness", () => {
   });
 
   it("names the owning story for members it does not implement", async () => {
-    await expect(engine.flyTo("mod-000/")).rejects.toThrow(
-      /3\.3-viz-navigation/,
-    );
+    // `flyTo` was on this list until story 3.3 implemented it; what remains is
+    // `exportPNG`, which story 3.5 owns.
     await expect(engine.exportPNG()).rejects.toThrow(/3\.5-viz-export-perf/);
   });
 
