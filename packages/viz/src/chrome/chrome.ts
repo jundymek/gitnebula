@@ -142,6 +142,15 @@ export function mountChrome(
 
 /**
  * Subscribes chrome to the engine. Returns a teardown function.
+ *
+ * **One connection describes one document.** `options.analysis` is the
+ * document the panel derives its rows from, and it is captured here — so a
+ * caller that later hands the same engine a *different* document through
+ * `engine.load()` must tear this connection down and make a new one, or the
+ * panel would print the previous repository's metrics and GitHub links. The
+ * Viewer loads once (`app.ts`), so the shipped path cannot reach that state;
+ * the constraint is written down because the next caller will not be able to
+ * infer it from the signature.
  */
 export function connectEngine(
   handle: ChromeHandle,
