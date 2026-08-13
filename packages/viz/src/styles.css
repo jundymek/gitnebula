@@ -342,6 +342,157 @@ canvas {
   border: 0;
 }
 
+/* modes — the header's Structure/Heatmap toggle (story 3.4, FR-21). */
+
+.modes {
+  display: flex;
+}
+
+.modes button {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: transparent;
+  color: var(--ink-mute);
+  border: 1px solid var(--line-hi);
+  border-radius: 6px 0 0 6px;
+  padding: 7px 12px;
+  cursor: pointer;
+}
+
+.modes button + button {
+  border-left: none;
+  border-radius: 0 6px 6px 0;
+}
+
+.modes button[aria-pressed="true"] {
+  color: var(--ink);
+  background: var(--line);
+}
+
+/* panel — the detail panel (story 3.4, FR-19/20, UX-DR7). */
+
+#panel {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 290px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 16px 18px;
+}
+
+/* `hidden` is the closed state, so the panel leaves the accessibility tree
+   with it rather than merely going invisible. */
+#panel[hidden] {
+  display: none;
+}
+
+.p-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: transparent;
+  border: none;
+  color: var(--ink-mute);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.p-close:hover {
+  color: var(--ink);
+}
+
+.p-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+
+.p-name {
+  font-family: var(--mono);
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.p-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hot);
+  border: 1px solid var(--hot);
+  border-radius: 4px;
+  padding: 1px 6px;
+  white-space: nowrap;
+}
+
+.p-badge[hidden] {
+  display: none;
+}
+
+.p-path {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  overflow-wrap: anywhere;
+}
+
+.p-kind {
+  display: block;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  margin-bottom: 14px;
+}
+
+.p-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--line);
+}
+
+.p-row span:first-child {
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.p-row span:last-child {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.p-bar {
+  height: 4px;
+  background: var(--line);
+  border-radius: 2px;
+  margin: 12px 0 14px;
+  overflow: hidden;
+}
+
+.p-bar i {
+  display: block;
+  height: 100%;
+  background: var(--hot);
+}
+
+.p-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.p-actions .iconbtn {
+  text-decoration: none;
+}
+
 /* export (story 3.5). Only the failure state needs styling — the resting
    button is the shared .iconbtn the replay control uses. The failed state
    borrows the hot-spot colour rather than introducing a red the palette does

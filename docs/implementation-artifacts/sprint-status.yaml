@@ -24,7 +24,7 @@ development_status:
   3.1-deps-python: review
   3.2-cli-serve-url: review
   3.3-viz-navigation: review
-  3.4-viz-panel-modes: backlog
+  3.4-viz-panel-modes: review
   3.5-viz-export-perf: review
   # Added 2026-08-13 by the epic/2-scanner-core supervisor, out of supervision
   # rather than planning; must merge before 4.2 turns CI on.

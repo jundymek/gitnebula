@@ -85,6 +85,13 @@ export const FIT_DURATION_MS = 620;
 /** Padding kept around the graph's bounds when fitting, in CSS px. */
 export const FIT_PADDING_PX = 90;
 
+/**
+ * How far a press may travel and still count as a click rather than a drag
+ * (story 3.4, AC-4). The mockup used any movement at all, which loses the
+ * click to a hand tremor on a trackpad.
+ */
+export const CLICK_SLOP_PX = 4;
+
 /** Search fly-to duration and targets (mockup; story 3.3 consumes them). */
 export const FLY_DURATION_MS = 620;
 export const FLY_ZOOM_MODULE = 2.0;
