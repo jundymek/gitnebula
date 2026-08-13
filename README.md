@@ -50,6 +50,10 @@ npx gitnebula --window-days 180       # widen the git history window (default 90
 Optional `.gitnebula.yml` in the repository root sets `excludes`, `windowDays`,
 `hotspotThreshold` and `layers`; command-line flags win over the file.
 
+Before the first npm release, `npx` has nothing to fetch — run it from a clone
+instead: `pnpm install && pnpm build && node packages/cli/dist/gitnebula.js .`
+(details in [CONTRIBUTING.md](CONTRIBUTING.md)).
+
 ## The map of gitnebula itself
 
 <!-- TODO(4.2-ci-pages-recipe): replace with the live GitHub Pages URL once the

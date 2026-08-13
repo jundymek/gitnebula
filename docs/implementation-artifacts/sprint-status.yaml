@@ -41,7 +41,7 @@ development_status:
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog
-  4.3-repo-quality: backlog
+  4.3-repo-quality: review
   4.4-dod-validation: backlog
 
 milestones:
