@@ -15,11 +15,13 @@
 // package that already reaches across the whole workspace.
 import { execFile, execFileSync } from "node:child_process";
 import {
+  appendFileSync,
   copyFileSync,
   existsSync,
   mkdirSync,
   readdirSync,
   readFileSync,
+  rmSync,
 } from "node:fs";
 import { join } from "node:path";
 import { promisify } from "node:util";
@@ -60,6 +62,13 @@ function workspaceManifests(): { name: string; manifest: PackageManifest }[] {
     });
 }
 
+/** `git status --porcelain`: empty exactly when the working tree is pristine. */
+function porcelain(repo: string): string {
+  return execFileSync("git", ["-C", repo, "status", "--porcelain"], {
+    encoding: "utf8",
+  }).trim();
+}
+
 function head(repo: string): string {
   return execFileSync("git", ["-C", repo, "rev-parse", "HEAD"], {
     encoding: "utf8",
@@ -98,6 +107,35 @@ describe("fixture repository build (story 3.6)", () => {
 
     ensureFixtureRepo();
     expect(heads[0]).toBe(head(fixtureRepo));
+  });
+
+  it("rebuilds a fixture whose working tree was modified in place", async () => {
+    // The pre-3.6 builder opened with `rm -rf`, so every run started from a
+    // pristine tree. The stamped no-op restores nothing, so without this guard
+    // a fixture dirtied by an interrupted operation or by hand survives into
+    // the next run and quietly fails the analyzers that read it.
+    //
+    // Sandboxed for the same reason as the concurrency case above: the shared
+    // fixture must not be dirtied while other packages are reading it.
+    const sandbox = makeTempDir(temps, "gitnebula-fixture-dirty-");
+    const scriptCopy = join(sandbox, BUILDER);
+    copyFileSync(buildScript, scriptCopy);
+    const repo = join(sandbox, ".generated", "history-repo");
+
+    const { stdout: first } = await execFileAsync("sh", [scriptCopy], {
+      encoding: "utf8",
+    });
+
+    appendFileSync(join(repo, "core", "scoring.py"), "# corrupted\n");
+    rmSync(join(repo, "web", "api.ts"));
+    expect(porcelain(repo)).not.toBe("");
+
+    const { stdout: second } = await execFileAsync("sh", [scriptCopy], {
+      encoding: "utf8",
+    });
+
+    expect(porcelain(repo)).toBe("");
+    expect(second.trim()).toBe(first.trim());
   });
 
   it("has exactly one package script invoking the builder: the root pretest", () => {

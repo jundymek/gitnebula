@@ -205,3 +205,46 @@ this story.** 4.2 turns `.github/workflows/ci.yml` on and CI runs exactly the
 command that was failing. That ordering is not expressible from inside this
 story — 4.2's own `Depends_on` lists only `4.1-build-bundle`, and editing an
 existing spec is not this story's to do.
+
+## Follow-up after the merge: the cached fixture must also be pristine
+
+A Codex review that finished after PR #20 had merged found a real gap in the
+shipped builder, and the epic supervisor authorised a second, narrow PR from
+this story rather than a new story id.
+
+The stamped fast path validated the cached fixture with `git rev-parse HEAD`
+alone. The no-op restores nothing, so a fixture whose working tree had been
+modified or partly deleted — by an interrupted operation, by a hand inspecting
+it — passed as valid and the corruption survived into the next run. The pre-3.6
+builder opened with `rm -rf` and got a pristine tree for free; that property was
+lost, and this restores it.
+
+Verified before the fix, on the merged epic head:
+
+```
+sh test-fixtures/build-fixture-repo.sh              # clean build
+echo corrupted >> .generated/history-repo/core/scoring.py
+rm .generated/history-repo/web/api.ts
+sh test-fixtures/build-fixture-repo.sh              # prints HEAD, rebuilds nothing
+git -C .generated/history-repo status --porcelain   # M core/scoring.py / D web/api.ts
+pnpm --filter @gitnebula/scanner test               # exit 1
+```
+
+The validity check now requires an empty `git status --porcelain` alongside a
+resolvable `HEAD`; anything else falls through to a rebuild. One extra git call
+on the fast path, no change to the lock, the swap, or the commit hashes.
+
+`packages/cli/src/fixture-build.test.ts` gains the third assertion: dirty the
+fixture tree, run the builder, require the tree pristine and the HEAD hash
+unchanged. Seen red against the builder as it stood on the epic branch —
+`expected 'M core/scoring.py\n D web/api.ts' to be ''`.
+
+**This is a property restored, not a bug fixed.** Nothing in the suite writes
+into the fixture tree today, so no test was failing because of it.
+
+And AC-1 finally has its clean number. With `bob`'s PR #26 merged, the clone
+flake is gone from the base and `pnpm test` from a clean checkout is **10 runs,
+10 passed** on epic head `29c0df9` — 701 tests: contract 103, scanner 145,
+githist 74, deps 66 (2 skipped), viz 294, cli 117. `pnpm lint` and
+`pnpm --filter @gitnebula/cli typecheck` both exit 0. Fixture HEAD unchanged at
+`70cc4d3ce32dc991795fd87c077cf3cf9f967b55`.
