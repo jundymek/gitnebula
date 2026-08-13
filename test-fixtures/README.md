@@ -1,16 +1,27 @@
-# Fixture git repositories
+# Fixture repositories
 
-Deterministic git repositories used by `githist` (and pipeline) tests, built
-by the scripts in this directory into the gitignored `.generated/` — **built,
-never committed** (AD-14). No `.git` directory, renamed or otherwise, ever
-lands in the repo.
+Deterministic repositories used by analyzer tests, built by the scripts in this
+directory into the gitignored `.generated/` — **built, never committed**
+(AD-14). No `.git` directory, renamed or otherwise, ever lands in the repo.
 
 ```sh
-./test-fixtures/build-fixture-repo.sh   # prints the HEAD hash
+./test-fixtures/build-fixture-repo.sh      # githist: prints the HEAD hash
+./test-fixtures/build-ts-fixture-repo.sh   # deps: prints the tree it wrote
 ```
 
-The root `pretest` script runs this automatically, so a fresh clone's
-`pnpm test` needs no manual step; CI does the same.
+The root `pretest` script runs the first automatically and `@gitnebula/deps`'
+own `pretest` runs the second, so a fresh clone's `pnpm test` needs no manual
+step; CI does the same.
+
+`build-ts-fixture-repo.sh` writes two plain source trees with no git history —
+`ts-imports-repo` and `ts-imports-repo-no-config` — because `deps` reads the
+working tree, never the log. One of its files has deliberate syntax errors, and
+that is precisely why it is generated: committed as `.ts` it would break
+`pnpm lint` and `pnpm typecheck` for the whole workspace.
+
+The two scripts are independent. `build-fixture-repo.sh`'s commit hashes are
+pinned by githist's snapshots; extend it only with that in mind, and prefer a
+new sibling script (below).
 
 ## Determinism
 

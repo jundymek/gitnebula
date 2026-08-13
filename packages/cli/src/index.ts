@@ -1,23 +1,37 @@
-// @gitnebula/cli — pipeline orchestration, config, server, build. Published
-// as `gitnebula` (AD-11). Story 2.4 implements the pipeline; this stub only
-// proves the AD-2 edges and gives the tsup build edge something to bundle.
-
-import { packageName as contractPackageName } from "@gitnebula/contract";
-import { packageName as depsPackageName } from "@gitnebula/deps";
-import { packageName as githistPackageName } from "@gitnebula/githist";
-import { packageName as scannerPackageName } from "@gitnebula/scanner";
+// @gitnebula/cli — pipeline orchestration, config, emit. Published as
+// `gitnebula` (AD-11); the local server and URL mode arrive in story 3.2.
+//
+// Story 1.1's scaffold exports (`pipelineEdges`, a placeholder `main`) are
+// gone: the AD-2 edges they existed to prove are now proven by the pipeline
+// importing all three analyzers for real.
 
 export const packageName = "@gitnebula/cli";
 
-export const pipelineEdges = [
-  contractPackageName,
-  scannerPackageName,
-  depsPackageName,
-  githistPackageName,
-];
-
-export function main(): void {
-  console.log(
-    `gitnebula scaffold placeholder — pipeline packages wired: ${pipelineEdges.join(", ")}`,
-  );
-}
+export { main, run, type RunOptions } from "./cli.js";
+export {
+  CONFIG_FILENAME,
+  DEFAULT_HOTSPOT_THRESHOLD,
+  DEFAULT_WINDOW_DAYS,
+  LLM_IGNORED_NOTICE,
+  resolveConfig,
+  type CliFlags,
+  type ConfigResolution,
+} from "./config.js";
+export { assemble, type AssembleInput } from "./assemble.js";
+export { DEFAULT_OUTPUT_FILENAME, emit, serialize } from "./emit.js";
+export { enrich } from "./enrich.js";
+export { StageError } from "./errors.js";
+export {
+  runPipeline,
+  type PipelineResult,
+  type RunPipelineOptions,
+  type TaggedWarning,
+} from "./pipeline.js";
+export {
+  createReporter,
+  createSilentReporter,
+  formatElapsed,
+  type OnProgress,
+  type Reporter,
+} from "./progress.js";
+export { resolveRepo, type RepoInfo } from "./repo.js";

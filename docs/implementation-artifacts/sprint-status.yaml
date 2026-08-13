@@ -15,17 +15,20 @@ development_status:
   # was waiting for; that acceptance released 2.5 / 3.3 / 3.5.
   1.4-perf-spike: done
   # Epic 2 — Analysis Pipeline and Living Map (-> M2)
-  2.1-scanner-core: backlog
-  2.2-deps-ts-imports: backlog
-  2.3-githist-metrics: backlog
-  2.4-cli-pipeline: backlog
-  2.5-viz-engine-core: backlog
+  2.1-scanner-core: done
+  2.2-deps-ts-imports: done
+  2.3-githist-metrics: done
+  2.4-cli-pipeline: done
+  2.5-viz-engine-core: done
   # Epic 3 — Full Exploration Experience
   3.1-deps-python: backlog
   3.2-cli-serve-url: backlog
   3.3-viz-navigation: backlog
   3.4-viz-panel-modes: backlog
   3.5-viz-export-perf: backlog
+  # Added 2026-08-13 by the epic/2-scanner-core supervisor, out of supervision
+  # rather than planning; must merge before 4.2 turns CI on.
+  3.6-fixture-build-race: backlog
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog

@@ -9,6 +9,11 @@ build/
 # Generated fixture repositories (AD-14) — built by scripts, never committed
 test-fixtures/.generated/
 
+# What `gitnebula` writes when run here with no --out. Root-anchored, so the
+# committed fixtures under packages/ and any bundle sibling (ADR-0004) are
+# unaffected.
+/analysis.json
+
 # BMAD personal settings (per-developer, not shared)
 _bmad/config.user.toml
 _bmad/custom/config.user.toml

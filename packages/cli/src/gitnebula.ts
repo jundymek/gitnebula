@@ -1,5 +1,5 @@
-// Executable entry for the placeholder binary (tsup adds the shebang).
+// Executable entry for the `gitnebula` binary (tsup adds the shebang).
 
-import { main } from "./index.js";
+import { main } from "./cli.js";
 
-main();
+await main(process.argv.slice(2));
