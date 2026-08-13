@@ -106,8 +106,10 @@ export function mountChrome(
       panel.setIsolated(next !== null);
     },
     onClose() {
-      // Closing clears selection AND isolate (AC-4); the `select` event that
-      // comes back is what actually shuts the panel.
+      // Closing clears selection AND isolate together (AC-4). The engine
+      // echoes a `select: null` back, which shuts the panel a second time —
+      // but the panel is also shut here, so × works before an engine is
+      // attached rather than looking dead.
       engine?.setIsolated(null);
       engine?.setSelected(null);
       store.setState({ selected: null, isolated: false });
