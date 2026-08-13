@@ -18,6 +18,13 @@ const UNIVERSE = [
   "stubs/only/__init__.pyi",
 ];
 
+/** PEP 420: a package under `src/` with no `__init__.py` anywhere in it. */
+const NAMESPACE_UNIVERSE = [
+  "src/acme/tools.py",
+  "src/acme/nested/thing.py",
+  "pyproject.toml",
+];
+
 const resolver = createPythonResolver(UNIVERSE);
 
 describe("source roots", () => {
@@ -56,6 +63,34 @@ describe("absolute resolution", () => {
 
   it("never resolves to a non-Python file", () => {
     expect(resolver.resolveAbsolute(["docs", "readme"])).toBeUndefined();
+  });
+});
+
+describe("namespace packages (PEP 420)", () => {
+  const namespaced = createPythonResolver(NAMESPACE_UNIVERSE);
+
+  it("treats a conventional layout directory as a source root", () => {
+    // Nothing on disk marks `src/acme` as a package, so only the convention
+    // can say that `acme.tools` is how the repo imports it.
+    expect(namespaced.sourceRoots).toEqual(["", "src"]);
+    expect(namespaced.resolveAbsolute(["acme", "tools"])).toBe(
+      "src/acme/tools.py",
+    );
+    expect(namespaced.resolveAbsolute(["acme", "nested", "thing"])).toBe(
+      "src/acme/nested/thing.py",
+    );
+  });
+
+  it("keeps the repo-root reading as well", () => {
+    expect(namespaced.resolveAbsolute(["src", "acme", "tools"])).toBe(
+      "src/acme/tools.py",
+    );
+  });
+
+  it("does not invent a root from a directory holding no python", () => {
+    expect(createPythonResolver(["src/app.ts", "a.py"]).sourceRoots).toEqual([
+      "",
+    ]);
   });
 });
 

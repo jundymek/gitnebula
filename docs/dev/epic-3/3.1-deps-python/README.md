@@ -78,12 +78,16 @@ name" — its rules are path arithmetic. The resolver therefore never touches th
 filesystem: it indexes the scan universe (AD-13) and answers from that, which
 makes it a pure function of `(universe, import)` and trivially deterministic.
 
-- **Source roots** are the repo root plus the parent of every top-level package.
-  streamlit keeps its package at `lib/streamlit/` and imports it as
-  `streamlit.x`, not `lib.streamlit.x`; resolving from the repo root alone would
-  report most of the repo as unresolved. A directory is a source root when it
-  directly contains a package (`__init__.py`) whose own parent is not one. On
-  streamlit this finds `''`, `'lib'`, and two more.
+- **Source roots** are the repo root, the parent of every top-level package, and
+  any `src`/`lib` directory holding Python. streamlit keeps its package at
+  `lib/streamlit/` and imports it as `streamlit.x`, not `lib.streamlit.x`;
+  resolving from the repo root alone would report most of the repo as
+  unresolved. A directory is a source root when it directly contains a package
+  (`__init__.py` or `__init__.pyi`) whose own parent is not one — plus the two
+  conventional layout names, because a PEP 420 namespace package
+  (`src/acme/tools.py`, imported as `acme.tools`) has no marker file to find. An
+  extra root only adds candidates to the index, so it cannot change an answer
+  that already resolved. On streamlit this finds `''`, `'lib'`, and two more.
 - **`from pkg import name`** tries `pkg/name.py` first — the name may be a
   submodule. Where it is not, the name is a symbol and `pkg/__init__.py` is the
   dependency, because that is the file which defines it.

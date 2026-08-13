@@ -52,7 +52,16 @@ function join(base: string, tail: string): string {
  *
  * The repo root is always a candidate: a flat repo of loose modules has no
  * `__init__.py` anywhere and still imports its own files by name.
+ *
+ * Package markers alone are not enough, though. A PEP 420 namespace package has
+ * no `__init__.py` at all — `src/acme/tools.py` is imported as `acme.tools` and
+ * nothing on disk says so — so the two conventional layout directories are
+ * source roots whenever they hold Python at all. Adding a root only ever adds
+ * candidates to the index; `.py` still beats `.pyi` and the shortest root still
+ * wins a tie, so this cannot change an answer that already resolved.
  */
+const CONVENTIONAL_ROOTS = ["src", "lib"] as const;
+
 function sourceRootsOf(pythonFiles: readonly string[]): string[] {
   const isPackageMarker = (file: string): boolean =>
     [INIT, INIT_PYI].some((name) => file === name || file.endsWith(`/${name}`));
@@ -66,6 +75,17 @@ function sourceRootsOf(pythonFiles: readonly string[]): string[] {
     if (dir === "") continue;
     const parent = dirOf(dir);
     if (!packageDirs.has(parent)) roots.add(parent);
+  }
+  for (const file of pythonFiles) {
+    // The `src`/`lib` segment of this file's path, if it has one: a namespace
+    // package needs its layout directory named as a root, and no marker file
+    // will ever say which.
+    const segments = dirOf(file).split("/");
+    for (const [index, segment] of segments.entries()) {
+      if ((CONVENTIONAL_ROOTS as readonly string[]).includes(segment)) {
+        roots.add(segments.slice(0, index + 1).join("/"));
+      }
+    }
   }
   // Shortest first, then lexicographic: a deterministic order for the
   // first-wins rule below (AD-4).
