@@ -77,7 +77,7 @@ free when the repository is already built.
 
 | criterion | evidence |
 | --- | --- |
-| AC-1 | `pnpm test` from a clean checkout (`rm -rf test-fixtures/.generated` before each), **10 runs, 10 passed** on the base this branch started from — 578 tests. After rebasing onto the epic head twice (stories 3.2 and 3.1 merged in): **7 of 10**, then **8 of 10**. Every failure in both sets is story 3.2's `clone.test.ts`, none is the fixture builder — `grep -c 'Command failed: sh .*build-fixture-repo'` over all twenty run logs returns 0. See the section below. |
+| AC-1 | `pnpm test` from a clean checkout (`rm -rf test-fixtures/.generated` before each), **10 runs, 10 passed** on the base this branch started from — 578 tests. After rebasing onto the epic head three times (stories 3.2, 3.1 and 3.3 merged in): **7 of 10**, **8 of 10**, **7 of 10**, the last with `TMPDIR` pointed at an empty directory. Every failure in all three sets is story 3.2's `clone.test.ts`, none is the fixture builder — `grep -c 'Command failed: sh .*build-fixture-repo'` over all thirty run logs returns 0. See the section below. |
 | AC-2 | Lock + stamp + swap, above. Six concurrent builders on a clean `.generated/` all exit 0 and print the same hash — asserted in `packages/cli/src/fixture-build.test.ts`. |
 | AC-3 | `pnpm --filter @gitnebula/<pkg> test`, each from a clean `.generated/`, re-run after the second rebase: contract 103, scanner 145, githist 74, deps 66 (2 skipped), cli 116, viz 148 — all exit 0. |
 | AC-4 | `git -C test-fixtures/.generated/history-repo log --format=%H` before and after the change: **identical**, HEAD `70cc4d3ce32dc991795fd87c077cf3cf9f967b55`. The crafted history was not touched; the build directory's path does not enter a commit hash. |
@@ -154,9 +154,9 @@ in the table above.
 
 After rebasing onto `epic/3-deps-python` with story 3.2 (`feat(cli): loopback
 server and shallow-clone URL mode`, PR #19) merged into it, the ten-run check
-came back **7 of 10**; after a second rebase, with story 3.1 merged in too,
-**8 of 10**. Every failure in both sets is the same test, and none of them
-touches the fixture builder:
+came back **7 of 10**; after a second rebase, with 3.1 merged in too, **8 of
+10**; after a third, with 3.3 merged in, **7 of 10** again. Every failure in all
+three sets is the same test, and none of them touches the fixture builder:
 
 ```
 FAIL src/clone.test.ts > an unreachable URL aborts in the AD-7 shape (AC-5)
@@ -182,11 +182,21 @@ this branch's sample: **5 failures in 8 runs** at `629a14c`, always
 exposure. Their instruction was to record it and leave it alone, which is what
 this file does.
 
+One alternative explanation was ruled out rather than assumed. A stale
+`gitnebula-clone-*` directory left in this machine's shared temp directory can
+turn the same assertions permanently red, so the third set of ten runs was made
+with `TMPDIR` pointed at an empty directory. It still came back 7 of 10 — the
+race is between sibling suites inside one run, not residue from an earlier one.
+
 Not fixed here, deliberately: it belongs to story 3.2, whose author is done, and
 this story's spec says that changing what a test asserts rather than when the
 fixture is built is out of scope. Reported to `bob` and to the epic supervisor,
 who escalated it to the maintainer. `grep -c 'Command failed: sh .*build-fixture-repo'`
-over all twenty run logs returns 0 — not one failure came from the builder.
+over all thirty run logs returns 0 — not one failure came from the builder.
+
+Story 3.2's author has since fixed it in PR #26, and the epic supervisor also
+specced it as story 3.7; neither had merged into the epic head this branch was
+last measured on (`f0a64dc`), so the figures above stand as observed.
 
 ## Note for the maintainer
 
