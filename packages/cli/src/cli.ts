@@ -132,7 +132,7 @@ export async function run(
       throw new StageError(
         INPUT_STAGE,
         `analyzing a remote repository (${target}) is not supported in this release`,
-        "clone it locally and run gitnebula in the clone — URL mode arrives with the local server, in story 3.2",
+        "clone it locally and run gitnebula in the clone; URL mode arrives with the local server in story 3.2",
       );
     }
 
