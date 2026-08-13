@@ -87,6 +87,13 @@ entry is surface no story asks for, so the field is gone — cli is a binary,
 test now asserts the general property: every entry point the manifest
 advertises must exist in the tarball.
 
+A ninth, narrow but exactly the kind the previous fix invites: the
+self-exclusion asked whether `path.relative` *started with* two dots, which is
+true both of a path stepping out of the repository and of a directory merely
+named `..site`. The second is inside, so its exclusion was dropped and the
+bundle went back into its own map. Outside now means exactly `..` or a path
+continuing through `../`.
+
 ## Files
 
 ### `packages/viz`
