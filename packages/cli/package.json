@@ -8,9 +8,6 @@
   "bin": {
     "gitnebula": "./dist/bin/gitnebula.js"
   },
-  "exports": {
-    ".": "./src/index.ts"
-  },
   "files": [
     "dist",
     "assets",

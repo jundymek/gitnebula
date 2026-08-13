@@ -18,7 +18,7 @@
 //   - `workspace:*` in `dependencies` makes `npm install <tarball>` fail
 //     before the binary exists at all.
 import { execFileSync, spawn } from "node:child_process";
-import { existsSync, readdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -80,6 +80,18 @@ function pack(destination: string): string {
   return join(destination, tarball);
 }
 
+/**
+ * Every file path an `exports` map points at, however it is nested — a bare
+ * string, a subpath map, or conditions inside either.
+ */
+function collectEntryPoints(node: unknown): string[] {
+  if (typeof node === "string") return [node];
+  if (typeof node !== "object" || node === null) return [];
+  return Object.values(node as Record<string, unknown>).flatMap(
+    collectEntryPoints,
+  );
+}
+
 /** Everything inside the tarball, as `package/…` paths. */
 function listTarball(tarball: string): string[] {
   return execFileSync("tar", ["-tzf", tarball], { encoding: "utf8" })
@@ -117,6 +129,32 @@ describe("npm pack — the published tarball (AC-4)", () => {
       /^(workspace|catalog):/.test(range),
     );
     expect(unresolvable).toEqual([]);
+  });
+
+  // A manifest that names an entry point the tarball does not carry is a
+  // promise the installed package cannot keep: `import "@gitnebula/cli"` would
+  // die on ERR_MODULE_NOT_FOUND. cli is a binary — `bin` is its whole public
+  // surface — so the guard is that whatever it *does* advertise, it ships.
+  it("advertises no entry point it does not ship", () => {
+    const entries = listTarball(pack(makeTempDir(temps, "gitnebula-pack-")));
+    const manifest = JSON.parse(
+      readFileSync(join(cliRoot, "package.json"), "utf8"),
+    ) as {
+      bin?: Record<string, string>;
+      main?: string;
+      exports?: unknown;
+    };
+
+    const advertised = [
+      ...Object.values(manifest.bin ?? {}),
+      ...(manifest.main === undefined ? [] : [manifest.main]),
+      ...collectEntryPoints(manifest.exports),
+    ];
+    expect(advertised.length).toBeGreaterThan(0);
+
+    for (const entry of advertised) {
+      expect(entries).toContain(`package/${entry.replace(/^\.\//, "")}`);
+    }
   });
 
   it("ships the viewer as one self-contained file (ADR-0004)", () => {

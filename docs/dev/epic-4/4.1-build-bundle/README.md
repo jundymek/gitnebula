@@ -78,6 +78,15 @@ viewer drawing it. `build` now contributes one exclusion of its own for the
 output directory whenever it lies inside the repository. Three consecutive
 runs on this repository now report the same 343 nodes and 402 edges.
 
+An eighth, from the last review round: the manifest advertised
+`exports: { ".": "./src/index.ts" }` while `files` ships only `dist`, `assets`
+and `LICENSE`, so the tarball promised an entry point it did not carry.
+Shipping `src` would not have made the import work and building a library
+entry is surface no story asks for, so the field is gone — cli is a binary,
+`bin` is its whole public surface, and nothing in the workspace imports it. A
+test now asserts the general property: every entry point the manifest
+advertises must exist in the tarball.
+
 ## Files
 
 ### `packages/viz`
@@ -105,7 +114,7 @@ runs on this repository now report the same 343 nodes and 402 edges.
 | `src/index.ts`             | UPDATE | exports the bundle surface                                                    |
 | `scripts/prepack.mjs`      | NEW    | copies the viz dist, the grammar and the licence into the package            |
 | `tsup.config.ts`           | UPDATE | `dist/bin/gitnebula.js`; `web-tree-sitter` external                          |
-| `package.json`             | UPDATE | `files`, `bin`, `prepack`, and an npm-resolvable dependency block            |
+| `package.json`             | UPDATE | `files`, `bin`, `prepack`, an npm-resolvable dependency block, no `exports`  |
 
 ### Repository
 
