@@ -287,9 +287,12 @@ this story could fail:
 | map-of-itself published on GitHub Pages | **not available** | same — publishing is 4.2's deliverable |
 | `npx gitnebula` against the real registry | **not available** | the package is unpublished and still `private` / `@gitnebula/cli` / 0.0.0. Story `4.5-npm-release` (specced by the epic supervisor on 2026-08-13, row `backlog`) covers it. The tarball proof above is how far this report can go without it |
 
-They are recorded here rather than filed as issues because they are a
-maintainer decision with a known cause, not a defect discovered by this run.
-Both belong to story 4.2 and both are inputs to the M3 verdict below.
+All three are recorded here rather than filed as issues because each is a
+scheduling decision with a known cause, not a defect discovered by this run.
+They split two ways, and the split matters for who picks them up: **the first
+two are story `4.2-ci-pages-recipe`**, deferred because Actions billing is
+disabled, and **the third is story `4.5-npm-release`**, which did not exist when
+this wave launched. All three are inputs to the M3 verdict below.
 
 ## Human-review checklist — prefilled, unticked (AC-4)
 
