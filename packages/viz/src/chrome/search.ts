@@ -106,6 +106,16 @@ export function createSearchBox(actions: SearchActions): SearchBox {
       option.className = "search-result";
       option.setAttribute("role", "option");
       option.setAttribute("aria-selected", String(index === activeIndex));
+      // The name is authored rather than left to name-from-content. `option`
+      // is children-presentational per ARIA, so the two spans below should
+      // flatten into a name on their own — they do not. Chrome's accessibility
+      // tree gives every option an empty name and exposes both spans as
+      // separate generic nodes, and VoiceOver duly reads a result as "menu
+      // item, group" with no path in it at all. An authored name is the one
+      // thing no engine has to infer. It also puts a separator between the two
+      // spans, which name-from-content would not: their text runs together as
+      // "assemble.tsfile".
+      option.setAttribute("aria-label", `${node.path}, ${node.kind}`);
       if (index === activeIndex) option.classList.add("is-active");
 
       const name = document.createElement("span");
@@ -113,9 +123,10 @@ export function createSearchBox(actions: SearchActions): SearchBox {
       name.textContent = node.path;
       // The span clips long paths from the front, so the directories a result
       // lives in are on screen but unreadable. The title puts them back within
-      // reach without touching the truncation. It sits on the span rather than
-      // on the `role=option` ancestor: the option's accessible name comes from
-      // its content, and a title there would only have it read out twice.
+      // reach without touching the truncation. It is the sighted half of the
+      // fix and belongs on the element that clips; the `aria-label` above is
+      // the other half. A title on the option instead would have become its
+      // accessible description and been read out after the name.
       name.title = node.path;
       const kind = document.createElement("span");
       kind.className = "search-result-kind";

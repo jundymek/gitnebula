@@ -12,13 +12,17 @@ in this branch.
 
 ## What changed
 
-One line of behaviour: the span that holds the path now also carries it as a
-`title`, so the browser's own tooltip reveals the full string.
+Two attributes, one for each way of reading a row.
 
 ```ts
+option.setAttribute("aria-label", `${node.path}, ${node.kind}`);
 name.textContent = node.path;
 name.title = node.path;
 ```
+
+The `title` on the span reveals the path to a pointer. The `aria-label` on the
+option gives the same path to a screen reader — which, it turned out, was not
+getting *any* of it.
 
 `title` is the mechanism already in use elsewhere in this chrome —
 `export-button.ts` and `header.ts` both label their controls with it. The
@@ -26,17 +30,56 @@ canvas tooltip from 3.3 (`chrome/tooltip.ts`) is deliberately **not** reused:
 it follows the cursor over the map and belongs to hover-on-node, and a second
 consumer would couple search chrome to it for nothing.
 
-### Why the span and not the row
+### The a11y half: a search result had no accessible name at all
 
-The `title` is on `span.search-result-name`, not on the `li[role=option]`.
+Found by the maintainer running this story's own `MANUAL_TESTING.md` step 7,
+the screen-reader step. VoiceOver announced a result as *"You are currently on
+a menu item, group, inside a list box"* — no path, not even the truncated one.
+
+This was not a regression from the `title`. Chrome's accessibility tree, read
+against the running app before the fix, gave **every** option an empty name and
+exposed its two spans as separate nodes:
+
+```
+option [ref_28]                                       <- no name
+ generic "packages/cli/src/assemble.ts" [ref_29]
+ generic "file" [ref_30]
+```
+
+Every other element in the same tree is named (`button "Export PNG"`, `status
+"7 results"`). ARIA says this should not happen — `option` is
+children-presentational, so the spans ought to flatten into a name — but it
+does, in the engine, and it has since the listbox arrived in 3.3.
+
+The `aria-label` authors the name outright, which no engine has to infer. It
+also inserts the separator that name-from-content would not: the two spans run
+together as `assemble.tsfile`, which is what a screen reader would have read
+even had the name worked.
+
+After the change, in the same tree:
+
+```
+option "docs/adr/0006-viewport-scoped-semantic-unfold.md, file" [ref_32]
+option "packages/deps/assets/tree-sitter-python.wasm.sha256, file" [ref_35]
+```
+
+Note the clipped rows announce their **full** path — the screen-reader half of
+AC-1 now matches the pointer half.
+
+This is a 3.3 defect rather than one of this story's making. It is fixed here
+because it is the same element, because this story's own reasoning had asserted
+the opposite, and because a story about reading a search result that a
+screen-reader user still cannot read is not finished. It reaches no further
+than `search.ts`.
+
+### Why the title is on the span and not the row
 
 The span is the element that clips, and it has no ARIA role, so the attribute
-is invisible to name computation. On the `li` it would instead become the
-option's accessible *description*, and a screen reader would read the path
-twice — once from the option's content, once from the description. A test
-asserts the `li` has no `title`, so the choice cannot be undone by accident.
+stays out of name computation. On the `li` it would instead become the option's
+accessible *description* and be announced after the name. A test asserts the
+`li` has no `title`, so the choice cannot be undone by accident.
 
-The span spans the row minus the short `file`/`module` kind label at the right
+The span covers the row minus the short `file`/`module` kind label at the right
 edge, so hovering anywhere over the path text works.
 
 ## AC-4 — audit of the rest of `chrome/`
@@ -63,8 +106,8 @@ already on screen.
 
 | file | change | why |
 | --- | --- | --- |
-| `packages/viz/src/chrome/search.ts` | UPDATE | sets `name.title = node.path` when rendering an option |
-| `packages/viz/src/chrome/search.test.ts` | UPDATE | four tests: the title on a clipped path, on every result, absent from the `li`, and the ARIA wiring still intact |
+| `packages/viz/src/chrome/search.ts` | UPDATE | sets `name.title` and the option's `aria-label` when rendering a result |
+| `packages/viz/src/chrome/search.test.ts` | UPDATE | seven tests: the title on a clipped path and on every result, absent from the `li`; the authored name for a file, a module and a clipped path; the ARIA wiring still intact |
 | `docs/dev/epic-3/3.8-viz-search-path-tooltip/README.md` | NEW | this file |
 | `docs/dev/epic-3/3.8-viz-search-path-tooltip/MANUAL_TESTING.md` | NEW | hover verification steps |
 | `docs/implementation-artifacts/epic-3-exploration/3.8-viz-search-path-tooltip.md` | UPDATE | tasks ticked, Dev Agent Record filled |
@@ -73,14 +116,16 @@ already on screen.
 ## Verification
 
 ```
-pnpm --filter @gitnebula/viz test        # 366 passed (31 files)
+pnpm --filter @gitnebula/viz test        # 369 passed (31 files)
 pnpm --filter @gitnebula/viz typecheck   # clean
 pnpm lint                                # clean
 pnpm build                               # clean
 ```
 
-The two title assertions were watched fail before the fix landed — `expected
-undefined to be 'docs/adr/…'` — so they are known to be load-bearing.
+Every new assertion was watched fail before its fix landed — the two title ones
+against `expected undefined to be 'docs/adr/…'`, the three name ones against
+`expected null to be 'src/engine/graph.ts, file'` — so none of them is
+decorative.
 
 Beyond the suite, the maintainer's original reproduction was replayed in a real
 Chrome against a real analysis of this repository; see `MANUAL_TESTING.md`.

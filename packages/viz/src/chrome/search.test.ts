@@ -166,11 +166,36 @@ describe("the full path of a truncated result (FR-18)", () => {
     }
   });
 
-  it("leaves the option's own accessible name to its content", () => {
+  it("keeps the title off the option itself", () => {
     // The title belongs to the span that clips, not to the `role=option`
-    // ancestor — otherwise a screen reader reads the path twice.
+    // ancestor — there it would become the option's accessible description and
+    // be read out after the name.
     type("graph");
     expect(options()[0]!.hasAttribute("title")).toBe(false);
+  });
+
+  it("names each option outright, path first", () => {
+    // Name-from-content does not happen here: Chrome leaves a `role=option`
+    // built from two spans with an empty accessible name and exposes the spans
+    // separately, so VoiceOver announces "menu item, group" and no path.
+    box.setNodes([node(LONG)]);
+    type("unfold");
+    expect(options()[0]!.getAttribute("aria-label")).toBe(`${LONG}, file`);
+  });
+
+  it("separates the path from the kind in the name", () => {
+    // Without the separator the two spans run together as "assemble.tsfile".
+    type("graph");
+    expect(options()[0]!.getAttribute("aria-label")).toBe(
+      "src/engine/graph.ts, file",
+    );
+    expect(options()[0]!.textContent).toBe("src/engine/graph.tsfile");
+  });
+
+  it("names a module option by its kind too", () => {
+    box.setNodes([node("src/", "module")]);
+    type("src");
+    expect(options()[0]!.getAttribute("aria-label")).toBe("src/, module");
   });
 
   it("does not disturb the ARIA wiring it sits inside", () => {

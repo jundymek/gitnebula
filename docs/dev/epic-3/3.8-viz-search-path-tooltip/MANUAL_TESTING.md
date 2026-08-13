@@ -55,10 +55,39 @@ The CLI prints the URL it is serving on (a free port on `127.0.0.1`; it was
       from, in a real Chrome; that it draws is Chrome's own behaviour. Left for
       a human with a real pointer.*
 
-- [ ] **7. Screen reader.** With VoiceOver on, arrow through the results and
+- [x] **7. Screen reader.** With VoiceOver on, arrow through the results and
       confirm each option is announced once, as its path, with no duplicate
       description.
-      *Not checkable headless: needs a real assistive-technology stack.*
+      *Run by the maintainer on 2026-08-13 — and it **failed**. VoiceOver said
+      "You are currently on a menu item, group, inside a list box" and no path
+      at all. See step 8; the cause was a missing accessible name, fixed in
+      this branch.*
+
+- [x] **8. The option carries an accessible name (follow-up to step 7).** Read
+      the browser's own accessibility tree with the result list open.
+      *Observed before the fix — every option unnamed, its two spans exposed
+      separately, while every other element on the page is named:*
+
+      ```
+      option [ref_28]                                       <- no name
+       generic "packages/cli/src/assemble.ts" [ref_29]
+       generic "file" [ref_30]
+      ```
+
+      *Observed after the fix — all seven named, clipped rows announcing the
+      **full** path:*
+
+      ```
+      option "docs/adr/0006-viewport-scoped-semantic-unfold.md, file" [ref_32]
+      option "packages/deps/assets/tree-sitter-python.wasm.sha256, file" [ref_35]
+      ```
+
+- [ ] **9. Re-run step 7 with VoiceOver.** Confirm each result is now announced
+      as `<path>, file` — once, with no stray "group".
+      *Not checkable headless: needs a real assistive-technology stack. Step 8
+      verifies the name VoiceOver reads from, in a real Chrome; that it is
+      spoken is the screen reader's own behaviour. This is the one step worth a
+      human minute before merge, since it is the step that caught the defect.*
 
 ## Accessibility checks
 
@@ -66,10 +95,18 @@ The CLI prints the URL it is serving on (a free port on `127.0.0.1`; it was
       id after the change. *Observed in the suite and unchanged in the DOM.*
 - [x] `role=option` / `aria-selected` unchanged on every row.
 - [x] The polite live region still announces the result count.
-- [ ] Screen-reader announcement (step 7 above).
+- [x] Every option has a non-empty accessible name (step 8).
+- [x] The name separates path from kind — without it the spans run together as
+      `assemble.tsfile`. *Observed: `packages/cli/src/assemble.ts, file`.*
+- [ ] Spoken VoiceOver announcement (step 9 above).
 
 ## Outcome
 
-Ran 5 of 7 steps. Both unrun steps need a human at a real machine — one for the
-native tooltip's rendering, one for a screen reader — and neither can be
-faked from a headless environment.
+Ran 7 of 9 steps. Step 7 was run by the maintainer, failed, and produced the
+`aria-label` fix in this branch; step 8 was added to verify that fix at the
+tree level and passes both before (showing the defect) and after (showing it
+gone).
+
+Two steps stay unrun and both need a human at a real machine: the native
+tooltip's rendering, which is an OS widget painted outside the page bitmap, and
+the re-run of the VoiceOver announcement. Neither can be faked headless.
