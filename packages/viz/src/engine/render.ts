@@ -17,6 +17,7 @@ import {
   HOT_PULSE_MS,
   LAYER_COLOR,
   NODE_ALPHA_DIMMED,
+  PULSE_MAX_RADIUS_PX,
   VOID_COLOR,
 } from "./constants.js";
 import { toScreen, type Viewport } from "./camera.js";
@@ -57,6 +58,11 @@ export interface RenderScene {
   readonly selectedId: string | null;
   /** File labels appear from 3.0× (story 3.3). */
   readonly showFileLabels: boolean;
+  /**
+   * A search-arrival pulse: the target node and progress 0 → 1 (story 3.3).
+   * Optional so the field is additive — 3.5's export builds the same scene.
+   */
+  readonly pulse?: { readonly id: string; readonly t: number } | null;
 }
 
 /**
@@ -180,6 +186,19 @@ export function renderFrame(
       ctx.beginPath();
       ctx.arc(s.x, s.y, screenRadius + 5, 0, TAU);
       ctx.stroke();
+    }
+
+    // The search-arrival pulse: a ring that expands and fades once, marking
+    // which node the camera just flew to (story 3.3).
+    if (scene.pulse && scene.pulse.id === node.id) {
+      const t = Math.min(1, Math.max(0, scene.pulse.t));
+      ctx.globalAlpha = (dim ? NODE_ALPHA_DIMMED : 1) * (1 - t);
+      ctx.strokeStyle = "rgba(230,238,252,0.9)";
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, screenRadius + 5 + t * PULSE_MAX_RADIUS_PX, 0, TAU);
+      ctx.stroke();
+      ctx.globalAlpha = dim ? NODE_ALPHA_DIMMED : 1;
     }
 
     if (node.kind === "module") {

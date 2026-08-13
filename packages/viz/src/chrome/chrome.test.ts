@@ -118,14 +118,19 @@ describe("chrome — UX-DR2/9 legend and hint", () => {
 describe("chrome — AD-5 wiring", () => {
   it("follows the engine's settle events and unsubscribes on teardown", () => {
     const listeners = new Map<GraphEngineEvent, (payload: never) => void>();
+    let subscriptions = 0;
     let offCalls = 0;
     const engine = {
       on(event: GraphEngineEvent, listener: (payload: never) => void) {
         listeners.set(event, listener);
+        subscriptions++;
         return () => {
           offCalls++;
         };
       },
+      // Story 3.3's handlers read these back when unfold/collapse arrive.
+      unfoldedModules: () => [],
+      nodes: [],
     } as unknown as GraphEngine;
 
     const { store } = mount();
@@ -143,6 +148,10 @@ describe("chrome — AD-5 wiring", () => {
     expect(store.getState().settling).toBe(true);
 
     teardown();
-    expect(offCalls).toBe(2);
+    // Every subscription is released — asserted as the invariant rather than
+    // as a fixed count, so a story that adds a listener does not have to come
+    // back and edit this number (3.3 took it from 2 to 6).
+    expect(subscriptions).toBeGreaterThanOrEqual(2);
+    expect(offCalls).toBe(subscriptions);
   });
 });
