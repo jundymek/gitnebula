@@ -451,6 +451,31 @@ describe("AC-3 — search fly-to", () => {
     expect(engine.getSelected()?.id).toBe(second.id);
   });
 
+  it("keeps the pin when both searches target the same module", async () => {
+    // Codex P1 on the first cut of the pin fix. `pinnedUnfolds` is a set, so
+    // two files in the SAME module share one entry: acquiring the new pin
+    // before cancelling the old flight had the outgoing flight delete the very
+    // entry the incoming one needed, and the module collapsed mid-flight. The
+    // sibling-module test above could not see this — it picked different
+    // parents on purpose.
+    settledEngine();
+    const moduleId = engine.nodes.find((node) => node.kind === "module")!.id;
+    const siblings = engine.nodes.filter((node) => node.parent === moduleId);
+    expect(siblings.length).toBeGreaterThan(1);
+
+    const flightA = engine.flyTo(siblings[0]!.id);
+    run(2);
+    const flightB = engine.flyTo(siblings[1]!.id); // same module
+    run(4);
+
+    expect(engine.getCamera().k).toBeLessThan(UNFOLD_ZOOM);
+    expect(engine.isUnfolded(moduleId)).toBe(true);
+
+    run(Math.ceil(FLY_DURATION_MS / FRAME_MS) + 2);
+    await Promise.all([flightA, flightB]);
+    expect(engine.getSelected()?.id).toBe(siblings[1]!.id);
+  });
+
   it("takes 620ms +/- 50ms to arrive", async () => {
     settledEngine();
     const module = engine.nodes.filter((n) => n.kind === "module")[5]!;

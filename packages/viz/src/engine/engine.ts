@@ -382,6 +382,14 @@ export class CanvasGraphEngine implements GraphEngine {
     if (!node) return;
     this.cameraTakenByUser = true;
 
+    // Retire any flight already in the air BEFORE taking out this one's pin.
+    // `pinnedUnfolds` is a set, so two searches for files in the same module
+    // share one entry: acquiring first and cancelling second would have the
+    // outgoing flight delete the very entry the incoming one depends on, and
+    // the module would collapse mid-flight. Cancelling first makes the later
+    // `cancelFlight()` inside `animateCameraTo` a no-op.
+    this.cancelFlight();
+
     // The search box works from the first frame, but the layout keeps moving
     // for 2–3 s. Aiming at a node that is still drifting means arriving where
     // it *was*: the target is captured once, and 620 ms later the node has
