@@ -51,6 +51,12 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
       against the repo name the header displays), not only in a unit test.
 - [x] A second click while an export is in flight does not start a second
       re-render (unit-tested; the button is disabled for the duration).
+- [x] A failed export is visible in the UI, not only in the console: the button
+      reads `✕ png failed`, its `title` carries the reason, and it carries
+      `aria-live="polite"`. Verified by unit test with an injected failure,
+      including that the state clears on the next successful export. A real
+      out-of-memory encode cannot be provoked here, so the failure is injected
+      rather than caused.
 - [ ] **Click the `↓ png` button by hand in a desktop browser and open the file
       from the Downloads folder.** Not executed: this worktree runs headless,
       and the button path was instead exercised through Playwright's real
@@ -106,7 +112,7 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
 
 ## Summary
 
-Ran 20 of 23 checks. The three left for a human are the by-hand button click
+Ran 21 of 24 checks. The three left for a human are the by-hand button click
 with an OS-level download, the CI job actually running on GitHub, and a
 screen-reader pass — none of which can be executed headlessly in this worktree,
 and each stated above with its reason.

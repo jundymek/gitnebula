@@ -341,3 +341,12 @@ canvas {
   white-space: nowrap;
   border: 0;
 }
+
+/* export (story 3.5). Only the failure state needs styling — the resting
+   button is the shared .iconbtn the replay control uses. The failed state
+   borrows the hot-spot colour rather than introducing a red the palette does
+   not have (UX-DR1). */
+.iconbtn.failed {
+  color: var(--hot);
+  border-color: var(--hot);
+}

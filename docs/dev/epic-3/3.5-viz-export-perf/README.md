@@ -41,6 +41,16 @@ Two details that are not obvious:
 `scale < 2` is rejected rather than clamped: a silent clamp turns a caller's
 mistake into a file that looks like a satisfied FR-22 and is not.
 
+**A failed export says so on the button.** Export is the one action in the
+Viewer whose result lives outside the page — the map still looks exactly as it
+did, so a user whose 2× encode ran out of memory has no way to tell that no
+file was written. On failure the button reads `✕ png failed`, its `title`
+carries the reason, and `aria-live="polite"` means the change is announced
+rather than merely drawn. It resets after six seconds or on the next click, so
+a later success never has to argue with a stale error. (Codex caught this: the
+first version had the console line and the comment claiming a visible signal,
+without the signal.)
+
 ## Harness: what makes a run evidence
 
 Story 1.4 built the methodology and, in the course of building it, found three

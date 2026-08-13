@@ -108,4 +108,52 @@ describe("renderExportButton (FR-22)", () => {
     expect(button.disabled).toBe(false);
     error.mockRestore();
   });
+
+  it("shows the failure on the button, not only in the console", async () => {
+    // Export is the one action whose result lives outside the page: the map
+    // still looks exactly as it did, so a console line is not a signal a user
+    // can act on.
+    const engine = {
+      exportPNG: () => Promise.reject(new Error("canvas out of memory")),
+    } as unknown as GraphEngine;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const button = renderExportButton(store(), engine);
+    button.click();
+    await vi.waitFor(() =>
+      expect(button.classList.contains("failed")).toBe(true),
+    );
+    expect(button.textContent).toBe("✕ png failed");
+    expect(button.title).toContain("canvas out of memory");
+    // The label carries the message, so its change has to be announced.
+    expect(button.getAttribute("aria-live")).toBe("polite");
+    error.mockRestore();
+  });
+
+  it("clears the failure state when the next export is attempted", async () => {
+    let fail = true;
+    const engine = {
+      exportPNG: () =>
+        fail
+          ? Promise.reject(new Error("transient"))
+          : Promise.resolve(new Blob()),
+    } as unknown as GraphEngine;
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const deliver = vi.fn();
+
+    const button = renderExportButton(store(), engine, { deliver });
+    button.click();
+    await vi.waitFor(() =>
+      expect(button.classList.contains("failed")).toBe(true),
+    );
+
+    fail = false;
+    button.click();
+    await vi.waitFor(() => expect(deliver).toHaveBeenCalledTimes(1));
+    // A successful export must not have to argue with a stale error.
+    expect(button.classList.contains("failed")).toBe(false);
+    expect(button.textContent).toBe("↓ png");
+    expect(button.title).toBe("Export PNG");
+    error.mockRestore();
+  });
 });
