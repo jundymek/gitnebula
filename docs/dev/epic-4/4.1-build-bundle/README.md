@@ -54,6 +54,14 @@ parent. `gitnebula build -o site` silently wrote to `./gitnebula-bundle`.
 `enablePositionalOptions()` fixes it; a test asserting *where the files landed*
 is what caught it.
 
+A sixth came from the Codex review of this branch, and it was the most
+dangerous of the set because it produced a plausible wrong answer rather than a
+crash: the reuse rule keyed only on mtime versus HEAD, so an output directory
+reused for a second repository published the first repository's map under the
+second's name. Reuse now checks provenance — repository identity, remote,
+window, unrecorded flags, and `.gitnebula.yml` — and re-analyzes whenever any
+of that cannot be verified.
+
 ## Files
 
 ### `packages/viz`
@@ -73,7 +81,7 @@ is what caught it.
 
 | file                       | change | why                                                                          |
 | -------------------------- | ------ | ---------------------------------------------------------------------------- |
-| `src/bundle.ts`            | NEW    | output assembly, the gzip measurement, and the freshness rule                 |
+| `src/bundle.ts`            | NEW    | output assembly, the gzip measurement, and the reuse-provenance rule          |
 | `src/bundle.test.ts`       | NEW    | AC-1 and AC-2 at the unit level                                              |
 | `src/pack.test.ts`         | NEW    | AC-4's cold install, and AC-2 against the real dist                          |
 | `src/cli.ts`               | UPDATE | the `build` subcommand, positional options, shared analysis flags            |
@@ -100,11 +108,15 @@ have to rediscover:
   performs, not this story — every spec, doc and CI step (including this
   story's own test command) names the package as it is today, and the package
   is still `"private": true`.
-- **`build` reuses a `analysis.json` that is newer than HEAD.** AC-1 allows
-  reuse without defining "fresh". Defined here against the HEAD commit instant
-  rather than a wall-clock age, because that is checkable offline and is the
-  case story 4.2's CI recipe hits. `--force` overrides; the choice is printed
-  either way, never silent.
+- **`build` reuses an `analysis.json` only when its provenance checks out.**
+  AC-1 allows reuse without defining "fresh". The first attempt defined it as
+  "newer than HEAD" and a review caught the hole: an output directory is a
+  destination, not a cache keyed on anything, so `build -o site repo-a` then
+  `build -o site repo-b` published repo-a's map under repo-b's name. Reuse now
+  requires the document to name the same repository and remote, cover the same
+  window, be newer than both HEAD and `.gitnebula.yml`, and the invocation to
+  have passed no flag the document does not record. `--force` overrides, and
+  the verdict — including the reason a file was rejected — is always printed.
 - **The `file://` hint lives in `viz`.** The spec's Touches line scopes viz to
   "build config only", but AC-3 asks for browser-side behaviour that can only
   live in the loader. The AC wins; the divergence is flagged in the PR.

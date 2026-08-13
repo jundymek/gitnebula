@@ -22,6 +22,7 @@ import {
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
+import { CONFIG_FILENAME } from "./config.js";
 import { DEFAULT_OUTPUT_FILENAME } from "./emit.js";
 import { StageError } from "./errors.js";
 
@@ -100,35 +101,141 @@ export function describeViewerSize(size: ViewerSize): string {
   return `viewer assets: ${formatBytes(size.gzipped)} gzipped of ${formatBytes(size.budget)} budget (${((size.gzipped / size.budget) * 100).toFixed(1)}%)`;
 }
 
+export interface ReuseQuestion {
+  /** The candidate file: `analysis.json` in the output directory. */
+  readonly analysisPath: string;
+  /** Working-tree root of the repository this run was asked about. */
+  readonly repoRoot: string;
+  /** Identity of that repository, as `resolveRepo` reports it. */
+  readonly repo: { readonly name: string; readonly remoteUrl: string | null };
+  /** The window this run would analyze. */
+  readonly windowDays: number;
+  /**
+   * Names of analysis-shaping flags this invocation passed. The document
+   * records none of them, so their presence makes reuse unverifiable.
+   */
+  readonly unrecordedFlags: readonly string[];
+}
+
+export interface ReuseVerdict {
+  readonly reuse: boolean;
+  /** One clause, printed either way, so the decision is never silent. */
+  readonly because: string;
+}
+
 /**
- * Is the `analysis.json` already sitting in the output directory current for
- * this checkout?
+ * May the `analysis.json` already sitting in the output directory stand in for
+ * this run?
  *
- * "Fresh" is defined against the repository's HEAD commit rather than a
- * wall-clock age: a file written after the commit it describes was made
- * describes that commit, whether that was a minute or a month ago. This is the
- * case the CI recipe (story 4.2) hits — a job that has just regenerated the
- * JSON should not pay for the analysis twice — and it is checkable offline.
+ * The tempting answer is "if it is newer than HEAD" — and that answer is
+ * wrong, which a review of this branch caught before it shipped. An output
+ * directory is a *destination*, not a cache keyed by anything: run
+ * `build -o site repo-a` and then `build -o site repo-b` and the mtime test
+ * happily publishes repo-a's map under repo-b's name. The same hole swallows
+ * a changed `--window-days`, a new exclusion, a different threshold.
  *
- * Uncommitted working-tree edits are deliberately NOT considered: a file the
- * user has not committed is not in the map's history, and making the answer
- * depend on dirty state would make it unstable. `--force` is the escape hatch,
- * and the decision is always printed.
+ * So the question is provenance, not age, and the honest default is to
+ * re-analyze. Reuse requires every one of:
+ *
+ *   - the file parses, and names the same repository (name and remote URL);
+ *   - it was analyzed over the same window;
+ *   - this invocation passed no flag the document does not record — an
+ *     unrecorded flag cannot be compared, and what cannot be compared is not
+ *     evidence;
+ *   - it is newer than HEAD, and newer than `.gitnebula.yml`.
+ *
+ * Uncommitted working-tree edits are still deliberately not considered: a file
+ * the user has not committed is not in the map's history, and making the
+ * answer depend on dirty state would make it unstable. `--force` overrides
+ * everything, and the verdict is printed either way.
  */
-export function isAnalysisFresh(
-  analysisPath: string,
-  repoRoot: string,
-): boolean {
+export function assessReuse(question: ReuseQuestion): ReuseVerdict {
   let writtenAt: number;
   try {
-    writtenAt = statSync(analysisPath).mtimeMs;
+    writtenAt = statSync(question.analysisPath).mtimeMs;
   } catch {
-    return false;
+    return { reuse: false, because: "no analysis.json is there yet" };
   }
 
-  const committedAt = headCommittedAt(repoRoot);
-  if (committedAt === null) return false;
-  return writtenAt >= committedAt;
+  if (question.unrecordedFlags.length > 0) {
+    return {
+      reuse: false,
+      because: `${question.unrecordedFlags.join(", ")} would change the analysis and the existing document does not record ${question.unrecordedFlags.length === 1 ? "it" : "them"}`,
+    };
+  }
+
+  let document: {
+    repo?: {
+      name?: unknown;
+      remoteUrl?: unknown;
+      analysisWindowDays?: unknown;
+    };
+  };
+  try {
+    document = JSON.parse(
+      readFileSync(question.analysisPath, "utf8"),
+    ) as typeof document;
+  } catch {
+    return {
+      reuse: false,
+      because: "the existing analysis.json is unreadable",
+    };
+  }
+
+  const repo = document.repo ?? {};
+  if (repo.name !== question.repo.name) {
+    return {
+      reuse: false,
+      because: `the existing analysis.json describes ${describeName(repo.name)}, not ${question.repo.name}`,
+    };
+  }
+  // `null` and a missing remote are the same fact; anything else must match
+  // exactly, or two repositories sharing a directory name would be conflated.
+  if ((repo.remoteUrl ?? null) !== question.repo.remoteUrl) {
+    return {
+      reuse: false,
+      because: "the existing analysis.json was made from a different remote",
+    };
+  }
+  if (repo.analysisWindowDays !== question.windowDays) {
+    return {
+      reuse: false,
+      because: `the existing analysis.json covers ${String(repo.analysisWindowDays)} days, not ${question.windowDays}`,
+    };
+  }
+
+  const committedAt = headCommittedAt(question.repoRoot);
+  if (committedAt === null) {
+    return { reuse: false, because: "HEAD has no commit to compare against" };
+  }
+  if (writtenAt < committedAt) {
+    return { reuse: false, because: "it predates HEAD" };
+  }
+
+  const configuredAt = modifiedAt(join(question.repoRoot, CONFIG_FILENAME));
+  if (configuredAt !== null && writtenAt < configuredAt) {
+    return { reuse: false, because: `it predates ${CONFIG_FILENAME}` };
+  }
+
+  return {
+    reuse: true,
+    because: "it describes this repository at HEAD, over the same window",
+  };
+}
+
+function describeName(name: unknown): string {
+  return typeof name === "string" && name.length > 0
+    ? name
+    : "no named repository";
+}
+
+/** A file's mtime in ms, or null when it is not there. */
+function modifiedAt(path: string): number | null {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return null;
+  }
 }
 
 /** HEAD's commit instant in ms, or null for a repository with no commits. */

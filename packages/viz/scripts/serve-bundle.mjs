@@ -12,7 +12,7 @@
 //   node serve-bundle.mjs <port> <viewer-dist> <analysis.json>
 import { createReadStream, existsSync } from "node:fs";
 import { createServer } from "node:http";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 
 const [port, viewerDist, analysis] = process.argv.slice(2);
 if (!port || !viewerDist || !analysis) {
@@ -42,7 +42,15 @@ const TYPES = {
 };
 
 createServer((request, response) => {
-  const path = (request.url ?? "/").split("?")[0];
+  const raw = (request.url ?? "/").split("?")[0];
+  let path;
+  try {
+    path = decodeURIComponent(raw);
+  } catch {
+    response.writeHead(400).end("bad request");
+    return;
+  }
+
   const file =
     path === "/analysis.json"
       ? analysisPath
@@ -51,7 +59,11 @@ createServer((request, response) => {
   // No fallback to index.html: a single-page rewrite would answer 200 to a
   // request for a script that is not there, and the whole check is whether
   // anything is requested at all.
-  if (!file.startsWith(dist) && file !== analysisPath) {
+  //
+  // The separator in the prefix check is load-bearing: a bare
+  // `startsWith(dist)` also accepts a sibling directory whose name merely
+  // begins with the dist's, which `..` in a request path can reach.
+  if (file !== analysisPath && !file.startsWith(dist + sep)) {
     response.writeHead(403).end("forbidden");
     return;
   }

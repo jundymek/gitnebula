@@ -34,11 +34,17 @@ Environment: darwin 25.5.0 (arm64), Node 22.20.0, pnpm 10.34.5,
       (191,825 B). Nothing else.
 
 - [x] Run it a second time with no `--force`
-      → `reusing …/analysis.json — it is newer than HEAD (pass --force to
-      re-analyze)`; no analysis stages ran.
+      → `reusing …/analysis.json — it describes this repository at HEAD, over
+      the same window (pass --force to re-analyze)`; no analysis stages ran.
 
 - [x] Run it again with `--force`
       → all eight pipeline stages ran and the file was rewritten.
+
+- [x] Run it again with `--window-days 30` into the same directory
+      → `re-analyzing — the existing analysis.json covers 90 days, not 30`.
+      The reuse rule is provenance, not age: the same check refuses a document
+      made from another repository, another remote, or before
+      `.gitnebula.yml` changed.
 
 - [x] `gitnebula build -o site` writes to `./site`, not to the default
       → verified. This is the commander `-o` collision described in the README;

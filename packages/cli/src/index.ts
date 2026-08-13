@@ -40,10 +40,12 @@ export {
   DEFAULT_BUNDLE_DIR,
   VIEWER_GZIP_BUDGET_BYTES,
   assembleBundle,
+  assessReuse,
   describeViewerSize,
   formatBytes,
-  isAnalysisFresh,
   measureViewer,
+  type ReuseQuestion,
+  type ReuseVerdict,
   type ViewerSize,
 } from "./bundle.js";
 export { DEFAULT_OUTPUT_FILENAME, emit, serialize } from "./emit.js";
