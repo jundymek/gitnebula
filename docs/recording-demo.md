@@ -51,9 +51,13 @@ point at empty space the moment the demo is re-recorded on another checkout.
 ```bash
 pnpm install
 pnpm build
+# puts the built viewer and the Python grammar where the binary looks for them.
+# npm does this on install; a development checkout has to do it by hand, or the
+# next line stops at "the viewer has not been built" (see CONTRIBUTING.md).
+node packages/cli/scripts/prepack.mjs
 
 # terminal 1 — serve the real map of this repository
-node packages/cli/dist/gitnebula.js . --no-open
+node packages/cli/dist/bin/gitnebula.js . --no-open
 
 # terminal 2 — record it (DEMO_URL must match the port printed above).
 # The script prints the path of the WebM it wrote: DEMO_OUT/demo.webm, one
