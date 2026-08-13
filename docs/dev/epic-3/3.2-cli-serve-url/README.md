@@ -106,10 +106,24 @@ is that way, and it is what the package's own tests use. See `DECISIONS.md` §1.
 | `packages/cli/src/index.ts` | UPDATE | exports the new surface |
 | `packages/cli/package.json` | UPDATE | `open` dependency |
 
+## Asserting that the temp checkout is gone
+
+Every cleanup assertion is scoped to a directory the test itself handed the
+clone, via `CloneOptions.tempDir` (and `RunOptions.cloneTempDir` one layer up).
+
+That seam exists because the obvious alternative is a race. Listing
+`gitnebula-clone-*` in the shared system temp directory — snapshot before,
+compare after — made this suite fail roughly a third of the time: vitest runs
+the package's suites in parallel workers, and a neighbour creating or disposing
+its own checkout between the two observations moves the listing for reasons that
+have nothing to do with the code under test. The failure that surfaced was not
+even a leak; it was a directory in the `before` snapshot that someone else
+cleaned up first.
+
 ## Testing
 
 ```sh
-pnpm --filter @gitnebula/cli test    # 113 tests
+pnpm --filter @gitnebula/cli test    # 114 tests
 pnpm lint && pnpm build
 ```
 

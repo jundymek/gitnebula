@@ -37,6 +37,8 @@ export interface RunOptions {
   readonly vizDist?: string;
   /** Test seam: first port of the scan. Defaults to serve.ts's. */
   readonly port?: number;
+  /** Test seam: where URL mode puts its checkout. Defaults to the temp dir. */
+  readonly cloneTempDir?: string;
 }
 
 interface ParsedFlags {
@@ -145,6 +147,9 @@ export async function run(
           // window in the file simply sees what the clone fetched.
           windowDays,
           ...(options.now === undefined ? {} : { now: options.now }),
+          ...(options.cloneTempDir === undefined
+            ? {}
+            : { tempDir: options.cloneTempDir }),
         }),
       );
     }
