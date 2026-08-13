@@ -211,6 +211,33 @@ describe("gitnebula build — the bundle stays out of its own map (AC-1)", () =>
     ).toEqual([]);
   });
 
+  // `path.relative` returns `..site` for a directory of that name, and a
+  // check for a two-dot *prefix* reads it as an escape. The directory is
+  // inside, so dropping its exclusion puts the bundle back in its own map.
+  it("excludes an in-repository directory whose name starts with two dots", async () => {
+    const repo = makeRepo();
+    const dist = fakeVizDist();
+    const outDir = join(repo, "..site");
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(
+        await run(["build", repo, "-o", outDir], {
+          cwd: repo,
+          vizDist: dist,
+          reporter: createSilentReporter(),
+          write: () => {},
+        }),
+      ).toBe(0);
+    }
+
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { nodes: { path: string }[] };
+    expect(
+      document.nodes.filter((node) => node.path.startsWith("..site")),
+    ).toEqual([]);
+  });
+
   it("refuses to write the bundle to the repository root", async () => {
     const repo = makeRepo();
     const chunks: string[] = [];

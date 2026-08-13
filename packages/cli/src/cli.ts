@@ -386,8 +386,13 @@ function planBundle(
     );
   }
 
+  // "Outside" is `..` itself or a path that steps up through it — not merely
+  // anything spelled with two leading dots. `-o ..site` is a directory named
+  // `..site` sitting *inside* the repository, and reading it as outside would
+  // quietly drop its exclusion and put the bundle back in its own map.
+  const escapes = inside === ".." || inside.startsWith(`..${sep}`);
   const selfExclude =
-    inside.startsWith("..") || isAbsolute(inside)
+    escapes || isAbsolute(inside)
       ? undefined
       : // picomatch matches a directory entry against the directory itself and
         // prunes the subtree (scanner/excludes.ts). Posix separators, because
