@@ -96,14 +96,12 @@ export function mountChrome(
 
   const panel = renderPanel({
     onIsolate() {
-      // Isolate is a toggle on the open node; the engine owns the state and
-      // the store mirrors it from the `highlight` event.
+      // A toggle on the open node. The button only *asks*: the engine owns
+      // isolate state and publishes it on `highlight`, which is where the
+      // store and this button read it back from.
       const selected = store.getState().selected;
       if (!engine || !selected) return;
-      const next = store.getState().isolated ? null : selected.id;
-      engine.setIsolated(next);
-      store.setState({ isolated: next !== null });
-      panel.setIsolated(next !== null);
+      engine.setIsolated(store.getState().isolated ? null : selected.id);
     },
     onClose() {
       // Closing clears selection AND isolate together (AC-4). The engine
@@ -166,15 +164,16 @@ export function connectEngine(
     engine.on("select", ({ node }) => {
       handle.setState({ selectedId: node?.id ?? null });
       // Isolate belongs to the open node, so any selection change drops it —
-      // whether the panel is closing or moving on (AC-4).
+      // whether the panel is closing or moving to another node. The engine
+      // echoes the result on `highlight`, which is what updates the button.
       engine.setIsolated(null);
       if (node === null) {
-        handle.setState({ selected: null, isolated: false });
+        // Empty canvas, or the × : selection and isolate go together (AC-4).
+        handle.setState({ selected: null });
         handle.panel.close();
         return;
       }
-      handle.setState({ selected: node, isolated: false });
-      handle.panel.setIsolated(false);
+      handle.setState({ selected: node });
       handle.panel.open({
         document: options.analysis,
         node,
@@ -186,6 +185,13 @@ export function connectEngine(
     }),
     engine.on("collapse", () => {
       handle.setState({ unfolded: engine.unfoldedModules().length });
+    }),
+    // Isolate state is the engine's, not the panel's. Reading it back from
+    // the event it is published on means a change made anywhere — the panel
+    // button, a future control, a test — reaches the button and the store.
+    engine.on("highlight", ({ isolated }) => {
+      handle.setState({ isolated });
+      handle.panel.setIsolated(isolated);
     }),
     engine.on("mode", ({ mode }) => {
       handle.setState({ mode });

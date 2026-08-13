@@ -143,7 +143,13 @@ function fakeEngine() {
       mode = next;
       emit("mode", { mode: next });
     },
-    setIsolated: (id: string | null) => isolated.push(id),
+    setIsolated(id: string | null) {
+      // The real engine ignores a no-op and publishes every real change on
+      // `highlight`; chrome reads its isolate state back from that event.
+      if (isolated.at(-1) === id) return;
+      isolated.push(id);
+      emit("highlight", { focusId: id, isolated: id !== null });
+    },
     setSelected: (id: string | null) => selected.push(id),
     // Story 3.3's unfold/collapse handlers read these back.
     unfoldedModules: () => [],
@@ -240,6 +246,20 @@ describe("chrome — panel wiring (AC-1, AC-4)", () => {
     expect(isolated.at(-1)).toBeNull();
     expect(store.getState().isolated).toBe(false);
     expect(button.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("mirrors isolate changed outside the panel", () => {
+    // The button only asks; the engine owns the state and publishes it on
+    // `highlight`. A change made anywhere else must still reach the button.
+    const { panel, emit, store } = connected();
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+
+    emit("highlight", { focusId: "mod-000/", isolated: true });
+
+    expect(store.getState().isolated).toBe(true);
+    expect(
+      panel.querySelector("#p-isolate")!.getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 
   it("drops isolate when a different node is selected", () => {
