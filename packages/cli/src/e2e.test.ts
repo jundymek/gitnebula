@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 
 import type { AnalysisDocument } from "@gitnebula/contract";
 import { validateAnalysis } from "@gitnebula/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { serialize } from "./emit.js";
 import { runPipeline } from "./pipeline.js";
@@ -23,6 +23,7 @@ import { createSilentReporter } from "./progress.js";
 import {
   FIXTURE_ANCHOR,
   FIXTURE_WINDOW_DAYS,
+  ensureFixtureRepo,
   fixtureRepo,
   makeTempDir,
   removeAll,
@@ -44,6 +45,12 @@ const PINNED_ANALYZED_AT = "2026-01-01T00:00:00.000Z";
  */
 const SUMMARY =
   "history-repo: 3 modules, 3 files, 0 edges, 0 co-change pairs, 5 commits in 365d";
+
+// The fixture repository (AD-14) is built here rather than by a `pretest`:
+// the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
+// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// adding a fifth shell caller racing the other packages.
+beforeAll(() => ensureFixtureRepo());
 
 const temps: string[] = [];
 afterEach(() => removeAll(temps));
