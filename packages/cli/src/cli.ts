@@ -4,14 +4,21 @@
 //
 // `run` returns an exit code instead of calling `process.exit`, so the failure
 // paths are testable without spawning a process.
-import { existsSync } from "node:fs";
-import { resolve } from "node:path";
-
 import { Command, CommanderError } from "commander";
 
+import { openBrowser as defaultOpenBrowser } from "./browser.js";
+import { cloneRepository, isRemoteTarget, type Checkout } from "./clone.js";
+import { DEFAULT_WINDOW_DAYS } from "./config.js";
 import { StageError, describeThrown } from "./errors.js";
 import { runPipeline, type RunPipelineOptions } from "./pipeline.js";
 import { createReporter, type Reporter } from "./progress.js";
+import {
+  awaitShutdown,
+  missingDistError,
+  resolveVizDist,
+  startServer,
+  type SignalSource,
+} from "./serve.js";
 
 /** The stage name flag parsing aborts under (AD-7). */
 export const INPUT_STAGE = "input";
@@ -22,6 +29,16 @@ export interface RunOptions {
   /** Where usage text and failures go. Defaults to stderr. */
   readonly write?: (chunk: string) => void;
   readonly now?: () => number;
+  /** Test seam: what receives the shutdown signals. Defaults to `process`. */
+  readonly signals?: SignalSource;
+  /** Test seam: the browser hand-off. Defaults to the `open` package. */
+  readonly openBrowser?: (url: string) => Promise<void>;
+  /** Test seam: the viewer dist to serve. Defaults to the built one (AD-11). */
+  readonly vizDist?: string;
+  /** Test seam: first port of the scan. Defaults to serve.ts's. */
+  readonly port?: number;
+  /** Test seam: where URL mode puts its checkout. Defaults to the temp dir. */
+  readonly cloneTempDir?: string;
 }
 
 interface ParsedFlags {
@@ -30,31 +47,9 @@ interface ParsedFlags {
   readonly windowDays?: string;
   readonly hotspotThreshold?: string;
   readonly windowAnchor?: string;
-}
-
-/**
- * A remote target is recognised so it can be refused clearly. URL mode is
- * story 3.2 (shallow clone into a temp dir); implementing it here would widen
- * this story's scope and duplicate that one.
- *
- * The host-like third alternative is why {@link isRemoteTarget} checks the
- * filesystem first: `example.com/checkout` and `repo.local/src` are perfectly
- * good directory names, and a local path that exists is a local path.
- */
-const REMOTE_TARGET =
-  /^(?:[a-z][a-z0-9+.-]*:\/\/|git@|[\w.-]+\.[a-z]{2,}[/:])/i;
-
-/**
- * True when `target` should be treated as a remote repository: it looks like
- * one *and* no such path exists locally. Existence wins, because a directory
- * the user can point at is never a URL.
- */
-function isRemoteTarget(target: string, cwd: string): boolean {
-  if (!REMOTE_TARGET.test(target)) return false;
-  // A scheme or an scp-style spec is unambiguous; only the host-like form can
-  // collide with a directory name.
-  if (/^(?:[a-z][a-z0-9+.-]*:\/\/|git@)/i.test(target)) return true;
-  return !existsSync(resolve(cwd, target));
+  /** commander's `--no-*` convention: these default to true. */
+  readonly serve?: boolean;
+  readonly open?: boolean;
 }
 
 export function createProgram(write: (chunk: string) => void): Command {
@@ -84,6 +79,11 @@ export function createProgram(write: (chunk: string) => void): Command {
       "--hotspot-threshold <number>",
       "hot spot cutoff on the normalized churn scale, 0..1",
     )
+    .option(
+      "--no-serve",
+      "write analysis.json and exit, instead of serving the map on 127.0.0.1",
+    )
+    .option("--no-open", "serve the map but do not open a browser")
     .option(
       "--window-anchor <iso>",
       "TEST ONLY — pin the instant the analysis window is measured back from, e.g. 2026-01-01T00:00:00Z. Makes snapshot output stable across days; it never changes analyzedAt.",
@@ -127,19 +127,37 @@ export async function run(
     throw error;
   }
 
+  const cwd = options.cwd ?? process.cwd();
+  const reporter = options.reporter ?? createReporter();
+  let checkout: Checkout | null = null;
+
   try {
-    if (isRemoteTarget(target, options.cwd ?? process.cwd())) {
-      throw new StageError(
-        INPUT_STAGE,
-        `analyzing a remote repository (${target}) is not supported in this release`,
-        "clone it locally and run gitnebula in the clone; URL mode arrives with the local server in story 3.2",
+    const windowDays =
+      flags.windowDays === undefined
+        ? DEFAULT_WINDOW_DAYS
+        : positiveInteger("--window-days", flags.windowDays);
+
+    if (isRemoteTarget(target, cwd)) {
+      // The one network operation in the system (AD-8). Everything downstream
+      // reads the temp checkout and is identical to a local run.
+      checkout = await reporter.runStage("clone", async () =>
+        cloneRepository(target, {
+          // `.gitnebula.yml` lives inside the repository we do not have yet,
+          // so the shallow window comes from the flag or the default; a wider
+          // window in the file simply sees what the clone fetched.
+          windowDays,
+          ...(options.now === undefined ? {} : { now: options.now }),
+          ...(options.cloneTempDir === undefined
+            ? {}
+            : { tempDir: options.cloneTempDir }),
+        }),
       );
     }
 
     const pipelineOptions: RunPipelineOptions = {
-      target,
-      ...(options.cwd === undefined ? {} : { cwd: options.cwd }),
-      ...(options.reporter === undefined ? {} : { reporter: options.reporter }),
+      target: checkout === null ? target : checkout.root,
+      cwd,
+      reporter,
       ...(options.now === undefined ? {} : { now: options.now }),
       ...(flags.out === undefined ? {} : { out: flags.out }),
       ...(flags.windowAnchor === undefined
@@ -147,11 +165,7 @@ export async function run(
         : { windowAnchor: flags.windowAnchor }),
       flags: {
         ...(flags.exclude === undefined ? {} : { excludes: flags.exclude }),
-        ...(flags.windowDays === undefined
-          ? {}
-          : {
-              windowDays: positiveInteger("--window-days", flags.windowDays),
-            }),
+        ...(flags.windowDays === undefined ? {} : { windowDays }),
         ...(flags.hotspotThreshold === undefined
           ? {}
           : {
@@ -163,12 +177,61 @@ export async function run(
       },
     };
 
-    await runPipeline(pipelineOptions);
+    const result = await runPipeline(pipelineOptions);
+
+    if (flags.serve === false) return 0;
+    await serveUntilInterrupted(
+      result.outputPath,
+      flags.open !== false,
+      write,
+      options,
+    );
     return 0;
   } catch (error) {
     write(`${failureLine(error)}\n`);
     return 1;
+  } finally {
+    // AC-4: the temp checkout goes away on both paths, including the one where
+    // the pipeline threw halfway through.
+    checkout?.dispose();
   }
+}
+
+/**
+ * Serves the map on the loopback interface, opens a browser at it, and blocks
+ * until Ctrl+C — the tail of a zero-config `npx gitnebula` (FR-5).
+ *
+ * @throws {StageError} stage `serve` when the viewer has not been built.
+ */
+async function serveUntilInterrupted(
+  analysisPath: string,
+  openInBrowser: boolean,
+  write: (chunk: string) => void,
+  options: RunOptions,
+): Promise<void> {
+  const distDir = options.vizDist ?? resolveVizDist(import.meta.url);
+  if (distDir === null) throw missingDistError();
+
+  const server = await startServer({
+    distDir,
+    analysisPath,
+    ...(options.port === undefined ? {} : { port: options.port }),
+  });
+  write(`serving ${server.url} — press Ctrl+C to stop\n`);
+
+  if (openInBrowser) {
+    try {
+      await (options.openBrowser ?? defaultOpenBrowser)(server.url);
+    } catch (error) {
+      // A machine with no default browser is not a failed analysis: the URL is
+      // already printed and the server is already up.
+      write(`  ! could not open a browser (${describeThrown(error)})\n`);
+    }
+  }
+
+  await awaitShutdown(options.signals ?? process);
+  await server.close();
+  write("stopped\n");
 }
 
 /** Every abort reaches the terminal in AD-7's shape, whatever threw it. */

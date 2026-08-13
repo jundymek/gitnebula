@@ -13,10 +13,15 @@
  */
 
 import {
+  CLICK_SLOP_PX,
   FIT_DURATION_MS,
   FIT_PADDING_PX,
   FILE_LABEL_ZOOM,
+  FLY_DURATION_MS,
+  FLY_ZOOM_FILE,
+  FLY_ZOOM_MODULE,
   HOT_THRESHOLD,
+  PULSE_DURATION_MS,
   ZOOM_IN_STEP,
   ZOOM_OUT_STEP,
 } from "./constants.js";
@@ -32,20 +37,29 @@ import {
   type Viewport,
 } from "./camera.js";
 import { Emitter } from "./emitter.js";
+import { renderSceneToPng } from "./export.js";
 import { buildGraph, type Graph } from "./graph.js";
-import { ModuleLayout } from "./layout.js";
-import { mulberry32, seedFor, type Rng } from "./prng.js";
+import { MemberLayout, ModuleLayout, type LayoutNode } from "./layout.js";
+import { hashString, mulberry32, seedFor, type Rng } from "./prng.js";
 import {
   renderFrame,
   type RenderableEdge,
   type RenderableNode,
+  type RenderScene,
 } from "./render.js";
 import { seedStars, type Star } from "./starfield.js";
+import {
+  unfoldTransition,
+  wantedUnfolds,
+  type UnfoldCandidate,
+} from "./unfold.js";
 import type {
   CameraState,
   EngineOptions,
   EngineNode,
+  ExportPngOptions,
   FitOptions,
+  FlyToOptions,
   GraphEngine,
   GraphEngineEvent,
   GraphEngineListener,
@@ -54,18 +68,11 @@ import type {
 } from "./types.js";
 import type { AnalysisDocument } from "@gitnebula/contract";
 
-/**
- * Declared on the interface (AC-7), owned by a later story. Throwing names the
- * story: a silent no-op would let a caller believe the map moved when it did
- * not.
- */
-function notYet<T>(member: string, story: string): Promise<T> {
-  return Promise.reject(
-    new Error(
-      `GraphEngine.${member} is declared for story ${story} and not implemented in 2.5`,
-    ),
-  );
-}
+// `notYet()` lived here from story 2.5: members the interface declared before
+// anyone implemented them rejected with the name of the story that owed them,
+// so a caller could never mistake a stub for a working call. Stories 3.3
+// (`flyTo`) and 3.5 (`exportPNG`) were the last two debts, so the helper has
+// no callers left and is gone rather than kept warm for a hypothetical.
 
 interface CameraFlight {
   readonly from: CameraState;
@@ -78,7 +85,20 @@ interface CameraFlight {
    */
   startMs: number | null;
   readonly durationMs: number;
-  readonly resolve: () => void;
+  /**
+   * Modules this flight holds unfolded against the viewport rule. Owned per
+   * flight rather than globally: a second search cancels the first flight, and
+   * a shared pin set would let the cancelled flight's cleanup release the pin
+   * the new flight depends on.
+   */
+  readonly pins: readonly string[];
+  /**
+   * Resolved with `true` on arrival and `false` when the flight was cancelled.
+   * A cancelled flight must not run its caller's arrival effects — panning
+   * during a search flight would otherwise still select the node the user
+   * just steered away from.
+   */
+  readonly resolve: (arrived: boolean) => void;
 }
 
 export class CanvasGraphEngine implements GraphEngine {
@@ -103,12 +123,51 @@ export class CanvasGraphEngine implements GraphEngine {
   private selectedId: string | null = null;
   private isolatedId: string | null = null;
 
+  /**
+   * One local wake per unfolded module (story 3.3, ADR-0006). Insertion order
+   * is the unfold order, but nothing depends on it: each wake is seeded from
+   * its own module id, so a module's cloud is the same however it got here.
+   */
+  private readonly memberLayouts = new Map<string, MemberLayout>();
+  /**
+   * Modules held unfolded regardless of the viewport rule, for the duration of
+   * a fly-to that needs one of their files to exist. Without this the very next
+   * `updateUnfolds` — which runs per animated frame — collapses the module
+   * `ensureUnfolded` just opened, because the camera has not climbed past
+   * `UNFOLD_ZOOM` yet. Reported from story 3.4's manual testing.
+   */
+  private readonly pinnedUnfolds = new Set<string>();
+  /** Search-arrival pulse: the node, and the frame clock when it started. */
+  private pulseId: string | null = null;
+  private pulseStartMs: number | null = null;
+  /**
+   * Set once the user has aimed the camera themselves (a pan, a zoom, or a
+   * search fly-to). The settle-completion fit is suppressed afterwards: the
+   * map takes 2–3 s to settle and the search box works from the first frame,
+   * so a fly-to started during the settle would otherwise be cancelled by the
+   * automatic fit the moment the layout finished — the search appeared to do
+   * nothing at all. Cleared on load and replay, which re-frame deliberately.
+   */
+  private cameraTakenByUser = false;
+
   private frameHandle: number | null = null;
   private settleStartMs: number | null = null;
   private settleAnnounced = false;
+  /** Clock of the last drawn frame — the export re-renders at that instant. */
+  private lastFrameMs = 0;
 
   private dragging = false;
   private dragOrigin: ScreenPoint | null = null;
+  /** True once a press has travelled far enough to be a drag (story 3.4). */
+  private dragMoved = false;
+  /** Where the press started, kept apart from the per-move pan origin. */
+  private pressOrigin: ScreenPoint | null = null;
+  /**
+   * The pointer that owns the current gesture. A second finger's release must
+   * not end the first finger's drag, so every pointer event is matched
+   * against this before it is allowed to change anything.
+   */
+  private pressPointerId: number | null = null;
 
   constructor(options: EngineOptions) {
     this.canvas = options.canvas;
@@ -127,7 +186,8 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.canvas.addEventListener("pointermove", this.onPointerMove);
     this.canvas.addEventListener("pointerup", this.onPointerUp);
-    this.canvas.addEventListener("pointercancel", this.onPointerUp);
+    this.canvas.addEventListener("pointercancel", this.onPointerCancel);
+    this.canvas.addEventListener("pointerleave", this.onPointerLeave);
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
     globalThis.addEventListener?.("resize", this.onWindowResize);
 
@@ -139,9 +199,15 @@ export class CanvasGraphEngine implements GraphEngine {
   load(document: AnalysisDocument, seed?: number): void {
     this.seed = seed ?? seedFor(document.repo.name);
     this.graph = buildGraph(document, this.hotThreshold);
-    this.selectedId = null;
-    this.hoveredId = null;
-    this.isolatedId = null;
+    // Through the setters, not by assigning the fields: the interface says
+    // these publish `select` and `highlight`, so clearing them silently makes
+    // `load()` untruthful about its own state. Chrome mirrors both into its
+    // store, so a second load would otherwise leave a panel open on a node the
+    // new document need not contain. Each setter no-ops when unchanged, so a
+    // first load still emits nothing.
+    this.setSelected(null);
+    this.setHovered(null, null);
+    this.setIsolated(null);
     this.startSettle("load");
     this.startLoop();
   }
@@ -159,6 +225,9 @@ export class CanvasGraphEngine implements GraphEngine {
     // (AD-6 — "the same analysis.json always settles into the same map").
     this.rng = mulberry32(this.seed);
     this.cancelFlight();
+    this.clearUnfolds();
+    this.clearPulse();
+    this.cameraTakenByUser = false;
     this.layout?.stop();
     this.layout = new ModuleLayout(graph, this.rng);
     this.stars = seedStars(this.rng);
@@ -197,10 +266,12 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
+    this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.canvas.removeEventListener("wheel", this.onWheel);
     globalThis.removeEventListener?.("resize", this.onWindowResize);
     this.cancelFlight();
+    this.clearUnfolds();
     this.layout?.stop();
     this.emitter.clear();
   }
@@ -250,15 +321,22 @@ export class CanvasGraphEngine implements GraphEngine {
       // would divide through picking and panning.
       k: clampZoom(camera.k ?? this.camera.k),
     };
+    // Semantic zoom is a consequence of the camera, so it is recomputed here
+    // rather than in each of pan/zoom/fit/fly — every one of those routes
+    // through `setCamera`, and a route that forgot to ask would be a module
+    // that silently stayed collapsed.
+    this.updateUnfolds();
     this.emitter.emit("camera", { camera: this.camera });
   }
 
   panBy(dx: number, dy: number): void {
+    this.cameraTakenByUser = true;
     this.cancelFlight();
     this.setCamera(panBy(this.camera, dx, dy));
   }
 
   zoomAt(screen: ScreenPoint, factor: number): void {
+    this.cameraTakenByUser = true;
     this.cancelFlight();
     this.setCamera(zoomAt(this.camera, this.viewport, screen, factor));
   }
@@ -272,7 +350,24 @@ export class CanvasGraphEngine implements GraphEngine {
     const flight = this.flight;
     if (!flight) return;
     this.flight = null;
-    flight.resolve();
+    this.releasePins(flight.pins);
+    flight.resolve(false);
+  }
+
+  /**
+   * Drop one flight's pins and re-apply the viewport rule, so a module held
+   * open for a flight collapses as soon as that flight ends. Done here rather
+   * than in the awaiting caller because that resumes a microtask later, which
+   * leaves the map briefly disagreeing with ADR-0006 — and because the caller
+   * would clear pins belonging to whichever flight replaced it.
+   */
+  private releasePins(pins: readonly string[]): void {
+    if (pins.length === 0) return;
+    let changed = false;
+    for (const moduleId of pins) {
+      if (this.pinnedUnfolds.delete(moduleId)) changed = true;
+    }
+    if (changed) this.updateUnfolds();
   }
 
   fit(options: FitOptions = {}): Promise<void> {
@@ -282,11 +377,131 @@ export class CanvasGraphEngine implements GraphEngine {
       this.setCamera(target);
       return Promise.resolve();
     }
-    return this.animateCameraTo(target, durationMs);
+    // `fit` has no arrival effects, so it does not care which way it ended.
+    return this.animateCameraTo(target, durationMs).then(() => undefined);
   }
 
-  flyTo(id: string): Promise<void> {
-    return notYet(`flyTo(${id})`, "3.3-viz-navigation");
+  /**
+   * Fly the camera to a node and select it (FR-18).
+   *
+   * Selection is set on *arrival*, not on departure: the `select` event opens
+   * story 3.4's panel, and a panel that opened at the start of a 620 ms flight
+   * would describe a node the user cannot see yet.
+   */
+  async flyTo(id: string, options: FlyToOptions = {}): Promise<void> {
+    const node = this.getNode(id);
+    if (!node) return;
+    this.cameraTakenByUser = true;
+
+    // Retire any flight already in the air BEFORE taking out this one's pin.
+    // `pinnedUnfolds` is a set, so two searches for files in the same module
+    // share one entry: acquiring first and cancelling second would have the
+    // outgoing flight delete the very entry the incoming one depends on, and
+    // the module would collapse mid-flight. Cancelling first makes the later
+    // `cancelFlight()` inside `animateCameraTo` a no-op.
+    this.cancelFlight();
+
+    // The search box works from the first frame, but the layout keeps moving
+    // for 2–3 s. Aiming at a node that is still drifting means arriving where
+    // it *was*: the target is captured once, and 620 ms later the node has
+    // moved on. So a navigation during the settle finishes the settle first —
+    // the user asked to go somewhere, and a stable destination is worth more
+    // than the remainder of an animation they interrupted. It also gives a
+    // file's local wake a final parent position to settle around instead of a
+    // transient one.
+    this.finishSettle();
+
+    // A file inside a collapsed module has no position of its own yet, so the
+    // module is unfolded first and the wake run to Settled — the target must
+    // exist before we can aim at it (AC-3).
+    const pins: string[] = [];
+    if (node.kind === "file" && node.parent !== null) {
+      this.ensureUnfolded(node.parent);
+      pins.push(node.parent);
+    }
+
+    const zoom =
+      options.zoom ??
+      (node.kind === "module" ? FLY_ZOOM_MODULE : FLY_ZOOM_FILE);
+    const position = this.positionOf(id);
+    const target: CameraState = {
+      x: position?.x ?? this.camera.x,
+      y: position?.y ?? this.camera.y,
+      k: clampZoom(zoom),
+    };
+
+    const durationMs = options.durationMs ?? FLY_DURATION_MS;
+    if (this.reducedMotion || durationMs <= 0) {
+      // Reduced motion jumps; there is no arrival to pulse (UX-DR11).
+      this.setCamera(target);
+      this.releasePins(pins);
+      this.setSelected(id);
+      return;
+    }
+
+    const arrived = await this.animateCameraTo(target, durationMs, pins);
+    // Cancelled — the user panned, zoomed, searched again, or reloaded while
+    // this flight was in the air. Selecting now would open a panel on a node
+    // they steered away from.
+    if (!arrived) return;
+    this.startPulse(id);
+    this.setSelected(id);
+  }
+
+  /**
+   * Run the module layout to Settled immediately, as if the animation had
+   * finished. Used when the user navigates during the settle; the reduced-motion
+   * path does the same thing for the same reason, and reports a zero duration
+   * because nothing was animated.
+   */
+  private finishSettle(): void {
+    const layout = this.layout;
+    if (!layout || layout.settled) return;
+    const frames = layout.runToSettled();
+    this.announceSettled(frames, 0);
+    this.updateUnfolds();
+  }
+
+  /**
+   * Unfold a module now, outside the viewport rule — the one deliberate
+   * exception, for a fly-to whose target is a file (AC-3). The wake is run to
+   * Settled synchronously so the file has a real position to aim at within
+   * this call rather than several frames later.
+   */
+  private ensureUnfolded(moduleId: string): void {
+    this.pinnedUnfolds.add(moduleId);
+    if (this.memberLayouts.has(moduleId)) return;
+    const anchor = this.layout?.nodes.find((node) => node.id === moduleId);
+    if (!anchor) return;
+    const wake = this.createMemberLayout(moduleId, anchor);
+    if (!wake) return;
+    wake.runToSettled();
+    this.memberLayouts.set(moduleId, wake);
+    this.emitter.emit("unfold", { moduleIds: [moduleId] });
+  }
+
+  /** World position of any node the engine currently has one for. */
+  private positionOf(id: string): { x: number; y: number } | null {
+    const module = this.layout?.nodes.find((node) => node.id === id);
+    if (module) return { x: module.x, y: module.y };
+    for (const wake of this.memberLayouts.values()) {
+      const member = wake.nodes.find((node) => node.id === id);
+      if (member) return { x: member.x, y: member.y };
+    }
+    return null;
+  }
+
+  private startPulse(id: string): void {
+    if (this.reducedMotion) return;
+    this.pulseId = id;
+    // Started by the frame loop, like a flight: a pulse timed off a second
+    // clock drifts from the frames that draw it.
+    this.pulseStartMs = null;
+  }
+
+  private clearPulse(): void {
+    this.pulseId = null;
+    this.pulseStartMs = null;
   }
 
   private fitTarget(paddingPx: number = FIT_PADDING_PX): CameraState {
@@ -296,14 +511,18 @@ export class CanvasGraphEngine implements GraphEngine {
   private animateCameraTo(
     target: CameraState,
     durationMs: number,
-  ): Promise<void> {
+    pins: readonly string[] = [],
+  ): Promise<boolean> {
+    // Cancels whatever was already in the air — releasing only *that* flight's
+    // pins, so the ones this new flight depends on survive.
     this.cancelFlight();
-    return new Promise<void>((resolve) => {
+    return new Promise<boolean>((resolve) => {
       this.flight = {
         from: this.camera,
         to: target,
         startMs: null,
         durationMs,
+        pins,
         resolve,
       };
     });
@@ -318,7 +537,11 @@ export class CanvasGraphEngine implements GraphEngine {
     const world = toWorld(screen, this.camera, this.viewport);
     let best: EngineNode | null = null;
     let bestDistance = Infinity;
-    for (const item of layout.nodes) {
+    // Members first, then modules: an unfolded file sits on top of its module,
+    // and the nearest-centre tie-break below would otherwise hand every pick
+    // inside a module's disc to the module — making an unfolded file
+    // unhoverable and unclickable, which is exactly what AC-2 needs.
+    for (const item of [...this.memberNodes(), ...layout.nodes]) {
       const node = graph.nodes[item.graphIndex]!;
       const dx = item.x - world.x;
       const dy = item.y - world.y;
@@ -326,7 +549,16 @@ export class CanvasGraphEngine implements GraphEngine {
       // The 7 px slop is a screen-space forgiveness margin (mockup), so it is
       // divided back into world units rather than compared against them.
       const hit = Math.max(node.radius, 3 / this.camera.k) + 7 / this.camera.k;
-      if (distance <= hit && distance < bestDistance) {
+      if (distance > hit) continue;
+      // A file beats a module it overlaps, whatever the centre distance. An
+      // unfolded file sits inside its module's disc and is drawn on top of it,
+      // so nearest-centre alone would hand every pick to the module and make
+      // members unhoverable — the file is what the user is pointing at.
+      const beatsBest =
+        best === null ||
+        (node.kind === "file" && best.kind === "module") ||
+        (node.kind === best.kind && distance < bestDistance);
+      if (beatsBest) {
         bestDistance = distance;
         best = node;
       }
@@ -382,21 +614,153 @@ export class CanvasGraphEngine implements GraphEngine {
     this.emitter.emit("mode", { mode });
   }
 
-  // ---- semantic zoom (story 3.3) -----------------------------------------
+  // ---- semantic zoom (story 3.3, ADR-0006) -------------------------------
 
   unfoldedModules(): readonly string[] {
-    // Truthful, not a stub: 2.5 never unfolds, so nothing is unfolded.
-    return [];
+    return [...this.memberLayouts.keys()];
   }
 
   isUnfolded(moduleId: string): boolean {
-    return this.unfoldedModules().includes(moduleId);
+    return this.memberLayouts.has(moduleId);
+  }
+
+  /**
+   * Bring the unfolded set in line with the camera. Called on every camera
+   * change, which is what makes unfold a *pan*-triggered event and not only a
+   * zoom-triggered one (ADR-0006: "panning a collapsed module into view at
+   * ≥ 1.8× unfolds it").
+   *
+   * Cheap enough to run per camera change: it is one AABB test per module,
+   * against the module count (~100 at the DoD scale), not per file.
+   */
+  private updateUnfolds(): void {
+    const layout = this.layout;
+    const graph = this.graph;
+    // Nothing unfolds while the global layout is still moving: members spawn
+    // at their module's position, and a position that is still travelling
+    // would fling the cloud across the map behind it.
+    if (!layout || !graph || !layout.settled) return;
+
+    const candidates: UnfoldCandidate[] = layout.nodes.map((node) => ({
+      id: node.id,
+      x: node.x,
+      y: node.y,
+      radius: node.radius,
+    }));
+    const wanted = wantedUnfolds(candidates, this.camera, this.viewport);
+    // A pinned module stays open even below the threshold: it is the target of
+    // a flight in progress, and collapsing it would destroy the very node the
+    // camera is flying toward.
+    for (const moduleId of this.pinnedUnfolds) wanted.add(moduleId);
+    const transition = unfoldTransition(
+      new Set(this.memberLayouts.keys()),
+      wanted,
+    );
+    if (!transition.changed) return;
+
+    for (const moduleId of transition.left) {
+      this.memberLayouts.get(moduleId)?.stop();
+      this.memberLayouts.delete(moduleId);
+    }
+
+    const anchors = new Map(layout.nodes.map((node) => [node.id, node]));
+    const entered: string[] = [];
+    for (const moduleId of transition.entered) {
+      const anchor = anchors.get(moduleId);
+      if (!anchor) continue;
+      const wake = this.createMemberLayout(moduleId, anchor);
+      if (!wake) continue;
+      this.memberLayouts.set(moduleId, wake);
+      entered.push(moduleId);
+    }
+
+    // Emitted after the whole diff is applied, so a listener that reads
+    // `unfoldedModules()` sees the finished state rather than a half-applied
+    // one.
+    if (transition.left.length > 0) {
+      this.emitter.emit("collapse", { moduleIds: transition.left });
+    }
+    if (entered.length > 0) {
+      this.emitter.emit("unfold", { moduleIds: entered });
+    }
+  }
+
+  /**
+   * Build one module's wake.
+   *
+   * The stream is seeded from the module id combined with the document seed —
+   * **not** drawn from the shared settle stream. Unfolds happen in whatever
+   * order the user pans, so consuming the shared stream would make a module's
+   * cloud depend on which modules were visited first, and AD-6's promise that
+   * determinism holds through unfold would quietly become false.
+   */
+  private createMemberLayout(
+    moduleId: string,
+    anchor: LayoutNode,
+  ): MemberLayout | null {
+    const graph = this.graph;
+    if (!graph) return null;
+    const memberIndices = graph.membersByModule.get(moduleId) ?? [];
+    if (memberIndices.length === 0) return null;
+
+    const members = memberIndices.map((graphIndex) => {
+      const node = graph.nodes[graphIndex]!;
+      return { graphIndex, id: node.id, radius: node.radius };
+    });
+    const memberIds = new Set(members.map((member) => member.id));
+
+    const links: { source: string; target: string }[] = [];
+    for (const edge of graph.fileEdges) {
+      const source = graph.nodes[edge.source]!.id;
+      const target = graph.nodes[edge.target]!.id;
+      if (memberIds.has(source) && memberIds.has(target)) {
+        links.push({ source, target });
+      }
+    }
+
+    const rng = mulberry32((hashString(moduleId) ^ this.seed) >>> 0);
+    const wake = new MemberLayout(anchor, members, links, rng);
+    // Reduced motion gets the settled cloud, not a settling one (UX-DR11) —
+    // the same rule the initial load already follows.
+    if (this.reducedMotion) wake.runToSettled();
+    return wake;
+  }
+
+  private clearUnfolds(): void {
+    this.pinnedUnfolds.clear();
+    for (const wake of this.memberLayouts.values()) wake.stop();
+    this.memberLayouts.clear();
+  }
+
+  /** Every member node currently on screen, across all unfolded modules. */
+  private memberNodes(): LayoutNode[] {
+    const nodes: LayoutNode[] = [];
+    for (const wake of this.memberLayouts.values()) nodes.push(...wake.nodes);
+    return nodes;
   }
 
   // ---- export (story 3.5) ------------------------------------------------
 
-  exportPNG(): Promise<Blob> {
-    return notYet("exportPNG", "3.5-viz-export-perf");
+  /**
+   * Re-render the frame the user is looking at into an offscreen surface at
+   * `scale`× density (AD-5 — never a scaled canvas snapshot).
+   *
+   * The clock is the **last drawn frame's**, not a fresh reading: the hot-spot
+   * pulse is a function of time, so exporting at "now" would catch the pulse
+   * at a different phase than the pixels on screen and the two would legibly
+   * disagree. Reusing the frame clock is what makes AC-1's parity check able
+   * to compare pixel for pixel.
+   */
+  exportPNG(options: ExportPngOptions = {}): Promise<Blob> {
+    const scene = this.buildScene(this.lastFrameMs);
+    if (!scene) {
+      return Promise.reject(
+        new Error(
+          "viz: nothing to export — load an analysis document before exporting",
+        ),
+      );
+    }
+    return renderSceneToPng(scene, { scale: options.scale });
   }
 
   // ---- events ------------------------------------------------------------
@@ -439,9 +803,18 @@ export class CanvasGraphEngine implements GraphEngine {
       if (layout.settled) {
         this.announceSettled(layout.frames, timeMs - this.settleStartMs);
         // The camera frames the graph once the map has stopped moving; the
-        // 800 ms in AC-2 is this flight, and it starts here.
-        void this.fit();
+        // 800 ms in AC-2 is this flight, and it starts here. Skipped if the
+        // user already aimed the camera during the settle — framing the graph
+        // would cancel their fly-to.
+        if (!this.cameraTakenByUser) void this.fit();
       }
+    }
+
+    // Local wakes tick independently of the global layout, which stays frozen
+    // (story 1.4's freeze-on-settle). Each stops on its own Settled, so an
+    // unfolded module costs nothing once its cloud has resolved.
+    for (const wake of this.memberLayouts.values()) {
+      if (!wake.settled) wake.tick();
     }
 
     this.advanceFlight(timeMs);
@@ -460,17 +833,40 @@ export class CanvasGraphEngine implements GraphEngine {
     if (flight.startMs === null) flight.startMs = timeMs;
     const t = (timeMs - flight.startMs) / flight.durationMs;
     this.camera = lerpCamera(flight.from, flight.to, easeOutCubic(t));
+    // A flight moves the camera without going through `setCamera` — it must
+    // not, because `setCamera` cancels the flight it is animating. But the
+    // unfold set is a function of the camera, so it has to be recomputed here
+    // too, or a fly-to lands zoomed in with only its own module unfolded and
+    // every other module in view still collapsed until the user nudges the
+    // map. (Caught in the browser; the unit tests flew with duration 0, which
+    // does route through `setCamera` and hid it.)
+    this.updateUnfolds();
     this.emitter.emit("camera", { camera: this.camera });
     if (t >= 1) {
       this.flight = null;
-      flight.resolve();
+      // Arrived: the viewport rule takes over again, and at the arrival zoom
+      // the module stays open on its own merits.
+      this.releasePins(flight.pins);
+      flight.resolve(true);
     }
   }
 
-  private draw(timeMs: number): void {
+  /**
+   * Assemble the scene for one frame.
+   *
+   * Extracted from `draw()` so the live frame and story 3.5's PNG export
+   * render the *same* scene through the same path — AD-5 bans exporting a
+   * scaled canvas snapshot, which means export must re-render, which means
+   * there has to be one place the scene is built. Agreed with 3.5's owner as
+   * the shared seam; the export delegates here rather than rebuilding it.
+   *
+   * Public on the class, not on `GraphEngine` — so the export and the tests
+   * can reach it while chrome, which only ever holds the interface, cannot.
+   */
+  buildScene(timeMs: number): RenderScene | null {
     const graph = this.graph;
     const layout = this.layout;
-    if (!graph || !layout) return;
+    if (!graph || !layout) return null;
 
     const positions = new Map<string, { x: number; y: number }>();
     const nodes: RenderableNode[] = layout.nodes.map((item) => {
@@ -480,6 +876,27 @@ export class CanvasGraphEngine implements GraphEngine {
     });
 
     const edges: RenderableEdge[] = [];
+
+    // Unfolded members and the edges tying them to their module (ADR-0006).
+    for (const [moduleId, wake] of this.memberLayouts) {
+      const anchor = positions.get(moduleId);
+      for (const item of wake.nodes) {
+        const node = graph.nodes[item.graphIndex]!;
+        positions.set(node.id, { x: item.x, y: item.y });
+        nodes.push({ node, x: item.x, y: item.y });
+        if (!anchor) continue;
+        edges.push({
+          sourceId: moduleId,
+          targetId: node.id,
+          sx: anchor.x,
+          sy: anchor.y,
+          tx: item.x,
+          ty: item.y,
+          member: true,
+        });
+      }
+    }
+
     for (const edge of graph.moduleEdges) {
       const source = positions.get(graph.nodes[edge.source]!.id);
       const target = positions.get(graph.nodes[edge.target]!.id);
@@ -495,10 +912,29 @@ export class CanvasGraphEngine implements GraphEngine {
       });
     }
 
+    // File-level import edges, drawn only where both ends are unfolded — a
+    // half-visible edge would point at a file that is not on screen.
+    for (const edge of graph.fileEdges) {
+      const sourceId = graph.nodes[edge.source]!.id;
+      const targetId = graph.nodes[edge.target]!.id;
+      const source = positions.get(sourceId);
+      const target = positions.get(targetId);
+      if (!source || !target) continue;
+      edges.push({
+        sourceId,
+        targetId,
+        sx: source.x,
+        sy: source.y,
+        tx: target.x,
+        ty: target.y,
+        member: false,
+      });
+    }
+
     const focusId = this.isolatedId ?? this.hoveredId;
     const chain = focusId === null ? null : new Set(this.chainOf(focusId));
 
-    renderFrame(this.ctx, {
+    return {
       viewport: this.viewport,
       camera: this.camera,
       stars: this.stars,
@@ -510,34 +946,151 @@ export class CanvasGraphEngine implements GraphEngine {
       chain: chain && chain.size > 0 ? chain : null,
       selectedId: this.selectedId,
       showFileLabels: this.camera.k >= FILE_LABEL_ZOOM,
-    });
+      pulse: this.pulseProgress(timeMs),
+    };
+  }
+
+  /** The arrival pulse as `{ id, t }` with `t` running 0 → 1, or null. */
+  private pulseProgress(timeMs: number): { id: string; t: number } | null {
+    if (this.pulseId === null) return null;
+    if (this.pulseStartMs === null) this.pulseStartMs = timeMs;
+    const t = (timeMs - this.pulseStartMs) / PULSE_DURATION_MS;
+    if (t >= 1) {
+      this.clearPulse();
+      return null;
+    }
+    return { id: this.pulseId, t: Math.max(0, t) };
+  }
+
+  private draw(timeMs: number): void {
+    const scene = this.buildScene(timeMs);
+    if (!scene) return;
+    // Story 3.5: the export re-renders at the clock of the frame the user is
+    // looking at, so the hot-spot pulse and the search-arrival pulse come out
+    // at the phase they were on screen rather than at a fresh instant.
+    this.lastFrameMs = timeMs;
+    renderFrame(this.ctx, scene);
   }
 
   // ---- pointer input (FR-15) ---------------------------------------------
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    // Refuse the gesture at its start, not at its end. Guarding only the
+    // release stops a right-click selecting but still lets it pan the map on
+    // the way to the context menu.
+    if (event.button !== 0 || event.isPrimary === false) return;
     this.dragging = true;
+    this.dragMoved = false;
+    this.pressPointerId = event.pointerId;
+    this.pressOrigin = { x: event.clientX, y: event.clientY };
     this.dragOrigin = { x: event.clientX, y: event.clientY };
     this.canvas.style.cursor = "grabbing";
     this.canvas.setPointerCapture?.(event.pointerId);
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (!this.dragging || !this.dragOrigin) return;
-    this.panBy(
-      event.clientX - this.dragOrigin.x,
-      event.clientY - this.dragOrigin.y,
-    );
-    this.dragOrigin = { x: event.clientX, y: event.clientY };
+    if (
+      this.dragging &&
+      this.dragOrigin &&
+      event.pointerId === this.pressPointerId
+    ) {
+      // Story 3.4's AC-4 lives in this branch: a press only becomes a drag
+      // once it has travelled, and a press that never became one selects.
+      if (
+        !this.dragMoved &&
+        this.pressOrigin &&
+        Math.hypot(
+          event.clientX - this.pressOrigin.x,
+          event.clientY - this.pressOrigin.y,
+        ) > CLICK_SLOP_PX
+      ) {
+        this.dragMoved = true;
+      }
+      // Nothing pans until the press has become a drag. Panning inside the
+      // slop would shift the map by a few pixels on every click, and a user
+      // who clicks a dozen nodes would watch the graph drift out from under
+      // them. Crossing the threshold pans from the press point, so the
+      // motion held back here is not lost.
+      if (this.dragMoved) {
+        this.panBy(
+          event.clientX - this.dragOrigin.x,
+          event.clientY - this.dragOrigin.y,
+        );
+        this.dragOrigin = { x: event.clientX, y: event.clientY };
+      }
+      return;
+    }
+
+    // Hover (FR-17). Deliberately not evaluated while dragging: a pan would
+    // otherwise light up and dim every node it swept past.
+    const screen = this.toCanvasPoint(event);
+    const node = this.pick(screen);
+    this.setHovered(node?.id ?? null, screen);
+    // The tooltip follows the cursor, so a move *within* the same node still
+    // has to reach chrome — `setHovered` returns early on an unchanged id,
+    // which is right for the highlight and wrong for the pointer position.
+    if (node && this.hoveredId === node.id) {
+      this.emitter.emit("hover", { node, screen });
+    }
+    this.canvas.style.cursor = node ? "pointer" : "grab";
   };
 
+  private readonly onPointerLeave = (): void => {
+    // Leaving the canvas restores full opacity (AC-2) and takes the tooltip
+    // with it; a highlight left behind by a pointer that is gone reads as a
+    // stuck selection.
+    this.setHovered(null, null);
+  };
+
+  /** Pointer position relative to the canvas, in CSS pixels. */
+  private toCanvasPoint(event: PointerEvent): ScreenPoint {
+    const rect = this.canvas.getBoundingClientRect();
+    return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  }
+
+  /**
+   * Story 3.4's AC-4: a press that did not travel selects what is under it —
+   * a node, or nothing at all, which is how the panel closes. The mockup sets
+   * its `moved` flag on any pointermove at all, so a hand tremor eats the
+   * click; the slop threshold is the fix, and pan behaviour is untouched
+   * either way.
+   *
+   * Only a released primary button selects. A `pointercancel` (the browser
+   * taking the gesture away — a touch turning into a system scroll, a stylus
+   * leaving range) is a cleanup, not a click, and its coordinates are wherever
+   * the gesture was abandoned; a right-click is a press this map has no
+   * meaning for.
+   */
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (!this.dragging) return;
+    if (event.pointerId !== this.pressPointerId) return;
+    const moved = this.endPress(event);
+    if (moved || event.button !== 0 || event.isPrimary === false) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.pick({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    this.setSelected(hit?.id ?? null);
+  };
+
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId !== this.pressPointerId) return;
+    this.endPress(event);
+  };
+
+  /** Drop the press state. Returns whether it had become a drag. */
+  private endPress(event: PointerEvent): boolean {
+    if (!this.dragging) return true;
+    const moved = this.dragMoved;
     this.dragging = false;
+    this.dragMoved = false;
     this.dragOrigin = null;
+    this.pressOrigin = null;
+    this.pressPointerId = null;
     this.canvas.style.cursor = "grab";
     this.canvas.releasePointerCapture?.(event.pointerId);
-  };
+    return moved;
+  }
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();

@@ -5,8 +5,11 @@
  */
 
 import { connectEngine, mountChrome } from "./chrome/chrome.js";
+import { createSearchBox } from "./chrome/search.js";
+import { createTooltip } from "./chrome/tooltip.js";
 import { createGraphEngine, type GraphEngine } from "./engine/index.js";
 import { renderErrorScreen } from "./error-screen.js";
+import { publishHarnessHandle } from "./harness-handle.js";
 import { loadAnalysis } from "./loader.js";
 
 export async function boot(root: Element): Promise<GraphEngine | null> {
@@ -20,9 +23,17 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   stage.id = "stage";
 
   let engine: GraphEngine | null = null;
-  const store = mountChrome(root, result.document, {
+  // Search asks the engine to fly; the engine selects on arrival and emits
+  // `select`, which is what opens the panel. Chrome never moves the camera by
+  // hand (AD-5).
+  const search = createSearchBox({
+    onSelect: (id) => void engine?.flyTo(id),
+  });
+  const tooltip = createTooltip();
+  const chrome = mountChrome(root, result.document, {
     stage,
     actions: { onReplay: () => engine?.replay() },
+    overlays: [search.element, tooltip.element],
   });
 
   // Constructed after `mountChrome` has put the stage in the document: the
@@ -30,8 +41,17 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   // measures 0 × 0.
   try {
     engine = createGraphEngine({ canvas: stage });
-    connectEngine(store, engine);
+    // Before `load()`: the settle is announced synchronously inside it under
+    // reduced motion, and the harness has to be listening by then.
+    publishHarnessHandle(engine);
     engine.load(result.document);
+    // After `load`, so the search corpus is the document's node set rather
+    // than the empty one an unloaded engine reports.
+    connectEngine(chrome, engine, {
+      search,
+      tooltip,
+      analysis: result.document,
+    });
   } catch (cause) {
     // The loader's shape guard covers what the Viewer dereferences, but it is
     // a guard, not the schema. Anything it lets through that the engine still

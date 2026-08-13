@@ -2,8 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CanvasGraphEngine } from "./engine.js";
-import { FIT_DURATION_MS, MAX_ZOOM, MIN_ZOOM } from "./constants.js";
+import {
+  CLICK_SLOP_PX,
+  FIT_DURATION_MS,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from "./constants.js";
 import { seedFor } from "./prng.js";
+import type { ScreenPoint } from "./types.js";
 import {
   installFakeCanvas,
   type FakeContext,
@@ -259,11 +265,16 @@ describe("CanvasGraphEngine — AC-7 interface completeness", () => {
     expect(engine.chainOf("missing")).toEqual([]);
   });
 
-  it("names the owning story for members it does not implement", async () => {
-    await expect(engine.flyTo("mod-000/")).rejects.toThrow(
-      /3\.3-viz-navigation/,
-    );
-    await expect(engine.exportPNG()).rejects.toThrow(/3\.5-viz-export-perf/);
+  it("has no member left that is declared but unimplemented", async () => {
+    // This test used to assert that `flyTo` and `exportPNG` rejected with the
+    // name of the story that owed them. Story 3.3 implemented the first and
+    // story 3.5 the second, so the list is empty — and an empty list is worth
+    // asserting rather than deleting: the interface promise was that a
+    // declared member either works or names its owner, never silently no-ops.
+    await expect(engine.flyTo("mod-000/")).resolves.not.toThrow();
+    // `exportPNG` is exercised in `engine-export.test.ts`, which stubs the
+    // canvas encoder — jsdom has no `toBlob`, and calling it here would hang
+    // rather than fail.
   });
 
   it("unsubscribes cleanly", () => {
@@ -273,5 +284,188 @@ describe("CanvasGraphEngine — AC-7 interface completeness", () => {
     off();
     engine.setMode("structure");
     expect(seen).toEqual(["heat"]);
+  });
+});
+
+describe("CanvasGraphEngine — story 3.4 click selection (AC-4)", () => {
+  /** A screen point over a node, and one over empty space. */
+  function findPoints(): { hit: ScreenPoint; empty: ScreenPoint } {
+    let hit: ScreenPoint | null = null;
+    let empty: ScreenPoint | null = null;
+    for (let x = 20; x < 1200 && (!hit || !empty); x += 10) {
+      for (let y = 20; y < 800 && (!hit || !empty); y += 10) {
+        const point = { x, y };
+        if (engine.pick(point)) hit ??= point;
+        else empty ??= point;
+      }
+    }
+    if (!hit || !empty)
+      throw new Error("no hit/empty point on the settled map");
+    return { hit, empty };
+  }
+
+  function press(from: ScreenPoint, to: ScreenPoint = from): void {
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: from.x, clientY: from.y }),
+    );
+    if (to.x !== from.x || to.y !== from.y) {
+      canvas.dispatchEvent(
+        new MouseEvent("pointermove", { clientX: to.x, clientY: to.y }),
+      );
+    }
+    canvas.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: to.x, clientY: to.y }),
+    );
+  }
+
+  beforeEach(() => {
+    engine = create();
+    engine.load(loadSyntheticFixture());
+    run(400);
+  });
+
+  it("selects the node a click lands on", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit);
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toBe(engine.pick(hit)?.id);
+    expect(engine.getSelected()?.id).toBe(selected[0]);
+  });
+
+  it("clears the selection when the click lands on empty canvas", () => {
+    const { hit, empty } = findPoints();
+    press(hit);
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(empty);
+
+    expect(selected).toEqual([null]);
+    expect(engine.getSelected()).toBeNull();
+  });
+
+  it("never selects when the press dragged the map", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit, { x: hit.x + 120, y: hit.y + 40 });
+
+    expect(selected).toEqual([]);
+    expect(engine.getSelected()).toBeNull();
+  });
+
+  it("does not select when the browser cancels the gesture", () => {
+    // A touch turning into a system scroll ends at wherever it was abandoned;
+    // treating that as a click would open or close the panel by accident.
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: hit.x, clientY: hit.y }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointercancel", { clientX: hit.x, clientY: hit.y }),
+    );
+
+    expect(selected).toEqual([]);
+    expect(engine.getSelected()).toBeNull();
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
+  it("does not move the camera for a press that stays within the slop", () => {
+    // A tremor must not pan: a user clicking a dozen nodes would otherwise
+    // watch the graph drift out from under them a few pixels at a time.
+    const { hit } = findPoints();
+    const before = engine.getCamera();
+
+    press(hit, { x: hit.x + CLICK_SLOP_PX - 1, y: hit.y });
+
+    expect(engine.getCamera()).toEqual(before);
+  });
+
+  it("pans from the press point once the slop is crossed", () => {
+    // The motion held back inside the slop is not lost — crossing pans by the
+    // whole distance travelled, not just the part after the threshold.
+    const before = engine.getCamera();
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 200, clientY: 200 }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 260, clientY: 200 }),
+    );
+    canvas.dispatchEvent(new MouseEvent("pointerup", {}));
+
+    expect(engine.getCamera().x).toBeCloseTo(before.x - 60 / before.k, 8);
+  });
+
+  it("keeps a second pointer's release from ending the first's drag", () => {
+    // A second finger lifting must not clear the gesture the first is still
+    // driving, or the remaining touch stops panning mid-drag.
+    const down = new MouseEvent("pointerdown", { clientX: 200, clientY: 200 });
+    Object.defineProperty(down, "pointerId", { value: 1 });
+    canvas.dispatchEvent(down);
+
+    const stray = new MouseEvent("pointerup", { clientX: 400, clientY: 400 });
+    Object.defineProperty(stray, "pointerId", { value: 2 });
+    canvas.dispatchEvent(stray);
+
+    // The first pointer is still dragging, so it still pans.
+    const before = engine.getCamera();
+    const move = new MouseEvent("pointermove", { clientX: 300, clientY: 200 });
+    Object.defineProperty(move, "pointerId", { value: 1 });
+    canvas.dispatchEvent(move);
+    expect(engine.getCamera().x).toBeCloseTo(before.x - 100 / before.k, 8);
+  });
+
+  it("does not pan on a non-primary button either", () => {
+    // Guarding only the release would let a right-click drag the map on its
+    // way to the context menu.
+    const before = engine.getCamera();
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 100, clientY: 100, button: 2 }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 300, clientY: 260 }),
+    );
+
+    expect(engine.getCamera()).toEqual(before);
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
+  it("ignores a non-primary button", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: hit.x, clientY: hit.y }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointerup", {
+        clientX: hit.x,
+        clientY: hit.y,
+        button: 2,
+      }),
+    );
+
+    expect(selected).toEqual([]);
+  });
+
+  it("still selects through a tremor smaller than the slop", () => {
+    // The mockup's any-move flag loses this click; the threshold keeps it.
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit, { x: hit.x + CLICK_SLOP_PX - 1, y: hit.y });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).not.toBeNull();
   });
 });

@@ -21,14 +21,23 @@ development_status:
   2.4-cli-pipeline: done
   2.5-viz-engine-core: done
   # Epic 3 — Full Exploration Experience
-  3.1-deps-python: backlog
-  3.2-cli-serve-url: backlog
-  3.3-viz-navigation: backlog
-  3.4-viz-panel-modes: backlog
-  3.5-viz-export-perf: backlog
+  3.1-deps-python: done
+  3.2-cli-serve-url: done
+  3.3-viz-navigation: done
+  3.4-viz-panel-modes: done
+  3.5-viz-export-perf: done
   # Added 2026-08-13 by the epic/2-scanner-core supervisor, out of supervision
   # rather than planning; must merge before 4.2 turns CI on.
-  3.6-fixture-build-race: backlog
+  3.6-fixture-build-race: done
+  # 3.7-cli-clone-temp-isolation was specced here on 2026-08-13 and retired the
+  # same day without ever being scheduled: story 3.2's author reopened and fixed
+  # the flake himself in PR #26. Removed rather than left as a phantom backlog
+  # row; the spec and the reasoning are in the history (PR #22).
+  # Added 2026-08-13 by the epic/3-deps-python supervisor at epic closure, from
+  # the maintainer's own manual pass: search results truncate long paths and
+  # carry no title, so the full path cannot be read without opening the result.
+  # No AC covers it. Unassigned — the wave is the maintainer's call.
+  3.8-viz-search-path-tooltip: backlog
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog

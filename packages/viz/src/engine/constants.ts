@@ -85,7 +85,26 @@ export const FIT_DURATION_MS = 620;
 /** Padding kept around the graph's bounds when fitting, in CSS px. */
 export const FIT_PADDING_PX = 90;
 
+/**
+ * How far a press may travel and still count as a click rather than a drag
+ * (story 3.4, AC-4). The mockup used any movement at all, which loses the
+ * click to a hand tremor on a trackpad.
+ */
+export const CLICK_SLOP_PX = 4;
+
 /** Search fly-to duration and targets (mockup; story 3.3 consumes them). */
 export const FLY_DURATION_MS = 620;
 export const FLY_ZOOM_MODULE = 2.0;
 export const FLY_ZOOM_FILE = 3.0;
+
+/**
+ * How long a search target pulses after the camera arrives (story 3.3).
+ *
+ * The pulse answers "which of these did I just land on?" — at 2.0× a module
+ * arrives among neighbours, and the flight alone does not say which node was
+ * the target. Suppressed under reduced motion, where the camera jumps and
+ * there is no arrival to mark.
+ */
+export const PULSE_DURATION_MS = 900;
+/** Peak extra radius of the arrival pulse ring, in screen px. */
+export const PULSE_MAX_RADIUS_PX = 26;

@@ -7,13 +7,14 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "pretest": "sh ../../test-fixtures/build-ts-fixture-repo.sh >/dev/null",
+    "pretest": "sh ../../test-fixtures/build-ts-fixture-repo.sh >/dev/null && sh ../../test-fixtures/build-py-fixture-repo.sh >/dev/null",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@gitnebula/contract": "workspace:*",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "web-tree-sitter": "^0.26.12"
   },
   "devDependencies": {
     "@types/node": "catalog:",

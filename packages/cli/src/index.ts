@@ -1,5 +1,5 @@
-// @gitnebula/cli — pipeline orchestration, config, emit. Published as
-// `gitnebula` (AD-11); the local server and URL mode arrive in story 3.2.
+// @gitnebula/cli — pipeline orchestration, config, emit, the loopback viewer
+// server and URL mode. Published as `gitnebula` (AD-11).
 //
 // Story 1.1's scaffold exports (`pipelineEdges`, a placeholder `main`) are
 // gone: the AD-2 edges they existed to prove are now proven by the pipeline
@@ -7,7 +7,24 @@
 
 export const packageName = "@gitnebula/cli";
 
+export { openBrowser } from "./browser.js";
 export { main, run, type RunOptions } from "./cli.js";
+export {
+  cloneRepository,
+  isRemoteTarget,
+  type Checkout,
+  type CloneOptions,
+} from "./clone.js";
+export {
+  ANALYSIS_URL_PATH,
+  DEFAULT_PORT,
+  LOOPBACK_ADDRESS,
+  awaitShutdown,
+  resolveVizDist,
+  startServer,
+  type RunningServer,
+  type ServeOptions,
+} from "./serve.js";
 export {
   CONFIG_FILENAME,
   DEFAULT_HOTSPOT_THRESHOLD,

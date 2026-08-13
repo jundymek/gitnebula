@@ -7,6 +7,8 @@
  * fields, never reshaping the ones already here.
  */
 
+import type { EngineNode, ViewMode } from "../engine/index.js";
+
 export type Listener<T> = (state: T) => void;
 
 export interface Store<T> {
@@ -46,4 +48,17 @@ export interface ChromeState {
   readonly languages: Readonly<Record<string, number>>;
   /** True while the layout is settling; the replay control reads it. */
   readonly settling: boolean;
+  // ---- story 3.3 (navigation) — appended, nothing above is reshaped -------
+  /** Node currently under the pointer, or null (FR-17). */
+  readonly hoveredId: string | null;
+  /** Node the engine last selected — a click, or a search arrival (FR-18). */
+  readonly selectedId: string | null;
+  /** How many modules are unfolded right now (ADR-0006). */
+  readonly unfolded: number;
+  /** Story 3.4 — the node the panel is open on, or null when it is shut. */
+  readonly selected: EngineNode | null;
+  /** Story 3.4 — whether isolate is on for that node (FR-20). */
+  readonly isolated: boolean;
+  /** Story 3.4 — the engine's view mode, mirrored for the toggle (FR-21). */
+  readonly mode: ViewMode;
 }

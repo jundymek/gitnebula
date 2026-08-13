@@ -12,8 +12,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 export const workspaceRoot = join(here, "..", "..", "..");
 
 /**
- * The deterministic fixture repository (AD-14). Built by this package's
- * `pretest`, so the story's own test command is self-sufficient.
+ * The deterministic fixture repository (AD-14). Built by `ensureFixtureRepo`
+ * below, so `pnpm --filter @gitnebula/cli test` is self-sufficient.
  */
 export const fixtureRepo = join(
   workspaceRoot,
@@ -21,6 +21,22 @@ export const fixtureRepo = join(
   ".generated",
   "history-repo",
 );
+
+const buildScript = join(
+  workspaceRoot,
+  "test-fixtures",
+  "build-fixture-repo.sh",
+);
+
+/**
+ * Builds the fixture repository if it is not already there (story 3.6). The
+ * builder holds a lock and no-ops on a valid repository, so calling it from
+ * every suite that needs the fixture is both safe under `pnpm -r test` and
+ * cheap — this is what replaces this package's `pretest`.
+ */
+export function ensureFixtureRepo(): void {
+  execFileSync("sh", [buildScript], { stdio: "ignore" });
+}
 
 /** The window fixture tests pin, matching `test-fixtures/README.md`. */
 export const FIXTURE_ANCHOR = "2026-01-01T00:00:00Z";
