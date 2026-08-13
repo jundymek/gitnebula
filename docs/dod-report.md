@@ -45,16 +45,18 @@ Reproduce a row with:
 git clone https://github.com/<org>/<repo>.git && git -C <repo> checkout <sha>
 
 # the CLI exactly as a user gets it: packed, then installed into an empty dir
+mkdir -p /tmp/cold/app
 ( cd packages/cli && npm pack --pack-destination /tmp/cold )
-mkdir -p /tmp/cold/app && ( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
+( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
 /tmp/cold/app/node_modules/.bin/gitnebula <repo> --no-serve -o <repo>.json
 ```
 
 ## Per-repo definition of done (AC-1)
 
-Wall clock is the **median of three runs** after one discarded warm-up; the
-spread across the three was ≤ 0.05 s on every repo. Clone time is excluded —
-SM-1 is about analysing a repository you have.
+Wall clock is the **median of three runs** after one discarded warm-up. The
+spread across the three was 0.01 s on both small repos and 0.16 s on streamlit
+(2.65 / 2.81 / 2.79 s), which is why the median is reported rather than the
+best. Clone time is excluded — SM-1 is about analysing a repository you have.
 
 | repo | wall clock (≤ 60 s) | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
 | ---- | ------------------- | ---------- | ------------------------ | -------------------------- | ------ |
@@ -180,7 +182,8 @@ sandbox that denies networking outright:
 
 ```bash
 sandbox-exec -p '(version 1)(allow default)(deny network*)' \
-  /usr/bin/env node <cli> <repo> --no-serve -o <out>.json
+  /usr/bin/env /tmp/cold/app/node_modules/.bin/gitnebula \
+  <repo> --no-serve -o <out>.json
 ```
 
 The denial was proved in both directions before it was trusted: inside the

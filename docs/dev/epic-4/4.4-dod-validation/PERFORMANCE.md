@@ -34,8 +34,9 @@ comparable with `docs/dev/epic-3/3.5-viz-export-perf/PERFORMANCE.md`.
   harder case and the one `npx gitnebula` actually meets on a fresh checkout;
   stories 2.2 and 3.1 measured the same way.
 - One discarded warm-up run per repo, then **three measured runs; the median is
-  reported**. The spread across the three runs was ≤ 0.05 s everywhere, so the
-  median is not hiding a distribution.
+  reported**. The spread is 0.01 s on fastapi and excalidraw and 0.16 s on
+  streamlit — small enough that the median is not hiding a distribution, large
+  enough on the biggest repo that reporting the best run would flatter it.
 - `--no-serve`, so the number is the pipeline rather than the browser launch.
 - **Clone time is not included**: SM-1 is about analysing a repository you have,
   and cloning is network time the brief does not own. The clone SHAs are in the
@@ -46,8 +47,9 @@ comparable with `docs/dev/epic-3/3.5-viz-export-perf/PERFORMANCE.md`.
   the registry download.
 
 ```bash
+mkdir -p /tmp/cold/app
 ( cd packages/cli && npm pack --pack-destination /tmp/cold )
-mkdir -p /tmp/cold/app && ( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
+( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
 /tmp/cold/app/node_modules/.bin/gitnebula <repo> --no-serve -o <out>.json
 ```
 
