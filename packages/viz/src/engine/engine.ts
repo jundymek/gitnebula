@@ -913,6 +913,10 @@ export class CanvasGraphEngine implements GraphEngine {
   // ---- pointer input (FR-15) ---------------------------------------------
 
   private readonly onPointerDown = (event: PointerEvent): void => {
+    // Refuse the gesture at its start, not at its end. Guarding only the
+    // release stops a right-click selecting but still lets it pan the map on
+    // the way to the context menu.
+    if (event.button !== 0 || event.isPrimary === false) return;
     this.dragging = true;
     this.dragMoved = false;
     this.pressOrigin = { x: event.clientX, y: event.clientY };

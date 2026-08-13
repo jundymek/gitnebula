@@ -378,6 +378,21 @@ describe("CanvasGraphEngine — story 3.4 click selection (AC-4)", () => {
     expect(canvas.style.cursor).toBe("grab");
   });
 
+  it("does not pan on a non-primary button either", () => {
+    // Guarding only the release would let a right-click drag the map on its
+    // way to the context menu.
+    const before = engine.getCamera();
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 100, clientY: 100, button: 2 }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 300, clientY: 260 }),
+    );
+
+    expect(engine.getCamera()).toEqual(before);
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
   it("ignores a non-primary button", () => {
     const { hit } = findPoints();
     const selected: (string | null)[] = [];
