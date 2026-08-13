@@ -141,6 +141,72 @@ describe("filtering", () => {
   });
 });
 
+describe("the full path of a truncated result (FR-18)", () => {
+  // Long enough that `.search-result-name` clips it in the real listbox; the
+  // basename survives, the directories do not — which is the whole reason the
+  // path has to be readable some other way.
+  const LONG = "docs/adr/0006-viewport-scoped-semantic-unfold-and-hot-spot.md";
+
+  function name(option: HTMLElement): HTMLElement {
+    return option.querySelector(".search-result-name")!;
+  }
+
+  it("exposes a clipped path in full as a title", () => {
+    box.setNodes([node(LONG)]);
+    type("unfold");
+    expect(options()).toHaveLength(1);
+    expect(name(options()[0]!).title).toBe(LONG);
+  });
+
+  it("titles every result, not only the long one", () => {
+    type("s");
+    expect(options().length).toBeGreaterThan(1);
+    for (const option of options()) {
+      expect(name(option).title).toBe(name(option).textContent);
+    }
+  });
+
+  it("keeps the title off the option itself", () => {
+    // The title belongs to the span that clips, not to the `role=option`
+    // ancestor — there it would become the option's accessible description and
+    // be read out after the name.
+    type("graph");
+    expect(options()[0]!.hasAttribute("title")).toBe(false);
+  });
+
+  it("names each option outright, path first", () => {
+    // Name-from-content does not happen here: Chrome leaves a `role=option`
+    // built from two spans with an empty accessible name and exposes the spans
+    // separately, so VoiceOver announces "menu item, group" and no path.
+    box.setNodes([node(LONG)]);
+    type("unfold");
+    expect(options()[0]!.getAttribute("aria-label")).toBe(`${LONG}, file`);
+  });
+
+  it("separates the path from the kind in the name", () => {
+    // Without the separator the two spans run together as "assemble.tsfile".
+    type("graph");
+    expect(options()[0]!.getAttribute("aria-label")).toBe(
+      "src/engine/graph.ts, file",
+    );
+    expect(options()[0]!.textContent).toBe("src/engine/graph.tsfile");
+  });
+
+  it("names a module option by its kind too", () => {
+    box.setNodes([node("src/", "module")]);
+    type("src");
+    expect(options()[0]!.getAttribute("aria-label")).toBe("src/, module");
+  });
+
+  it("does not disturb the ARIA wiring it sits inside", () => {
+    type("engine");
+    const active = options()[0]!;
+    expect(active.getAttribute("role")).toBe("option");
+    expect(active.getAttribute("aria-selected")).toBe("true");
+    expect(input().getAttribute("aria-activedescendant")).toBe(active.id);
+  });
+});
+
 describe("keyboard navigation", () => {
   it("activates the first result so Enter works without arrowing", () => {
     type("engine");

@@ -37,7 +37,7 @@ development_status:
   # the maintainer's own manual pass: search results truncate long paths and
   # carry no title, so the full path cannot be read without opening the result.
   # No AC covers it. Unassigned — the wave is the maintainer's call.
-  3.8-viz-search-path-tooltip: backlog
+  3.8-viz-search-path-tooltip: done
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog
