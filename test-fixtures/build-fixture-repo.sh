@@ -82,8 +82,14 @@ trap 'release; exit 129' HUP
 # Already built by whoever held the lock before us, and built by *this* version
 # of the script: print the HEAD hash — the contract every caller reads — and
 # leave the repository alone.
+#
+# The working tree has to be pristine too, not merely the history: the no-op
+# restores nothing, so a fixture dirtied by an interrupted operation or by hand
+# would otherwise survive into the next run. The pre-3.6 builder started with
+# `rm -rf` and got that for free.
 if [ -f "$STAMP_FILE" ] && [ "$(cat "$STAMP_FILE")" = "$STAMP" ]; then
-  if HEAD_HASH=$(git -C "$FINAL_DIR" rev-parse HEAD 2>/dev/null); then
+  if HEAD_HASH=$(git -C "$FINAL_DIR" rev-parse HEAD 2>/dev/null) &&
+    [ -z "$(git -C "$FINAL_DIR" status --porcelain 2>/dev/null)" ]; then
     printf '%s\n' "$HEAD_HASH"
     exit 0
   fi
