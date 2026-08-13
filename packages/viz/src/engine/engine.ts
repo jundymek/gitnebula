@@ -165,7 +165,7 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.addEventListener("pointerdown", this.onPointerDown);
     this.canvas.addEventListener("pointermove", this.onPointerMove);
     this.canvas.addEventListener("pointerup", this.onPointerUp);
-    this.canvas.addEventListener("pointercancel", this.onPointerUp);
+    this.canvas.addEventListener("pointercancel", this.onPointerCancel);
     this.canvas.addEventListener("pointerleave", this.onPointerLeave);
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
     globalThis.addEventListener?.("resize", this.onWindowResize);
@@ -245,7 +245,7 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.removeEventListener("pointerdown", this.onPointerDown);
     this.canvas.removeEventListener("pointermove", this.onPointerMove);
     this.canvas.removeEventListener("pointerup", this.onPointerUp);
-    this.canvas.removeEventListener("pointercancel", this.onPointerUp);
+    this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
     this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.canvas.removeEventListener("wheel", this.onWheel);
     globalThis.removeEventListener?.("resize", this.onWindowResize);
@@ -975,18 +975,16 @@ export class CanvasGraphEngine implements GraphEngine {
    * its `moved` flag on any pointermove at all, so a hand tremor eats the
    * click; the slop threshold is the fix, and pan behaviour is untouched
    * either way.
+   *
+   * Only a released primary button selects. A `pointercancel` (the browser
+   * taking the gesture away — a touch turning into a system scroll, a stylus
+   * leaving range) is a cleanup, not a click, and its coordinates are wherever
+   * the gesture was abandoned; a right-click is a press this map has no
+   * meaning for.
    */
   private readonly onPointerUp = (event: PointerEvent): void => {
-    if (!this.dragging) return;
-    const moved = this.dragMoved;
-    this.dragging = false;
-    this.dragMoved = false;
-    this.dragOrigin = null;
-    this.pressOrigin = null;
-    this.canvas.style.cursor = "grab";
-    this.canvas.releasePointerCapture?.(event.pointerId);
-
-    if (moved) return;
+    const moved = this.endPress(event);
+    if (moved || event.button !== 0 || event.isPrimary === false) return;
     const rect = this.canvas.getBoundingClientRect();
     const hit = this.pick({
       x: event.clientX - rect.left,
@@ -994,6 +992,23 @@ export class CanvasGraphEngine implements GraphEngine {
     });
     this.setSelected(hit?.id ?? null);
   };
+
+  private readonly onPointerCancel = (event: PointerEvent): void => {
+    this.endPress(event);
+  };
+
+  /** Drop the press state. Returns whether it had become a drag. */
+  private endPress(event: PointerEvent): boolean {
+    if (!this.dragging) return true;
+    const moved = this.dragMoved;
+    this.dragging = false;
+    this.dragMoved = false;
+    this.dragOrigin = null;
+    this.pressOrigin = null;
+    this.canvas.style.cursor = "grab";
+    this.canvas.releasePointerCapture?.(event.pointerId);
+    return moved;
+  }
 
   private readonly onWheel = (event: WheelEvent): void => {
     event.preventDefault();

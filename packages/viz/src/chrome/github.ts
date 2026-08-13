@@ -34,7 +34,11 @@ export function githubRepoUrl(remoteUrl: string | null): string | null {
   // Exactly owner + repo. Fewer is not a repository; more is a URL shape we
   // did not parse and must not guess at.
   if (segments.length !== 2) return null;
-  return `https://github.com/${segments[0]}/${segments[1]}`;
+  // Encoded like every other segment: the remote is data out of
+  // `analysis.json`, and the scheme and host are ours rather than its.
+  return `https://github.com/${encodeURIComponent(
+    segments[0]!,
+  )}/${encodeURIComponent(segments[1]!)}`;
 }
 
 /**

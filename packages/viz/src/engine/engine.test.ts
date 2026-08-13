@@ -359,6 +359,44 @@ describe("CanvasGraphEngine — story 3.4 click selection (AC-4)", () => {
     expect(engine.getSelected()).toBeNull();
   });
 
+  it("does not select when the browser cancels the gesture", () => {
+    // A touch turning into a system scroll ends at wherever it was abandoned;
+    // treating that as a click would open or close the panel by accident.
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: hit.x, clientY: hit.y }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointercancel", { clientX: hit.x, clientY: hit.y }),
+    );
+
+    expect(selected).toEqual([]);
+    expect(engine.getSelected()).toBeNull();
+    expect(canvas.style.cursor).toBe("grab");
+  });
+
+  it("ignores a non-primary button", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: hit.x, clientY: hit.y }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointerup", {
+        clientX: hit.x,
+        clientY: hit.y,
+        button: 2,
+      }),
+    );
+
+    expect(selected).toEqual([]);
+  });
+
   it("still selects through a tremor smaller than the slop", () => {
     // The mockup's any-move flag loses this click; the threshold keeps it.
     const { hit } = findPoints();
