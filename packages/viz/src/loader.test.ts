@@ -1,7 +1,12 @@
 import { SUPPORTED_SCHEMA_MAJOR } from "@gitnebula/contract";
 import { describe, expect, it } from "vitest";
 
-import { ANALYSIS_URL, checkVersion, loadAnalysis } from "./loader.js";
+import {
+  ANALYSIS_URL,
+  FILE_PROTOCOL_HINT,
+  checkVersion,
+  loadAnalysis,
+} from "./loader.js";
 import { loadSyntheticFixture } from "./test-support/fixtures.js";
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -32,6 +37,37 @@ describe("loader — AD-12 data-loading contract", () => {
     );
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.document.repo.stats.files).toBe(2000);
+  });
+});
+
+describe("loader — ADR-0004 file:// is not a supported host (4.1 AC-3)", () => {
+  it("names the fix instead of fetching, on a page opened from disk", async () => {
+    const requested: string[] = [];
+    const result = await loadAnalysis((url) => {
+      requested.push(url);
+      return Promise.resolve(jsonResponse({}));
+    }, "file:");
+
+    // Not attempted at all: the browser's own failure for this case is
+    // "Failed to fetch", which describes nothing the reader can act on.
+    expect(requested).toEqual([]);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.failure.kind).toBe("unreachable");
+      expect(result.failure.detail).toBe(FILE_PROTOCOL_HINT);
+      // The one-liner ADR-0004 promises the user gets pointed at.
+      expect(result.failure.detail).toContain("npx serve");
+    }
+  });
+
+  it("fetches normally over http", async () => {
+    const requested: string[] = [];
+    await loadAnalysis((url) => {
+      requested.push(url);
+      return Promise.resolve(jsonResponse(loadSyntheticFixture()));
+    }, "http:");
+
+    expect(requested).toEqual([ANALYSIS_URL]);
   });
 });
 

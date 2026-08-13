@@ -39,9 +39,33 @@ export type LoadResult =
 
 type FetchLike = (url: string) => Promise<Response>;
 
+/**
+ * ADR-0004: `file://` is not a supported host. It fails for a reason the
+ * browser will not explain — a page on the `file:` scheme has an opaque
+ * origin, so fetching even its own sibling is a cross-origin request — and the
+ * error it does surface ("Failed to fetch", "Not allowed to load local
+ * resource") sends the reader looking for a bug in the map instead of at the
+ * way they opened it. Recognised here, before the fetch, so the answer is the
+ * one-liner that fixes it.
+ */
+export const FILE_PROTOCOL_HINT =
+  "gitnebula's map must be served over HTTP — a page opened from disk is not allowed to read the file next to it. From the folder holding index.html run `npx serve` (or `python3 -m http.server`) and open the address it prints.";
+
 export async function loadAnalysis(
   fetchImpl: FetchLike = (url) => globalThis.fetch(url),
+  protocol: string = globalThis.location?.protocol ?? "http:",
 ): Promise<LoadResult> {
+  if (protocol === "file:") {
+    return {
+      ok: false,
+      failure: {
+        kind: "unreachable",
+        title: "This page has to be served, not opened from disk",
+        detail: FILE_PROTOCOL_HINT,
+      },
+    };
+  }
+
   let response: Response;
   try {
     response = await fetchImpl(ANALYSIS_URL);
