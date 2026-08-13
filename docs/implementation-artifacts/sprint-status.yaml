@@ -43,6 +43,12 @@ development_status:
   4.2-ci-pages-recipe: backlog
   4.3-repo-quality: review
   4.4-dod-validation: backlog
+  # Added 2026-08-13 by the epic/4-build-bundle supervisor, out of supervision
+  # rather than planning: nothing in the repo covers publishing, and
+  # packages/cli is still private, named @gitnebula/cli and versioned 0.0.0,
+  # while the README leads with `npx gitnebula`. Unassigned — the wave is the
+  # maintainer's call.
+  4.5-npm-release: backlog
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
