@@ -6,20 +6,23 @@ directory into the gitignored `.generated/` — **built, never committed**
 
 ```sh
 ./test-fixtures/build-fixture-repo.sh      # githist: prints the HEAD hash
-./test-fixtures/build-ts-fixture-repo.sh   # deps: prints the tree it wrote
+./test-fixtures/build-ts-fixture-repo.sh   # deps, TS/JS: prints the tree it wrote
+./test-fixtures/build-py-fixture-repo.sh   # deps, Python: prints the tree it wrote
 ```
 
 The root `pretest` script runs the first automatically and `@gitnebula/deps`'
-own `pretest` runs the second, so a fresh clone's `pnpm test` needs no manual
+own `pretest` runs the other two, so a fresh clone's `pnpm test` needs no manual
 step; CI does the same.
 
-`build-ts-fixture-repo.sh` writes two plain source trees with no git history —
-`ts-imports-repo` and `ts-imports-repo-no-config` — because `deps` reads the
-working tree, never the log. One of its files has deliberate syntax errors, and
-that is precisely why it is generated: committed as `.ts` it would break
-`pnpm lint` and `pnpm typecheck` for the whole workspace.
+The two `deps` scripts write plain source trees with no git history —
+`ts-imports-repo`, `ts-imports-repo-no-config` and `python-imports-repo` —
+because `deps` reads the working tree, never the log. Each has one file with
+deliberate syntax errors, and that is precisely why the trees are generated:
+committed as `.ts` such a file would break `pnpm lint` and `pnpm typecheck` for
+the whole workspace, and as `.py` it would be a permanently broken file in the
+repository.
 
-The two scripts are independent. `build-fixture-repo.sh`'s commit hashes are
+The three scripts are independent. `build-fixture-repo.sh`'s commit hashes are
 pinned by githist's snapshots; extend it only with that in mind, and prefer a
 new sibling script (below).
 
