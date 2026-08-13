@@ -29,6 +29,11 @@ development_status:
   # Added 2026-08-13 by the epic/2-scanner-core supervisor, out of supervision
   # rather than planning; must merge before 4.2 turns CI on.
   3.6-fixture-build-race: backlog
+  # Added 2026-08-13 by the epic/3-deps-python supervisor, out of supervision
+  # rather than planning; fixes a flake in merged 3.2 test code that no live
+  # story owns and that blocks 3.6's AC-1. Unassigned — the wave is the
+  # maintainer's call.
+  3.7-cli-clone-temp-isolation: backlog
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog
