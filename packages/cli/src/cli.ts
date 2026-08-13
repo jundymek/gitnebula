@@ -4,8 +4,8 @@
 //
 // `run` returns an exit code instead of calling `process.exit`, so the failure
 // paths are testable without spawning a process.
-import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { existsSync, realpathSync } from "node:fs";
+import { isAbsolute, join, relative, resolve, sep } from "node:path";
 
 import { Command, CommanderError } from "commander";
 
@@ -24,6 +24,7 @@ import { DEFAULT_OUTPUT_FILENAME } from "./emit.js";
 import { StageError, describeThrown } from "./errors.js";
 import { runPipeline, type RunPipelineOptions } from "./pipeline.js";
 import { createReporter, type Reporter } from "./progress.js";
+import { resolveRepo } from "./repo.js";
 import {
   awaitShutdown,
   missingDistError,
@@ -240,7 +241,9 @@ export async function run(
     // minute analyzing and only then discovers it has no viewer to copy has
     // wasted the minute and told the user nothing they could not have been
     // told first.
-    const bundle = bundling ? planBundle(cwd, flags, options) : null;
+    const bundle = bundling
+      ? planBundle(repoTarget, cwd, flags, options)
+      : null;
 
     const pipelineOptions: RunPipelineOptions = {
       target: repoTarget,
@@ -256,7 +259,21 @@ export async function run(
         ? {}
         : { windowAnchor: flags.windowAnchor }),
       flags: {
-        ...(flags.exclude === undefined ? {} : { excludes: flags.exclude }),
+        // The bundle's own output directory is excluded when it sits inside
+        // the repository being mapped. Without it, the second `gitnebula
+        // build` in a repository maps the first one's output: the node count
+        // grows by the bundle's two files on every run, and the map acquires
+        // an `index.html` that is the viewer drawing it.
+        ...(flags.exclude === undefined && bundle?.selfExclude === undefined
+          ? {}
+          : {
+              excludes: [
+                ...(flags.exclude ?? []),
+                ...(bundle?.selfExclude === undefined
+                  ? []
+                  : [bundle.selfExclude]),
+              ],
+            }),
         ...(flags.windowDays === undefined ? {} : { windowDays }),
         ...(flags.hotspotThreshold === undefined
           ? {}
@@ -315,6 +332,12 @@ interface BundlePlan {
   readonly outDir: string;
   readonly analysisPath: string;
   readonly vizDist: string;
+  /**
+   * Exclusion glob for the output directory, when it lies inside the
+   * repository being analyzed; undefined when it does not (an absolute path
+   * elsewhere, or URL mode's temp checkout).
+   */
+  readonly selfExclude?: string;
 }
 
 /**
@@ -326,6 +349,7 @@ interface BundlePlan {
  * the output directory cannot be created.
  */
 function planBundle(
+  repoTarget: string,
   cwd: string,
   flags: ParsedFlags,
   options: RunOptions,
@@ -343,7 +367,39 @@ function planBundle(
   prepareBundleDir(outDir);
   const analysisPath = join(outDir, DEFAULT_OUTPUT_FILENAME);
 
-  return { outDir, analysisPath, vizDist };
+  // The same preflight the pipeline's `repo` stage runs, and cheap. Asking it
+  // here is what makes the self-exclusion below possible: the answer is
+  // relative to the working-tree root, not to wherever the command was typed.
+  //
+  // Both sides are resolved through symlinks first, exactly as serve.ts does
+  // for the same reason: on macOS a temp directory is `/var/…` to the caller
+  // and `/private/var/…` to git, and the textual comparison below would then
+  // read a directory inside the repository as being outside it — leaving the
+  // bundle in its own map with nothing to show for the check.
+  const repoRoot = realpathSync(resolveRepo(resolve(cwd, repoTarget)).root);
+  const inside = relative(repoRoot, realpathSync(outDir));
+  if (inside === "") {
+    throw new StageError(
+      "bundle",
+      "the bundle cannot be written to the repository root",
+      "pass -o with a subdirectory, or a path outside the repository — a bundle directory holds exactly two files and would have to empty the repository to hold them",
+    );
+  }
+
+  const selfExclude =
+    inside.startsWith("..") || isAbsolute(inside)
+      ? undefined
+      : // picomatch matches a directory entry against the directory itself and
+        // prunes the subtree (scanner/excludes.ts). Posix separators, because
+        // the scanner matches repository-relative paths in that form.
+        inside.split(sep).join("/");
+
+  return {
+    outDir,
+    analysisPath,
+    vizDist,
+    ...(selfExclude === undefined ? {} : { selfExclude }),
+  };
 }
 
 /**

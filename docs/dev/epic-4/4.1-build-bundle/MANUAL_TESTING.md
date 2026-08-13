@@ -41,6 +41,15 @@ Environment: darwin 25.5.0 (arm64), Node 22.20.0, pnpm 10.34.5,
       truthful answer here. The reasoning is in `README.md` and
       `DECISIONS.md`.
 
+- [x] Run `gitnebula build` (default `-o`) three times in a row in this
+      repository, reading the node count each time
+      → `343 nodes, 402 edges` on all three, and no node's path contains
+      `gitnebula-bundle`. Before the self-exclusion the count climbed on every
+      run as the bundle mapped its own previous output.
+
+- [x] `gitnebula build -o <repository root>`
+      → refused: `the bundle cannot be written to the repository root`, exit 1.
+
 - [x] `gitnebula build -o site` writes to `./site`, not to the default
       → verified. This is the commander `-o` collision described in the README;
       before the fix it silently wrote to `./gitnebula-bundle`.

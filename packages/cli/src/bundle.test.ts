@@ -136,6 +136,119 @@ describe("gitnebula build — the bundle is exactly two files (AC-1)", () => {
   });
 });
 
+describe("gitnebula build — the bundle stays out of its own map (AC-1)", () => {
+  /** A small repository the bundle can be written *into*. */
+  function makeRepo(): string {
+    const repo = makeTempDir(temps, "gitnebula-repo-");
+    git(repo, "init", "-q");
+    git(repo, "config", "user.email", "t@example.com");
+    git(repo, "config", "user.name", "T");
+    writeFileSync(join(repo, "a.ts"), "export const a = 1;\n", "utf8");
+    writeFileSync(join(repo, "b.ts"), "export const b = 2;\n", "utf8");
+    git(repo, "add", "-A");
+    git(repo, "commit", "-qm", "first");
+    return repo;
+  }
+
+  function nodeCount(outDir: string): number {
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { nodes: { path: string }[] };
+    return document.nodes.length;
+  }
+
+  // Without the self-exclusion, the second run maps the first run's output:
+  // the count grows by the bundle's two files every time, and the map acquires
+  // an index.html that is the viewer drawing it.
+  it("does not grow by its own output on a second run", async () => {
+    const repo = makeRepo();
+    const dist = fakeVizDist();
+    const outDir = join(repo, DEFAULT_BUNDLE_DIR);
+
+    const invoke = (): Promise<number> =>
+      run(["build", repo, "-o", outDir], {
+        cwd: repo,
+        vizDist: dist,
+        reporter: createSilentReporter(),
+        write: () => {},
+      });
+
+    expect(await invoke()).toBe(0);
+    const first = nodeCount(outDir);
+    expect(await invoke()).toBe(0);
+
+    expect(nodeCount(outDir)).toBe(first);
+
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { nodes: { path: string }[] };
+    expect(
+      document.nodes.filter((node) => node.path.includes(DEFAULT_BUNDLE_DIR)),
+    ).toEqual([]);
+  });
+
+  it("keeps a nested output directory out too", async () => {
+    const repo = makeRepo();
+    const dist = fakeVizDist();
+    const outDir = join(repo, "docs", "site");
+
+    for (let run_ = 0; run_ < 2; run_ += 1) {
+      expect(
+        await run(["build", repo, "-o", outDir], {
+          cwd: repo,
+          vizDist: dist,
+          reporter: createSilentReporter(),
+          write: () => {},
+        }),
+      ).toBe(0);
+    }
+
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { nodes: { path: string }[] };
+    expect(
+      document.nodes.filter((node) => node.path.startsWith("docs/site")),
+    ).toEqual([]);
+  });
+
+  it("refuses to write the bundle to the repository root", async () => {
+    const repo = makeRepo();
+    const chunks: string[] = [];
+    const code = await run(["build", repo, "-o", repo], {
+      cwd: repo,
+      vizDist: fakeVizDist(),
+      reporter: createSilentReporter(),
+      write: (chunk) => chunks.push(chunk),
+    });
+
+    expect(code).toBe(1);
+    expect(chunks.join("")).toContain(
+      "cannot be written to the repository root",
+    );
+  });
+
+  // An output directory outside the repository has nothing to exclude, and
+  // asking for one anyway would silently drop a real directory from the map.
+  it("adds no exclusion when the output is outside the repository", async () => {
+    const repo = makeRepo();
+    const outDir = join(makeTempDir(temps, "gitnebula-out-"), "site");
+
+    expect(
+      await run(["build", repo, "-o", outDir], {
+        cwd: repo,
+        vizDist: fakeVizDist(),
+        reporter: createSilentReporter(),
+        write: () => {},
+      }),
+    ).toBe(0);
+
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { nodes: { path: string }[] };
+    expect(document.nodes.some((node) => node.path === "a.ts")).toBe(true);
+  });
+});
+
 describe("gitnebula build — the analysis is never reused (AC-1)", () => {
   // AC-1 permits reusing "a fresh analysis.json". Two rounds of review showed
   // freshness cannot be established from what the emitted document records —

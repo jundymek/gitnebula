@@ -69,6 +69,15 @@ That is where the reuse path was removed rather than patched a third time. See
 analysis it came from, and the two places provenance could be written are both
 barred here. Every `gitnebula build` now runs the pipeline.
 
+A seventh, from the review round after that, and the most embarrassing because
+it is the default path: **the bundle was in its own map.** The output directory
+is created inside the repository being analyzed, and nothing excluded it, so
+the second `gitnebula build` in a repository mapped the first one's output —
+346 nodes became 349, and the map gained an `index.html` node that is the
+viewer drawing it. `build` now contributes one exclusion of its own for the
+output directory whenever it lies inside the repository. Three consecutive
+runs on this repository now report the same 343 nodes and 402 edges.
+
 ## Files
 
 ### `packages/viz`
