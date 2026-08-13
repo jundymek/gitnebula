@@ -11,13 +11,15 @@
     "dev": "vite",
     "perf-spike": "vite perf-spike",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf": "playwright test -c perf/playwright.config.ts"
   },
   "dependencies": {
     "@gitnebula/contract": "workspace:*",
     "d3-force": "^3.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/d3-force": "^3.0.10",
     "@types/node": "catalog:",
     "jsdom": "^27.4.0",

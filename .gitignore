@@ -25,3 +25,11 @@ _bmad/custom/config.user.toml
 # perf-spike run output (regenerated on every run; the recorded evidence
 # lives in docs/dev/epic-1/1.4-perf-spike/results.json)
 packages/viz/perf-spike/results.json
+
+# Story 3.5 perf harness output. Regenerated on every `pnpm --filter
+# @gitnebula/viz perf`; the numbers that count are transcribed into
+# docs/dev/epic-3/3.5-viz-export-perf/PERFORMANCE.md, where they are reviewed
+# rather than overwritten.
+packages/viz/perf/report/
+packages/viz/test-results/
+packages/viz/playwright-report/

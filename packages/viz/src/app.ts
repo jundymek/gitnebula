@@ -9,6 +9,7 @@ import { createSearchBox } from "./chrome/search.js";
 import { createTooltip } from "./chrome/tooltip.js";
 import { createGraphEngine, type GraphEngine } from "./engine/index.js";
 import { renderErrorScreen } from "./error-screen.js";
+import { publishHarnessHandle } from "./harness-handle.js";
 import { loadAnalysis } from "./loader.js";
 
 export async function boot(root: Element): Promise<GraphEngine | null> {
@@ -40,6 +41,9 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   // measures 0 × 0.
   try {
     engine = createGraphEngine({ canvas: stage });
+    // Before `load()`: the settle is announced synchronously inside it under
+    // reduced motion, and the harness has to be listening by then.
+    publishHarnessHandle(engine);
     engine.load(result.document);
     // After `load`, so the search corpus is the document's node set rather
     // than the empty one an unloaded engine reports.

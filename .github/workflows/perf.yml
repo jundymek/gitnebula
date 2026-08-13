@@ -1,0 +1,58 @@
+name: Performance harness
+
+# Story 3.5, AC-4: the harness runs in CI, and where runner variance forces it
+# to be non-blocking the decision must be recorded rather than left implicit
+# (PRD SM-2). Both halves apply here, for two independent reasons:
+#
+# 1. This repository's CI is deliberately workflow_dispatch-only until story
+#    4.2 revisits the recipe — see ci.yml's own header. A perf workflow firing
+#    on push would make it the only automatic workflow in the repo, which is
+#    not this story's decision to make.
+# 2. GitHub's hosted runners have no GPU and rasterise canvas 2D in software on
+#    shared hardware. The frame rate there measures the runner, not the
+#    renderer, so a hard threshold would fail for reasons unrelated to the code
+#    under review.
+#
+# The job therefore runs on demand and does not gate a merge; it uploads the
+# report so a run can be compared against the recorded local numbers. The
+# decision and the measured run-to-run variance it rests on are written up in
+# docs/dev/epic-3/3.5-viz-export-perf/README.md and PERFORMANCE.md.
+on:
+  workflow_dispatch:
+
+jobs:
+  perf:
+    name: fps harness, export parity and reduced-motion audit
+    runs-on: ubuntu-latest
+    # Non-blocking by design — see above. The report is the artefact that
+    # matters; a red X here is a prompt to read it, not a broken build.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        # Version comes from the packageManager field in package.json.
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright's Chromium
+        run: pnpm --filter @gitnebula/viz exec playwright install --with-deps chromium
+
+      - name: Run the harness
+        run: pnpm --filter @gitnebula/viz perf
+
+      - name: Upload the run report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-report
+          path: |
+            packages/viz/perf/report/
+            packages/viz/test-results/
+          if-no-files-found: warn
