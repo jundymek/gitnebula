@@ -89,7 +89,9 @@ node packages/cli/dist/bin/gitnebula.js . --no-open
 - [x] `pnpm --filter @gitnebula/viz test` — 32 files, 383 tests passed.
 - [x] `pnpm lint` — ESLint and Prettier clean.
 - [x] `pnpm typecheck` — all six packages clean.
-- [x] `pnpm test` — 105 + 145 + 74 + 66 (2 skipped) + 383 + 140 passed, 0 failed.
+- [x] `pnpm test` — 105 + 145 + 74 + 66 (2 skipped) + 383 + 141 passed, 0 failed.
+      (Re-run after rebasing onto PR #44; the cli figure was 140 before that
+      PR added its own suite.)
 - [x] `pnpm build` — tsup (cli) and vite (viz) both succeeded.
 - [x] The new assertions were **watched failing** against the unfixed
       `graph.ts`: 8 of them, including `expected [] to include
