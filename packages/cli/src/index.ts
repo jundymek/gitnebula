@@ -35,6 +35,17 @@ export {
   type ConfigResolution,
 } from "./config.js";
 export { assemble, type AssembleInput } from "./assemble.js";
+export {
+  BUNDLE_CONTENTS,
+  DEFAULT_BUNDLE_DIR,
+  VIEWER_GZIP_BUDGET_BYTES,
+  assembleBundle,
+  describeViewerSize,
+  formatBytes,
+  isAnalysisFresh,
+  measureViewer,
+  type ViewerSize,
+} from "./bundle.js";
 export { DEFAULT_OUTPUT_FILENAME, emit, serialize } from "./emit.js";
 export { enrich } from "./enrich.js";
 export { StageError } from "./errors.js";
