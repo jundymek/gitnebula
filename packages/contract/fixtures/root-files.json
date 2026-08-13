@@ -1,0 +1,137 @@
+{
+  "schemaVersion": "1.0",
+  "repo": {
+    "name": "fixture-root-files",
+    "remoteUrl": null,
+    "analyzedAt": "2026-01-01T00:00:00.000Z",
+    "defaultBranch": "main",
+    "analysisWindowDays": 365,
+    "stats": {
+      "files": 5,
+      "loc": 460,
+      "commits": 21,
+      "languages": {
+        "python": 1
+      }
+    }
+  },
+  "nodes": [
+    {
+      "id": "fp/",
+      "kind": "module",
+      "parent": null,
+      "path": "fp/",
+      "layer": "backend",
+      "loc": 190,
+      "churn": 0.62,
+      "commits": 14,
+      "authors": 2,
+      "lastChangedAt": "2025-12-30T12:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "fp/proxy.py",
+      "kind": "file",
+      "parent": "fp/",
+      "path": "fp/proxy.py",
+      "layer": "backend",
+      "loc": 130,
+      "churn": 0.71,
+      "commits": 11,
+      "authors": 2,
+      "lastChangedAt": "2025-12-30T12:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "fp/util.py",
+      "kind": "file",
+      "parent": "fp/",
+      "path": "fp/util.py",
+      "layer": "backend",
+      "loc": 60,
+      "churn": 0.18,
+      "commits": 3,
+      "authors": 1,
+      "lastChangedAt": "2025-11-04T09:30:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "setup.py",
+      "kind": "file",
+      "parent": null,
+      "path": "setup.py",
+      "layer": "infra",
+      "loc": 40,
+      "churn": 0.25,
+      "commits": 5,
+      "authors": 1,
+      "lastChangedAt": "2025-12-02T08:15:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "test_proxy.py",
+      "kind": "file",
+      "parent": null,
+      "path": "test_proxy.py",
+      "layer": "test",
+      "loc": 172,
+      "churn": 0.55,
+      "commits": 9,
+      "authors": 2,
+      "lastChangedAt": "2025-12-28T17:45:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    },
+    {
+      "id": "version.py",
+      "kind": "file",
+      "parent": null,
+      "path": "version.py",
+      "layer": "infra",
+      "loc": 8,
+      "churn": 0.11,
+      "commits": 2,
+      "authors": 1,
+      "lastChangedAt": "2025-10-12T11:00:00.000Z",
+      "description": null,
+      "descriptionSource": null
+    }
+  ],
+  "edges": [
+    {
+      "source": "fp/proxy.py",
+      "target": "version.py",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "setup.py",
+      "target": "fp/proxy.py",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "setup.py",
+      "target": "version.py",
+      "kind": "import",
+      "weight": 1
+    },
+    {
+      "source": "test_proxy.py",
+      "target": "fp/proxy.py",
+      "kind": "import",
+      "weight": 2
+    }
+  ],
+  "cochanges": [
+    {
+      "a": "fp/proxy.py",
+      "b": "test_proxy.py",
+      "count": 7
+    }
+  ]
+}

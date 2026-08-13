@@ -26,8 +26,20 @@ export interface GraphEdge {
 export interface Graph {
   /** Every node of the document, contract order preserved. */
   readonly nodes: readonly EngineNode[];
-  /** Indices of the module nodes — the set 2.5 simulates and draws. */
+  /** Indices of the module nodes — the set ADR-0006's unfold rule ranges over. */
   readonly moduleIndices: readonly number[];
+  /**
+   * Indices of the repository's root files — `kind: "file"`, `parent: null`
+   * (story 2.1's decision, story 4.7's case).
+   */
+  readonly rootFileIndices: readonly number[];
+  /**
+   * What the module-level layout simulates and draws: the modules **and** the
+   * root files. A root file belongs to no module, so it can only be a
+   * top-level node or nothing at all — and for every real repository with a
+   * README, "nothing at all" was 9.5%–82% of the lines in the map (4.7).
+   */
+  readonly topLevelIndices: readonly number[];
   /** Module-level import edges, by index into `nodes`. */
   readonly moduleEdges: readonly GraphEdge[];
   /** File-level import edges, by index into `nodes` (story 3.3 draws them). */
@@ -78,14 +90,25 @@ export function buildGraph(
       if (!membersByModule.has(node.id)) membersByModule.set(node.id, []);
     }
   });
+  const rootFileIndices: number[] = [];
   nodes.forEach((node, index) => {
-    if (node.kind !== "file" || node.parent === null) return;
+    if (node.kind !== "file") return;
+    if (node.parent === null) {
+      // A repository-root file: `setup.py`, `README.md`, `eslint.config.js`.
+      // Not an orphan and not a contract violation — story 2.1 deliberately
+      // leaves these parentless rather than inventing a synthetic `./` module
+      // that would have to claim a layer over an arbitrary bag of files. They
+      // are top-level nodes, drawn beside the modules (story 4.7).
+      rootFileIndices.push(index);
+      return;
+    }
     const members = membersByModule.get(node.parent);
-    // A parent outside the document would be a contract violation, not
-    // something to paper over — but the Viewer draws what it was given rather
-    // than throwing on it, so an orphan is simply not a member of anything.
+    // A parent naming a module outside the document *would* be a contract
+    // violation — but the Viewer draws what it was given rather than throwing
+    // on it, so such a file is simply not a member of anything.
     if (members) members.push(index);
   });
+  const topLevelIndices = [...moduleIndices, ...rootFileIndices];
 
   const moduleEdges: GraphEdge[] = [];
   const fileEdges: GraphEdge[] = [];
@@ -109,6 +132,8 @@ export function buildGraph(
   return {
     nodes,
     moduleIndices,
+    rootFileIndices,
+    topLevelIndices,
     moduleEdges,
     fileEdges,
     membersByModule,

@@ -114,7 +114,12 @@ export class ModuleLayout {
   frames = 0;
 
   constructor(graph: Graph, rng: Rng) {
-    const nodes: LayoutNode[] = graph.moduleIndices.map((graphIndex) => {
+    // Modules **and** the repository's root files (story 4.7). A root file has
+    // no module to unfold out of, so the module-level layout is the only place
+    // it can hold a position — and holding one from the first tick is what
+    // makes "the map does not shift when a root file appears" true by
+    // construction: it never appears, it was always there.
+    const nodes: LayoutNode[] = graph.topLevelIndices.map((graphIndex) => {
       const node = graph.nodes[graphIndex]!;
       return { graphIndex, id: node.id, radius: node.radius, x: 0, y: 0 };
     });
@@ -122,9 +127,9 @@ export class ModuleLayout {
     scatter(nodes, rng);
 
     const links: LayoutLink[] = [];
-    for (const edge of graph.moduleEdges) {
-      const source = byId.get(graph.nodes[edge.source]!.id);
-      const target = byId.get(graph.nodes[edge.target]!.id);
+    for (const edge of topLevelLinks(graph)) {
+      const source = byId.get(edge.source);
+      const target = byId.get(edge.target);
       if (source === undefined || target === undefined) continue;
       links.push({ source, target });
     }
@@ -203,6 +208,56 @@ export class ModuleLayout {
   stop(): void {
     this.simulation.stop();
   }
+}
+
+/**
+ * The links of the module-level layout: every module→module import edge, plus
+ * the file edges that touch a repository-root file, lifted to the top level.
+ *
+ * A root file has no module-level edge of its own — module aggregation has no
+ * module to attribute it to — so without this it would enter the simulation as
+ * a free particle and drift to wherever charge and gravity left room. Lifting
+ * `setup.py → fp/proxy.py` to `setup.py → fp/` settles it beside the module it
+ * actually imports, which is the whole point of drawing it (story 4.7).
+ *
+ * Deterministic by construction: contract order, deduplicated by a stable key,
+ * self-links (two files inside one module) dropped.
+ */
+function topLevelLinks(graph: Graph): { source: string; target: string }[] {
+  const topLevelIdOf = (index: number): string | null => {
+    const node = graph.nodes[index]!;
+    if (node.kind === "module") return node.id;
+    // A root file stands for itself; a module's file stands for its module.
+    return node.parent ?? node.id;
+  };
+
+  const links: { source: string; target: string }[] = [];
+  const seen = new Set<string>();
+  const add = (source: string, target: string): void => {
+    if (source === target) return;
+    const key = `${source} ${target}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    links.push({ source, target });
+  };
+
+  for (const edge of graph.moduleEdges) {
+    add(graph.nodes[edge.source]!.id, graph.nodes[edge.target]!.id);
+  }
+  const rootFileIds = new Set(
+    graph.rootFileIndices.map((index) => graph.nodes[index]!.id),
+  );
+  for (const edge of graph.fileEdges) {
+    const source = topLevelIdOf(edge.source);
+    const target = topLevelIdOf(edge.target);
+    if (source === null || target === null) continue;
+    // Only edges that touch a root file: a file edge between two modules'
+    // files is already represented by the module-level edge the pipeline
+    // aggregated it into, and lifting it again would double its pull.
+    if (!rootFileIds.has(source) && !rootFileIds.has(target)) continue;
+    add(source, target);
+  }
+  return links;
 }
 
 /** A module's centre, as the member wake sees it. */
