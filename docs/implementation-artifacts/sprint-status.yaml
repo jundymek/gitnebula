@@ -59,6 +59,12 @@ development_status:
   # and three top-level docs still name the old path, so the one command a
   # visitor can run today fails. Unassigned — the wave is the maintainer's call.
   4.6-docs-path-drift: backlog
+  # Added 2026-08-13 by the epic/4-build-bundle supervisor, from the
+  # maintainer's own manual pass on free-proxy: files in a repository's root
+  # carry parent: null (story 2.1's deliberate decision) and the Viewer draws
+  # only module members, so they never appear — 82% of that repository's lines.
+  # No AC covers it. Unassigned — the wave is the maintainer's call.
+  4.7-viz-root-files: backlog
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
