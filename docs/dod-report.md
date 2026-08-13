@@ -44,37 +44,54 @@ Reproduce a row with:
 ```bash
 git clone https://github.com/<org>/<repo>.git && git -C <repo> checkout <sha>
 
-# the CLI exactly as a user gets it: packed, then installed into an empty dir
+# the CLI exactly as a user gets it, minus the registry
 mkdir -p /tmp/cold/app
 ( cd packages/cli && npm pack --pack-destination /tmp/cold )
+
+# 1. through npx — the front door
+npx -y -p /tmp/cold/gitnebula-cli-0.0.0.tgz gitnebula <repo> --no-serve -o <repo>.json
+
+# 2. installed, for the same artefact without npx's overhead
 ( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
 /tmp/cold/app/node_modules/.bin/gitnebula <repo> --no-serve -o <repo>.json
 ```
 
 ## Per-repo definition of done (AC-1)
 
-Wall clock is the **median of three runs** after one discarded warm-up. The
-spread across the three was 0.01 s on both small repos and 0.16 s on streamlit
-(2.65 / 2.81 / 2.79 s), which is why the median is reported rather than the
-best. Clone time is excluded — SM-1 is about analysing a repository you have.
+Each wall clock is the **median of three runs** after one discarded warm-up.
+The widest spread in any set of three is 0.16 s (streamlit through the
+installed binary: 2.65 / 2.81 / 2.79 s), which is why the median is reported
+rather than the best. Clone time is excluded — SM-1 is about analysing a
+repository you have.
 
-| repo | wall clock (≤ 60 s) | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
-| ---- | ------------------- | ---------- | ------------------------ | -------------------------- | ------ |
-| fastapi | **1.12 s** ✅ | ✅ exit 0 | **1.32 MiB** ✅ | **0.00%** ✅ | ✅ valid |
-| excalidraw | **0.93 s** ✅ | ✅ exit 0 | **0.94 MiB** ✅ | **6.34%** ✅ | ✅ valid |
-| streamlit | **2.79 s** ✅ | ✅ exit 0 | **2.16 MiB** ✅ | **3.74%** ✅ | ✅ valid |
+| repo | `npx` wall clock (≤ 60 s) | installed binary | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
+| ---- | ------------------------- | ---------------- | ---------- | ------------------------ | -------------------------- | ------ |
+| fastapi | **1.82 s** ✅ | 1.12 s | ✅ exit 0 | **1.32 MiB** ✅ | **0.00%** ✅ | ✅ valid |
+| excalidraw | **1.63 s** ✅ | 0.93 s | ✅ exit 0 | **0.94 MiB** ✅ | **6.34%** ✅ | ✅ valid |
+| streamlit | **3.35 s** ✅ | 2.79 s | ✅ exit 0 | **2.16 MiB** ✅ | **3.74%** ✅ | ✅ valid |
 
-**All 15 cells pass. The tightest margin is streamlit's runtime, 21× under
-budget.**
+**All 15 threshold cells pass. The tightest margin is streamlit's runtime, 18×
+under budget.**
+
+The headline column is `npx` itself — `npx -p <tarball> gitnebula <repo>` — so
+the number includes npx's own resolution and startup, which cost ~0.6–0.7 s on
+top of the binary. **One thing in that command is not the real one**: the
+package comes from the local tarball rather than the registry, because
+gitnebula is not published yet (story `4.5-npm-release`, `backlog`). Registry
+download is network time SM-1 does not own, but the substitution is stated here
+rather than left for a reader to discover — this report cannot claim
+`npx gitnebula` end to end until 4.5 lands.
 
 ### What each column means
 
-- **How the CLI was invoked, precisely.** These numbers come from **the
-  packed tarball installed into an empty directory** — `npm pack` (which runs
-  4.1's prepack), then `npm install <tarball>` in a scratch dir with no pnpm,
-  no workspace and no `node_modules` hoisting, then that directory's
-  `node_modules/.bin/gitnebula`. That is the `npx` path in everything but the
-  registry download, which is network time SM-1 does not own.
+- **How the CLI was invoked, precisely.** Two invocations, both from the packed
+  tarball (`npm pack`, which runs 4.1's prepack):
+  1. `npx -y -p <tarball> gitnebula <repo> --no-serve` — the product's front
+     door, npx resolution and startup included, npx cache warm.
+  2. `npm install <tarball>` into a scratch directory with no pnpm, no
+     workspace and no `node_modules` hoisting, then that directory's
+     `node_modules/.bin/gitnebula` — the same artefact without npx's overhead,
+     which is what makes the difference between the two columns readable.
   This matters because it is where the run breaks if the packaging is wrong:
   the same binary invoked straight out of `packages/cli/dist/` **fails on both
   Python repos** with `ENOENT … packages/cli/assets/tree-sitter-python.wasm`,
@@ -82,8 +99,8 @@ budget.**
   in place. A first pass of this report measured through that path with the
   `.wasm` files copied in by hand; those numbers were within 0.1 s of these,
   but they proved the pipeline rather than the product, so they were rerun.
-- **Wall clock** — the full pipeline, `--no-serve`. Per-stage
-  numbers and the three raw runs are in
+- **Wall clock** — process start to exit, `--no-serve` so the browser launch is
+  not in it. Per-stage numbers and every raw run are in
   [`docs/dev/epic-4/4.4-dod-validation/PERFORMANCE.md`](dev/epic-4/4.4-dod-validation/PERFORMANCE.md).
 - **Crash-free** — exit code 0 and no aborted stage. Per-item failures are
   counted warnings by design (AD-7) and are listed per repo below.
@@ -278,10 +295,10 @@ measurement.
 
 ### Per demo repo
 
-- [ ] Map loads crash-free from `npx gitnebula` — *measured: 1.12 s / 0.93 s /
-      2.79 s, all exit 0 (SM-1 budget 60 s), through the tarball installed into
-      an empty directory. "Loads" — the map opening in a browser — is the half
-      that is yours; the analysis half is measured*
+- [ ] Map loads crash-free from `npx gitnebula` — *measured: 1.82 s / 1.63 s /
+      3.35 s, all exit 0 (SM-1 budget 60 s), via `npx` from the packed tarball
+      (the registry copy awaits story 4.5). "Loads" — the map opening in a
+      browser — is the half that is yours; the analysis half is measured*
 - [ ] The module map is visually sensible: recognizable top-level structure, no
       absurd giant/orphan nodes, no obviously wrong layer colours (FR-9) —
       *evidence:* [fastapi](dev/epic-4/4.4-dod-validation/map-fastapi.png) ·
@@ -346,7 +363,7 @@ streamlit"*.
 
 | brief §10 DoD item | verdict |
 | ------------------ | ------- |
-| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ for the artefact — 1.12 / 0.93 / 2.79 s through the packed tarball installed into an empty directory. The literal `npx gitnebula` resolves to nothing yet: the package is `private`, named `@gitnebula/cli` and versioned 0.0.0, which is story **4.5-npm-release** (specced 2026-08-13, `backlog`) |
+| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ for the artefact — 1.82 / 1.63 / 3.35 s through `npx` from the packed tarball. `npx gitnebula` **by name** resolves to nothing yet: the package is `private`, named `@gitnebula/cli` and versioned 0.0.0, which is story **4.5-npm-release** (specced 2026-08-13, `backlog`) |
 | 2. Pan/zoom smooth at 100 modules / 2,000 files | ✅ 59 fps sustained headed, floor 55 |
 | 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |

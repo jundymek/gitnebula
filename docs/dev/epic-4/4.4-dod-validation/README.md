@@ -127,6 +127,12 @@ pnpm dlx tsx <script>.mts <analysis>.json   # calls validateAnalysis from @gitne
 - **Timing excludes clone time** and uses the median of three runs after a
   discarded warm-up, with `--no-serve` so the number is the pipeline and not a
   browser launch.
+- **The headline timing goes through `npx`.** AC-1 names `npx gitnebula`, so
+  the table leads with `npx -p <tarball> gitnebula` and reports the installed
+  binary beside it; the gap between them is npx's own cost, ~0.6–0.7 s flat.
+  The tarball stands in for the registry because the package is unpublished
+  (story `4.5-npm-release`), and the report says so at the table rather than in
+  a footnote.
 - **The checklist is prefilled and left unticked.** AC-4 makes that an owner
   gate. Where a line has an automated counterpart the number is quoted next to
   it, so the maintainer's walk is a judgement call rather than a re-measurement.
@@ -138,7 +144,9 @@ pnpm dlx tsx <script>.mts <analysis>.json   # calls validateAnalysis from @gitne
 
 ## What the run found
 
-No threshold is red. The three repos analyse in 0.93–2.79 s against a 60 s
+No threshold is red. The three repos analyse in 1.63–3.35 s through `npx`
+(0.93–2.79 s through the installed binary, the difference being npx's own
+resolution and startup) against a 60 s
 budget, emit 0.94–2.16 MiB against 5 MB, resolve imports at 0.00–6.34% unresolved
 against 20%, and validate at `schemaVersion 1.0`. The map holds 59 fps sustained
 on a 60 Hz display, the bundle is 2.8% of its size budget and issues requests to

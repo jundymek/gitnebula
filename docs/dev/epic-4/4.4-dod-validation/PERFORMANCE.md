@@ -34,34 +34,55 @@ comparable with `docs/dev/epic-3/3.5-viz-export-perf/PERFORMANCE.md`.
   harder case and the one `npx gitnebula` actually meets on a fresh checkout;
   stories 2.2 and 3.1 measured the same way.
 - One discarded warm-up run per repo, then **three measured runs; the median is
-  reported**. The spread is 0.01 s on fastapi and excalidraw and 0.16 s on
-  streamlit — small enough that the median is not hiding a distribution, large
-  enough on the biggest repo that reporting the best run would flatter it.
+  reported**. The widest spread in any set of three is 0.16 s (streamlit,
+  installed binary) — small enough that the median is not hiding a
+  distribution, large enough on the biggest repo that reporting the best run
+  would flatter it.
 - `--no-serve`, so the number is the pipeline rather than the browser launch.
 - **Clone time is not included**: SM-1 is about analysing a repository you have,
   and cloning is network time the brief does not own. The clone SHAs are in the
   report so the measurement is reproducible.
-- **Through the packed tarball, not the worktree.** `npm pack` (which runs
-  4.1's prepack), `npm install <tarball>` into an empty directory with no pnpm
-  and no workspace, then that directory's binary. It is the `npx` path minus
-  the registry download.
+- **Through the packed tarball, not the worktree**, two ways: `npx` (the front
+  door, its resolution and startup included) and the tarball installed into an
+  empty directory (the same artefact without npx's overhead). Both come from
+  `npm pack`, which runs 4.1's prepack. The registry is the one substitution:
+  gitnebula is unpublished, so the tarball stands in for it.
 
 ```bash
 mkdir -p /tmp/cold/app
 ( cd packages/cli && npm pack --pack-destination /tmp/cold )
+
+npx -y -p /tmp/cold/gitnebula-cli-0.0.0.tgz gitnebula <repo> --no-serve -o <out>.json
+
 ( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
 /tmp/cold/app/node_modules/.bin/gitnebula <repo> --no-serve -o <out>.json
 ```
 
-### Numbers
+### Numbers — through `npx`
 
 | repo | files | LOC | commits in window | run 1 | run 2 | run 3 | **median** | budget |
 | ---- | ----- | --- | ----------------- | ----- | ----- | ----- | ---------- | ------ |
-| fastapi | 2,892 | 257,184 | 529 | 1.12 s | 1.12 s | 1.13 s | **1.12 s** | 60 s |
-| excalidraw | 930 | 245,523 | 78 | 0.93 s | 0.93 s | 0.94 s | **0.93 s** | 60 s |
-| streamlit | 2,516 | 548,971 | 644 | 2.65 s | 2.81 s | 2.79 s | **2.79 s** | 60 s |
+| fastapi | 2,892 | 257,184 | 529 | 1.85 s | 1.82 s | 1.81 s | **1.82 s** | 60 s |
+| excalidraw | 930 | 245,523 | 78 | 1.63 s | 1.69 s | 1.60 s | **1.63 s** | 60 s |
+| streamlit | 2,516 | 548,971 | 644 | 3.31 s | 3.35 s | 3.38 s | **3.35 s** | 60 s |
 
-The tightest margin is streamlit's, at **21× under budget**.
+The tightest margin is streamlit's, at **18× under budget**.
+
+The npx cache is warm: the first invocation, which unpacked and linked the
+tarball, took 2.38 s on excalidraw against a 1.63 s median afterwards, so
+**npx's one-off setup costs about 0.75 s** and its per-run overhead about the
+same again.
+
+### Numbers — the installed binary, same artefact
+
+| repo | run 1 | run 2 | run 3 | **median** | npx overhead |
+| ---- | ----- | ----- | ----- | ---------- | ------------ |
+| fastapi | 1.12 s | 1.12 s | 1.13 s | **1.12 s** | +0.70 s |
+| excalidraw | 0.93 s | 0.93 s | 0.94 s | **0.93 s** | +0.70 s |
+| streamlit | 2.65 s | 2.81 s | 2.79 s | **2.79 s** | +0.56 s |
+
+A flat ~0.6–0.7 s regardless of repository size, which is what "npx resolves and
+spawns" costs and not something the pipeline can be blamed for.
 
 ### The same runs out of the worktree, for comparison
 
@@ -153,9 +174,10 @@ marginally *smaller* compressed, because one gzip stream beats three.
 - **DPR-2 (Retina)**: the harness pins `deviceScaleFactor: 1` so runs stay
   comparable. Story 3.5 flagged the gap and it is still open; at DPR 2 the
   renderer rasterises 4× the pixels.
-- **Cold `npx` from the registry**: the package is unpublished, so the timings
-  above stop at the installed tarball. The registry download is network time and
-  is outside SM-1 by the same rule that excludes clone time; `npm install` of
-  the tarball itself took a few seconds and is not part of any budget.
+- **`npx gitnebula` by name, from the registry**: the package is unpublished
+  (`private`, `@gitnebula/cli`, 0.0.0 — story `4.5-npm-release`), so `npx` was
+  pointed at the tarball instead. Everything npx does is therefore measured
+  except the registry fetch, which is network time and outside SM-1 by the same
+  rule that excludes clone time.
 - **A 120 Hz display**: story 3.5's finding — that unfold is free at 60 Hz and
   costs real headroom at 120 — is unchanged and untested here.
