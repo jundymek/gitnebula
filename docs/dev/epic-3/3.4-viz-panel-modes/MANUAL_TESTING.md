@@ -1,11 +1,20 @@
 # Manual testing — 3.4 detail panel and view modes
 
-Every step below was executed on 2026-08-13 in Chrome, against **this
-repository's own `analysis.json`** rather than a fixture, because the
-committed fixtures all carry `remoteUrl: null` and the GitHub action (AC-3)
-cannot appear without a real remote. Observed results are recorded inline.
+Every step below was executed on 2026-08-13 in Chrome. Observed results are
+recorded inline. Ticked boxes were run; unticked boxes state why not, or what
+went wrong.
 
-Ticked boxes were run. Unticked boxes state why they were not.
+Two passes, because the branch was rebased onto story 3.3 mid-way:
+
+1. **Against this repository's own `analysis.json`**, produced by the cli —
+   the committed fixtures all carry `remoteUrl: null`, so the GitHub action
+   (AC-3) cannot appear under any of them.
+2. **Against the committed synthetic fixture** after the 3.3 rebase, to cover
+   the two steps that needed unfold and search. The cli could not be re-run
+   for this pass: the built `dist/gitnebula.js` aborts with
+   `ENOENT … dist/web-tree-sitter.wasm`, a packaging gap in the merged Python
+   deps work. Reported, not fixed here — it is another story's file, and the
+   fixture covers what this pass needed.
 
 ## Setup
 
@@ -41,10 +50,14 @@ GITNEBULA_FIXTURE=/tmp/analysis.json pnpm --filter @gitnebula/viz dev --port 300
       → this document's window is 90 days, so the row reads `churn 90d`; the
       synthetic fixture's 365-day window renders `churn 365d` in the unit
       tests.
-- [ ] A **file** node's panel (basename heading, `—` in the files row). Files
-      are only reachable once a module unfolds, which is story 3.3 and is not
-      yet on this base — `pick()` can only return a module here. Covered by
-      unit tests over file nodes; re-check after the 3.3 rebase.
+- [x] A **file** node's panel. Re-run after rebasing onto 3.3, which made
+      files selectable at all. Zoomed past 1.8× to unfold `mod-042/` on the
+      synthetic fixture and clicked `file-03.ts` → heading `file-03.ts`
+      (basename), path `mod-042/file-03.ts`, `file · infra`, files `—`, loc
+      `225`, churn 365d `94%`, authors `1`, last change `10 months ago`,
+      co-changes with `mod-042/file-16.ts 17 · mod-042/file-18.ts 3`, hot
+      badge shown, selection ring on the node. Note the co-change partners
+      are files, which is the AD-1 decision recorded in the story README.
 
 ## AC-2 — the inert description slot
 
@@ -88,14 +101,22 @@ GITNEBULA_FIXTURE=/tmp/analysis.json pnpm --filter @gitnebula/viz dev --port 300
 - [x] The mode survives panel interactions. → selected, isolated, un-isolated
       and closed the panel while in heatmap; `mode-heat` stayed pressed
       throughout.
-- [ ] The mode survives unfold/collapse. Unfold is story 3.3 and is not on
-      this base. The engine holds `mode` in a field nothing in the unfold path
-      touches, and the unit test covers persistence across every interaction
-      that exists today; re-check after the 3.3 rebase.
-- [ ] Search fly-to opens the panel. Search is story 3.3. The panel opens from
-      the `select` event regardless of what emitted it, which is the contract
-      3.3 emits on arrival; covered by a unit test that fires `select`
-      directly.
+- [x] The mode survives unfold/collapse. Re-run after the 3.3 rebase: switched
+      to heatmap, zoomed past 1.8× to unfold, zoomed back out to collapse —
+      `mode-heat` stayed `aria-pressed="true"` and the ramp stayed applied to
+      the file nodes as they appeared.
+- [ ] **Search fly-to opens the panel — NOT satisfied end-to-end on this
+      branch.** Activating a file result (Enter, ArrowDown+Enter, and a mouse
+      click on the option all tried, on a fully settled map) starts a camera
+      move that stops short of the file's 3.0× target, does not unfold the
+      module, and emits no selection — so the panel does not open. The
+      consumer half is verified working: a canvas click on the same fixture
+      opens the panel immediately, and when the module is unfolded **by hand**
+      afterwards, the pending selection lands and the panel opens on exactly
+      the searched file. So this is the producing half — 3.3's fly-to arrival
+      — not the panel. Reported to 3.3's author and to the supervisor with
+      this evidence rather than patched here: the code is merged and belongs
+      to another story's territory.
 
 ## Accessibility
 

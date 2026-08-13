@@ -147,6 +147,12 @@ export class CanvasGraphEngine implements GraphEngine {
   private dragMoved = false;
   /** Where the press started, kept apart from the per-move pan origin. */
   private pressOrigin: ScreenPoint | null = null;
+  /**
+   * The pointer that owns the current gesture. A second finger's release must
+   * not end the first finger's drag, so every pointer event is matched
+   * against this before it is allowed to change anything.
+   */
+  private pressPointerId: number | null = null;
 
   constructor(options: EngineOptions) {
     this.canvas = options.canvas;
@@ -919,6 +925,7 @@ export class CanvasGraphEngine implements GraphEngine {
     if (event.button !== 0 || event.isPrimary === false) return;
     this.dragging = true;
     this.dragMoved = false;
+    this.pressPointerId = event.pointerId;
     this.pressOrigin = { x: event.clientX, y: event.clientY };
     this.dragOrigin = { x: event.clientX, y: event.clientY };
     this.canvas.style.cursor = "grabbing";
@@ -926,10 +933,15 @@ export class CanvasGraphEngine implements GraphEngine {
   };
 
   private readonly onPointerMove = (event: PointerEvent): void => {
-    if (this.dragging && this.dragOrigin) {
+    if (
+      this.dragging &&
+      this.dragOrigin &&
+      event.pointerId === this.pressPointerId
+    ) {
       // Story 3.4's AC-4 lives in this branch: a press only becomes a drag
       // once it has travelled, and a press that never became one selects.
       if (
+        !this.dragMoved &&
         this.pressOrigin &&
         Math.hypot(
           event.clientX - this.pressOrigin.x,
@@ -938,11 +950,18 @@ export class CanvasGraphEngine implements GraphEngine {
       ) {
         this.dragMoved = true;
       }
-      this.panBy(
-        event.clientX - this.dragOrigin.x,
-        event.clientY - this.dragOrigin.y,
-      );
-      this.dragOrigin = { x: event.clientX, y: event.clientY };
+      // Nothing pans until the press has become a drag. Panning inside the
+      // slop would shift the map by a few pixels on every click, and a user
+      // who clicks a dozen nodes would watch the graph drift out from under
+      // them. Crossing the threshold pans from the press point, so the
+      // motion held back here is not lost.
+      if (this.dragMoved) {
+        this.panBy(
+          event.clientX - this.dragOrigin.x,
+          event.clientY - this.dragOrigin.y,
+        );
+        this.dragOrigin = { x: event.clientX, y: event.clientY };
+      }
       return;
     }
 
@@ -987,6 +1006,7 @@ export class CanvasGraphEngine implements GraphEngine {
    * meaning for.
    */
   private readonly onPointerUp = (event: PointerEvent): void => {
+    if (event.pointerId !== this.pressPointerId) return;
     const moved = this.endPress(event);
     if (moved || event.button !== 0 || event.isPrimary === false) return;
     const rect = this.canvas.getBoundingClientRect();
@@ -998,6 +1018,7 @@ export class CanvasGraphEngine implements GraphEngine {
   };
 
   private readonly onPointerCancel = (event: PointerEvent): void => {
+    if (event.pointerId !== this.pressPointerId) return;
     this.endPress(event);
   };
 
@@ -1009,6 +1030,7 @@ export class CanvasGraphEngine implements GraphEngine {
     this.dragMoved = false;
     this.dragOrigin = null;
     this.pressOrigin = null;
+    this.pressPointerId = null;
     this.canvas.style.cursor = "grab";
     this.canvas.releasePointerCapture?.(event.pointerId);
     return moved;

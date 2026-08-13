@@ -378,6 +378,51 @@ describe("CanvasGraphEngine — story 3.4 click selection (AC-4)", () => {
     expect(canvas.style.cursor).toBe("grab");
   });
 
+  it("does not move the camera for a press that stays within the slop", () => {
+    // A tremor must not pan: a user clicking a dozen nodes would otherwise
+    // watch the graph drift out from under them a few pixels at a time.
+    const { hit } = findPoints();
+    const before = engine.getCamera();
+
+    press(hit, { x: hit.x + CLICK_SLOP_PX - 1, y: hit.y });
+
+    expect(engine.getCamera()).toEqual(before);
+  });
+
+  it("pans from the press point once the slop is crossed", () => {
+    // The motion held back inside the slop is not lost — crossing pans by the
+    // whole distance travelled, not just the part after the threshold.
+    const before = engine.getCamera();
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: 200, clientY: 200 }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: 260, clientY: 200 }),
+    );
+    canvas.dispatchEvent(new MouseEvent("pointerup", {}));
+
+    expect(engine.getCamera().x).toBeCloseTo(before.x - 60 / before.k, 8);
+  });
+
+  it("keeps a second pointer's release from ending the first's drag", () => {
+    // A second finger lifting must not clear the gesture the first is still
+    // driving, or the remaining touch stops panning mid-drag.
+    const down = new MouseEvent("pointerdown", { clientX: 200, clientY: 200 });
+    Object.defineProperty(down, "pointerId", { value: 1 });
+    canvas.dispatchEvent(down);
+
+    const stray = new MouseEvent("pointerup", { clientX: 400, clientY: 400 });
+    Object.defineProperty(stray, "pointerId", { value: 2 });
+    canvas.dispatchEvent(stray);
+
+    // The first pointer is still dragging, so it still pans.
+    const before = engine.getCamera();
+    const move = new MouseEvent("pointermove", { clientX: 300, clientY: 200 });
+    Object.defineProperty(move, "pointerId", { value: 1 });
+    canvas.dispatchEvent(move);
+    expect(engine.getCamera().x).toBeCloseTo(before.x - 100 / before.k, 8);
+  });
+
   it("does not pan on a non-primary button either", () => {
     // Guarding only the release would let a right-click drag the map on its
     // way to the context menu.
