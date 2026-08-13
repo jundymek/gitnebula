@@ -6,7 +6,12 @@ import { EXPORT_SLOT_ID, MODE_SLOT_ID } from "./header.js";
 import { HINT_LINES } from "./hint.js";
 import { LEGEND_ENTRIES } from "./legend.js";
 import { HOT_COLOR, LAYER_COLOR, UNFOLD_ZOOM } from "../engine/index.js";
-import type { GraphEngine, GraphEngineEvent } from "../engine/index.js";
+import type {
+  GraphEngine,
+  GraphEngineEvent,
+  ViewMode,
+} from "../engine/index.js";
+import { engineNodeFrom } from "../test-support/engine-nodes.js";
 import { loadSyntheticFixture } from "../test-support/fixtures.js";
 
 function mount(overrides: Partial<{ onReplay: () => void }> = {}) {
@@ -115,43 +120,187 @@ describe("chrome — UX-DR2/9 legend and hint", () => {
   });
 });
 
+/**
+ * A recording double for the parts of the seam chrome uses. Chrome may only
+ * reach the map through this surface, so a stub of it is a faithful test of
+ * the wiring (AD-5).
+ */
+function fakeEngine() {
+  const listeners = new Map<GraphEngineEvent, (payload: never) => void>();
+  let offCalls = 0;
+  let mode: ViewMode = "structure";
+  const isolated: (string | null)[] = [];
+  const selected: (string | null)[] = [];
+  const engine = {
+    on(event: GraphEngineEvent, listener: (payload: never) => void) {
+      listeners.set(event, listener);
+      return () => {
+        offCalls++;
+      };
+    },
+    getMode: () => mode,
+    setMode(next: ViewMode) {
+      mode = next;
+      emit("mode", { mode: next });
+    },
+    setIsolated: (id: string | null) => isolated.push(id),
+    setSelected: (id: string | null) => selected.push(id),
+    // Story 3.3's unfold/collapse handlers read these back.
+    unfoldedModules: () => [],
+    nodes: [],
+  } as unknown as GraphEngine;
+
+  function emit(event: GraphEngineEvent, payload: unknown): void {
+    (listeners.get(event) as ((payload: unknown) => void) | undefined)?.(
+      payload,
+    );
+  }
+
+  return {
+    engine,
+    emit,
+    isolated,
+    selected,
+    offCalls: () => offCalls,
+    listeners,
+  };
+}
+
 describe("chrome — AD-5 wiring", () => {
   it("follows the engine's settle events and unsubscribes on teardown", () => {
-    const listeners = new Map<GraphEngineEvent, (payload: never) => void>();
-    let subscriptions = 0;
-    let offCalls = 0;
-    const engine = {
-      on(event: GraphEngineEvent, listener: (payload: never) => void) {
-        listeners.set(event, listener);
-        subscriptions++;
-        return () => {
-          offCalls++;
-        };
-      },
-      // Story 3.3's handlers read these back when unfold/collapse arrive.
-      unfoldedModules: () => [],
-      nodes: [],
-    } as unknown as GraphEngine;
-
+    const fake = fakeEngine();
     const { store } = mount();
-    const teardown = connectEngine(store, engine);
-
-    (listeners.get("settled") as (payload: unknown) => void)({
-      frames: 148,
-      durationMs: 2470,
+    const teardown = connectEngine(store, fake.engine, {
+      analysis: loadSyntheticFixture(),
     });
+
+    fake.emit("settled", { frames: 148, durationMs: 2470 });
     expect(store.getState().settling).toBe(false);
 
-    (listeners.get("settle-start") as (payload: unknown) => void)({
-      reason: "replay",
-    });
+    fake.emit("settle-start", { reason: "replay" });
     expect(store.getState().settling).toBe(true);
 
     teardown();
     // Every subscription is released — asserted as the invariant rather than
     // as a fixed count, so a story that adds a listener does not have to come
-    // back and edit this number (3.3 took it from 2 to 6).
-    expect(subscriptions).toBeGreaterThanOrEqual(2);
-    expect(offCalls).toBe(subscriptions);
+    // back and edit this number.
+    expect(fake.listeners.size).toBeGreaterThanOrEqual(2);
+    expect(fake.offCalls()).toBe(fake.listeners.size);
+  });
+});
+
+describe("chrome — panel wiring (AC-1, AC-4)", () => {
+  const analysis = loadSyntheticFixture();
+
+  function connected() {
+    const fake = fakeEngine();
+    const mounted = mount();
+    const teardown = connectEngine(mounted.store, fake.engine, {
+      analysis,
+      now: Date.parse("2026-08-13T12:00:00.000Z"),
+    });
+    const panel = mounted.root.querySelector<HTMLElement>("#panel")!;
+    return { ...mounted, ...fake, panel, teardown };
+  }
+
+  it("opens the panel on a select event, whatever fired it", () => {
+    const { panel, emit, store } = connected();
+    expect(panel.hidden).toBe(true);
+
+    // The same event a canvas click and a 3.3 search fly-to both produce.
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+
+    expect(panel.hidden).toBe(false);
+    expect(panel.querySelector(".p-name")?.textContent).toBe("mod-000/");
+    expect(store.getState().selected?.id).toBe("mod-000/");
+  });
+
+  it("closes the panel and clears isolate when selection goes to null", () => {
+    const { panel, emit, store, isolated } = connected();
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+    emit("select", { node: null });
+
+    expect(panel.hidden).toBe(true);
+    expect(store.getState().selected).toBeNull();
+    expect(store.getState().isolated).toBe(false);
+    expect(isolated.at(-1)).toBeNull();
+  });
+
+  it("toggles isolate on the open node and back off again", () => {
+    const { panel, emit, store, isolated } = connected();
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+
+    const button = panel.querySelector<HTMLButtonElement>("#p-isolate")!;
+    button.click();
+    expect(isolated.at(-1)).toBe("mod-000/");
+    expect(store.getState().isolated).toBe(true);
+    expect(button.getAttribute("aria-pressed")).toBe("true");
+
+    button.click();
+    expect(isolated.at(-1)).toBeNull();
+    expect(store.getState().isolated).toBe(false);
+    expect(button.getAttribute("aria-pressed")).toBe("false");
+  });
+
+  it("drops isolate when a different node is selected", () => {
+    const { panel, emit, isolated, store } = connected();
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+    panel.querySelector<HTMLButtonElement>("#p-isolate")!.click();
+
+    emit("select", { node: engineNodeFrom(analysis, "mod-001/") });
+
+    expect(isolated.at(-1)).toBeNull();
+    expect(store.getState().isolated).toBe(false);
+  });
+
+  it("asks the engine to clear selection and isolate when × is pressed", () => {
+    const { panel, emit, selected, isolated } = connected();
+    emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+
+    panel.querySelector<HTMLButtonElement>(".p-close")!.click();
+
+    expect(selected.at(-1)).toBeNull();
+    expect(isolated.at(-1)).toBeNull();
+    expect(panel.hidden).toBe(true);
+  });
+});
+
+describe("chrome — mode toggle wiring (AC-5)", () => {
+  const analysis = loadSyntheticFixture();
+
+  it("fills the header slot 2.5 left for it", () => {
+    const { root } = mount();
+    const slot = root.querySelector(`#${MODE_SLOT_ID}`)!;
+    expect(slot.querySelector("#mode-structure")).not.toBeNull();
+    expect(slot.querySelector("#mode-heat")).not.toBeNull();
+  });
+
+  it("drives the engine and repaints from the engine's own event", () => {
+    const fake = fakeEngine();
+    const { root, store } = mount();
+    connectEngine(store, fake.engine, { analysis });
+
+    const heat = root.querySelector<HTMLButtonElement>("#mode-heat")!;
+    heat.click();
+
+    expect(fake.engine.getMode()).toBe("heat");
+    expect(heat.getAttribute("aria-pressed")).toBe("true");
+    expect(store.getState().mode).toBe("heat");
+  });
+
+  it("keeps the mode across panel interactions", () => {
+    const fake = fakeEngine();
+    const { root, store } = mount();
+    connectEngine(store, fake.engine, { analysis });
+    root.querySelector<HTMLButtonElement>("#mode-heat")!.click();
+
+    fake.emit("select", { node: engineNodeFrom(analysis, "mod-000/") });
+    root.querySelector<HTMLButtonElement>("#p-isolate")!.click();
+    root.querySelector<HTMLButtonElement>(".p-close")!.click();
+
+    expect(store.getState().mode).toBe("heat");
+    expect(root.querySelector("#mode-heat")!.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
   });
 });

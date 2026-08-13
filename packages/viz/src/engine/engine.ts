@@ -13,6 +13,7 @@
  */
 
 import {
+  CLICK_SLOP_PX,
   FIT_DURATION_MS,
   FIT_PADDING_PX,
   FILE_LABEL_ZOOM,
@@ -142,6 +143,10 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private dragging = false;
   private dragOrigin: ScreenPoint | null = null;
+  /** True once a press has travelled far enough to be a drag (story 3.4). */
+  private dragMoved = false;
+  /** Where the press started, kept apart from the per-move pan origin. */
+  private pressOrigin: ScreenPoint | null = null;
 
   constructor(options: EngineOptions) {
     this.canvas = options.canvas;
@@ -909,6 +914,8 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private readonly onPointerDown = (event: PointerEvent): void => {
     this.dragging = true;
+    this.dragMoved = false;
+    this.pressOrigin = { x: event.clientX, y: event.clientY };
     this.dragOrigin = { x: event.clientX, y: event.clientY };
     this.canvas.style.cursor = "grabbing";
     this.canvas.setPointerCapture?.(event.pointerId);
@@ -916,6 +923,17 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private readonly onPointerMove = (event: PointerEvent): void => {
     if (this.dragging && this.dragOrigin) {
+      // Story 3.4's AC-4 lives in this branch: a press only becomes a drag
+      // once it has travelled, and a press that never became one selects.
+      if (
+        this.pressOrigin &&
+        Math.hypot(
+          event.clientX - this.pressOrigin.x,
+          event.clientY - this.pressOrigin.y,
+        ) > CLICK_SLOP_PX
+      ) {
+        this.dragMoved = true;
+      }
       this.panBy(
         event.clientX - this.dragOrigin.x,
         event.clientY - this.dragOrigin.y,
@@ -951,12 +969,30 @@ export class CanvasGraphEngine implements GraphEngine {
     return { x: event.clientX - rect.left, y: event.clientY - rect.top };
   }
 
+  /**
+   * Story 3.4's AC-4: a press that did not travel selects what is under it —
+   * a node, or nothing at all, which is how the panel closes. The mockup sets
+   * its `moved` flag on any pointermove at all, so a hand tremor eats the
+   * click; the slop threshold is the fix, and pan behaviour is untouched
+   * either way.
+   */
   private readonly onPointerUp = (event: PointerEvent): void => {
     if (!this.dragging) return;
+    const moved = this.dragMoved;
     this.dragging = false;
+    this.dragMoved = false;
     this.dragOrigin = null;
+    this.pressOrigin = null;
     this.canvas.style.cursor = "grab";
     this.canvas.releasePointerCapture?.(event.pointerId);
+
+    if (moved) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.pick({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    this.setSelected(hit?.id ?? null);
   };
 
   private readonly onWheel = (event: WheelEvent): void => {

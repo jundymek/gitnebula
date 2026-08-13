@@ -30,7 +30,7 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     onSelect: (id) => void engine?.flyTo(id),
   });
   const tooltip = createTooltip();
-  const store = mountChrome(root, result.document, {
+  const chrome = mountChrome(root, result.document, {
     stage,
     actions: { onReplay: () => engine?.replay() },
     overlays: [search.element, tooltip.element],
@@ -47,7 +47,11 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     engine.load(result.document);
     // After `load`, so the search corpus is the document's node set rather
     // than the empty one an unloaded engine reports.
-    connectEngine(store, engine, { search, tooltip });
+    connectEngine(chrome, engine, {
+      search,
+      tooltip,
+      analysis: result.document,
+    });
   } catch (cause) {
     // The loader's shape guard covers what the Viewer dereferences, but it is
     // a guard, not the schema. Anything it lets through that the engine still

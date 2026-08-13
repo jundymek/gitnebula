@@ -2,8 +2,14 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { CanvasGraphEngine } from "./engine.js";
-import { FIT_DURATION_MS, MAX_ZOOM, MIN_ZOOM } from "./constants.js";
+import {
+  CLICK_SLOP_PX,
+  FIT_DURATION_MS,
+  MAX_ZOOM,
+  MIN_ZOOM,
+} from "./constants.js";
 import { seedFor } from "./prng.js";
+import type { ScreenPoint } from "./types.js";
 import {
   installFakeCanvas,
   type FakeContext,
@@ -278,5 +284,90 @@ describe("CanvasGraphEngine — AC-7 interface completeness", () => {
     off();
     engine.setMode("structure");
     expect(seen).toEqual(["heat"]);
+  });
+});
+
+describe("CanvasGraphEngine — story 3.4 click selection (AC-4)", () => {
+  /** A screen point over a node, and one over empty space. */
+  function findPoints(): { hit: ScreenPoint; empty: ScreenPoint } {
+    let hit: ScreenPoint | null = null;
+    let empty: ScreenPoint | null = null;
+    for (let x = 20; x < 1200 && (!hit || !empty); x += 10) {
+      for (let y = 20; y < 800 && (!hit || !empty); y += 10) {
+        const point = { x, y };
+        if (engine.pick(point)) hit ??= point;
+        else empty ??= point;
+      }
+    }
+    if (!hit || !empty)
+      throw new Error("no hit/empty point on the settled map");
+    return { hit, empty };
+  }
+
+  function press(from: ScreenPoint, to: ScreenPoint = from): void {
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: from.x, clientY: from.y }),
+    );
+    if (to.x !== from.x || to.y !== from.y) {
+      canvas.dispatchEvent(
+        new MouseEvent("pointermove", { clientX: to.x, clientY: to.y }),
+      );
+    }
+    canvas.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: to.x, clientY: to.y }),
+    );
+  }
+
+  beforeEach(() => {
+    engine = create();
+    engine.load(loadSyntheticFixture());
+    run(400);
+  });
+
+  it("selects the node a click lands on", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit);
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).toBe(engine.pick(hit)?.id);
+    expect(engine.getSelected()?.id).toBe(selected[0]);
+  });
+
+  it("clears the selection when the click lands on empty canvas", () => {
+    const { hit, empty } = findPoints();
+    press(hit);
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(empty);
+
+    expect(selected).toEqual([null]);
+    expect(engine.getSelected()).toBeNull();
+  });
+
+  it("never selects when the press dragged the map", () => {
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit, { x: hit.x + 120, y: hit.y + 40 });
+
+    expect(selected).toEqual([]);
+    expect(engine.getSelected()).toBeNull();
+  });
+
+  it("still selects through a tremor smaller than the slop", () => {
+    // The mockup's any-move flag loses this click; the threshold keeps it.
+    const { hit } = findPoints();
+    const selected: (string | null)[] = [];
+    engine.on("select", (payload) => selected.push(payload.node?.id ?? null));
+
+    press(hit, { x: hit.x + CLICK_SLOP_PX - 1, y: hit.y });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0]).not.toBeNull();
   });
 });
