@@ -105,6 +105,14 @@ pnpm dlx tsx <script>.mts <analysis>.json   # calls validateAnalysis from @gitne
 
 ## Decisions worth knowing about
 
+- **The timings are taken through the packed tarball, not the worktree.** A
+  development checkout never runs `prepack`, so `packages/cli/assets/` is empty
+  and the built binary fails on any repository containing Python
+  (`ENOENT … tree-sitter-python.wasm`). Measuring around that with a hand-copied
+  `.wasm` proves the pipeline and nothing about the product, so the runs were
+  redone through `npm pack` → `npm install <tarball>` in an empty directory.
+  Packaging turned out to cost nothing at runtime — the two sets of numbers
+  agree within 0.1 s — but only one of them is reproducible by a user.
 - **Story 4.2 is out of scope for this run.** The spec makes 4.4 depend on
   `4.2-ci-pages-recipe`; the maintainer deliberately did not launch 4.2
   (GitHub Actions billing is disabled) and redirected the dependency to
@@ -128,10 +136,18 @@ pnpm dlx tsx <script>.mts <analysis>.json   # calls validateAnalysis from @gitne
 
 ## What the run found
 
-No threshold is red. The three repos analyse in 0.95–2.69 s against a 60 s
+No threshold is red. The three repos analyse in 0.93–2.79 s against a 60 s
 budget, emit 0.94–2.16 MiB against 5 MB, resolve imports at 0.00–6.34% unresolved
 against 20%, and validate at `schemaVersion 1.0`. The map holds 59 fps sustained
-on a 60 Hz display and the bundle is 3% of its size budget.
+on a 60 Hz display, the bundle is 2.8% of its size budget and issues requests to
+its own two files only.
+
+One thing the run found that was not on anyone's list: **a development checkout
+cannot analyse a Python repository with its own built binary.** That is not a
+defect in 4.1 — the packaged tarball is correct and its cold-install test proves
+it — but it is a sharp edge for a contributor who runs `pnpm build` and then the
+binary, and it is written up here because the DoD run is exactly the kind of
+exercise that finds it.
 
 Two things are *not available* rather than passing: a green CI run and the
 map-of-itself on Pages, both story 4.2's, both deferred by the maintainer. They

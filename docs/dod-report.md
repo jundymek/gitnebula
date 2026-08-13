@@ -43,12 +43,12 @@ Reproduce a row with:
 
 ```bash
 git clone https://github.com/<org>/<repo>.git && git -C <repo> checkout <sha>
-node packages/cli/dist/gitnebula.js <repo> --no-serve -o <repo>.json
-```
 
-(That second line is the exact invocation used; see the note on it below — on
-this base it needs the grammar `.wasm` present at `packages/assets/`, which is
-story 4.1's packaging step.)
+# the CLI exactly as a user gets it: packed, then installed into an empty dir
+( cd packages/cli && npm pack --pack-destination /tmp/cold )
+mkdir -p /tmp/cold/app && ( cd /tmp/cold/app && npm install ../gitnebula-cli-0.0.0.tgz )
+/tmp/cold/app/node_modules/.bin/gitnebula <repo> --no-serve -o <repo>.json
+```
 
 ## Per-repo definition of done (AC-1)
 
@@ -58,27 +58,28 @@ SM-1 is about analysing a repository you have.
 
 | repo | wall clock (≤ 60 s) | crash-free | `analysis.json` (≤ 5 MB) | unresolved imports (≤ 20%) | schema |
 | ---- | ------------------- | ---------- | ------------------------ | -------------------------- | ------ |
-| fastapi | **1.19 s** ✅ | ✅ exit 0 | **1.32 MiB** ✅ | **0.00%** ✅ | ✅ valid |
-| excalidraw | **0.95 s** ✅ | ✅ exit 0 | **0.94 MiB** ✅ | **6.34%** ✅ | ✅ valid |
-| streamlit | **2.69 s** ✅ | ✅ exit 0 | **2.16 MiB** ✅ | **3.74%** ✅ | ✅ valid |
+| fastapi | **1.12 s** ✅ | ✅ exit 0 | **1.32 MiB** ✅ | **0.00%** ✅ | ✅ valid |
+| excalidraw | **0.93 s** ✅ | ✅ exit 0 | **0.94 MiB** ✅ | **6.34%** ✅ | ✅ valid |
+| streamlit | **2.79 s** ✅ | ✅ exit 0 | **2.16 MiB** ✅ | **3.74%** ✅ | ✅ valid |
 
-**All 15 cells pass. The tightest margin is streamlit's runtime, 22× under
+**All 15 cells pass. The tightest margin is streamlit's runtime, 21× under
 budget.**
 
 ### What each column means
 
-- **How the CLI was invoked, precisely.** The measured runs are
-  `node packages/cli/dist/gitnebula.js …` — the tsup-built binary from this
-  worktree, not an installed package, and **not `npx`**. On this base the built
-  binary cannot run at all without help: it resolves the tree-sitter grammar at
-  `packages/assets/tree-sitter-python.wasm`, which nothing puts there yet — that
-  prepack step is story 4.1's AD-11 task. The runs used a local, uncommitted
-  copy of the two `.wasm` files at that path, removed afterwards. So these
-  numbers measure **the pipeline as it will ship**, and they do **not** prove
-  the cold-start path: a clean checkout cannot reproduce the command as written
-  until 4.1 lands. The cold-install proof is 4.1's own `npm pack` test (its
-  AC-4); this report treats the `npx` half of brief §10.1 as *carried by 4.1*,
-  and says so again in the M3 table.
+- **How the CLI was invoked, precisely.** These numbers come from **the
+  packed tarball installed into an empty directory** — `npm pack` (which runs
+  4.1's prepack), then `npm install <tarball>` in a scratch dir with no pnpm,
+  no workspace and no `node_modules` hoisting, then that directory's
+  `node_modules/.bin/gitnebula`. That is the `npx` path in everything but the
+  registry download, which is network time SM-1 does not own.
+  This matters because it is where the run breaks if the packaging is wrong:
+  the same binary invoked straight out of `packages/cli/dist/` **fails on both
+  Python repos** with `ENOENT … packages/cli/assets/tree-sitter-python.wasm`,
+  because a development checkout never runs `prepack` and the grammar is not
+  in place. A first pass of this report measured through that path with the
+  `.wasm` files copied in by hand; those numbers were within 0.1 s of these,
+  but they proved the pipeline rather than the product, so they were rerun.
 - **Wall clock** — the full pipeline, `--no-serve`. Per-stage
   numbers and the three raw runs are in
   [`docs/dev/epic-4/4.4-dod-validation/PERFORMANCE.md`](dev/epic-4/4.4-dod-validation/PERFORMANCE.md).
@@ -103,7 +104,7 @@ budget.**
 | modules | 6 | 17 | 11 |
 | nodes / edges | 2,898 / 1,612 | 947 / 3,424 | 2,527 / 6,364 |
 | co-change pairs | 134 | 146 | 517 |
-| commits in the 90-day window | 531 | 78 | 646 |
+| commits in the 90-day window | 529 | 78 | 644 |
 | specifiers resolved to edges | 1,608 | 3,397 | 6,361 |
 | external (stdlib, packages) | 1,885 | 585 | 6,485 |
 | outside universe | 0 | 1 | 3 |
@@ -128,6 +129,14 @@ Three details checked rather than assumed:
 - **streamlit's one unparsable file** is `e2e_playwright/compilation_error_dialog.py`,
   which streamlit keeps deliberately broken to test its own error dialog. The
   parser is right about it.
+
+One number in this table moves on its own, and it is worth knowing which:
+**`commits in the window` is the only one.** Repeating the runs six hours later
+changed fastapi from 531 to 529 and streamlit from 646 to 644 and left every
+other cell — nodes, edges, co-change pairs, resolution counts — identical to
+the byte. The window is 90 days measured back from the run, so old commits fall
+out of it while the pinned SHA stays put. Everything else in this report is a
+function of the commit, not of the clock (AD-4).
 
 ### Map exports
 
@@ -160,8 +169,9 @@ chose when it framed the graph, untouched.
 | sustained fps, headed (60 Hz) | ≥ 55 | ✅ **59 / 59** (both phases) |
 | sustained fps, headless | ≥ 55 | ✅ **119** (frozen), **82** (unfold) |
 | settle duration, headed | 2–3 s | ✅ **2.60 s** |
-| viewer bundle, gzipped | ≤ 2 MB | ✅ **59.75 kB** (3.0% of budget) |
-| bundle issues requests only to its own two files | zero external | see below |
+| viewer bundle, gzipped | ≤ 2 MB | ✅ **57.6 kB** assets / 57.5 kB whole file (2.8% of budget) |
+| bundle issues requests only to its own two files | zero external | ✅ **4 checks passed** |
+| cold install from the packed tarball | must run | ✅ 140 tests, incl. the pack e2e |
 
 ### Offline (SM-3, brief §10.4)
 
@@ -201,24 +211,38 @@ modes, search and export.
 
 ### Bundle (ADR-0004, SM-C3)
 
-Measured from `pnpm build`'s Vite output on this branch: `index.html` 0.26 kB
-gz, CSS 1.74 kB gz, JS 57.75 kB gz — **59.75 kB gzipped against a 2 MB budget**,
-a 33× margin.
+Story 4.1 is merged into this base, so `pnpm build` now emits the single
+self-contained file ADR-0004 asks for: **one `index.html`, 191,825 bytes raw**,
+with the JS and CSS inline and no other emitted asset.
 
-`gitnebula build`'s single self-contained `index.html` (ADR-0004) inlines these
-same assets, which moves bytes between files without adding any; no base64
-inlining is involved for JS or CSS, so the gzipped total does not materially
-change.
+| measurement | value | budget |
+| ----------- | ----- | ------ |
+| viewer assets, gzipped — 4.1's own size gate, printed by its test run | **57.6 kB** | 2.00 MB (2.8%) |
+| the whole `index.html`, `gzip -9` | **57.5 kB** (58,830 B) | 2 MB |
 
-<!-- 4.1-bundle-checks -->
+Two figures because they answer two questions; they agree, which is the point.
+The gate's number is the binding one — it is the assertion that fails the build
+— and the whole-file measurement is what a browser actually downloads.
 
-**The zero-external-requests re-check is pending story 4.1.** That check is
-4.1's own deliverable (its AC-3, Playwright asserting the page requests only its
-two files), and it does not exist on this branch yet. This row is re-run and
-recorded when 4.1 merges into the epic branch; until then it is *unverified*,
-not *passed*. The property it protects — AD-8, no external requests — is
-enforced today by the bundle carrying no remote URLs, but this report does not
-count design intent as a measurement.
+The zero-external-requests assertion is 4.1's `bundle-check` suite, re-run on
+this branch:
+
+```
+pnpm --filter @gitnebula/viz bundle-check     → 4 passed
+  ✓ requests its own two files and nothing else
+  ✓ carries its script and styles inline
+  ✓ draws the map it fetched
+  ✓ file:// open explains how to serve it instead of failing silently
+```
+
+That is AD-8 measured rather than asserted: the page's request pathnames are
+exactly `["/", "/analysis.json"]`.
+
+The cold-start half of the same story is `pnpm --filter @gitnebula/cli test` —
+**13 files, 140 tests passed**, including the pack e2e whose summary line reads
+`cold install: npm-installed tarball analyzed the fixture repo and served
+index.html + analysis.json`. This report's per-repo timings were taken through
+that same installed tarball.
 
 ## Red numbers and filed issues (AC-3)
 
@@ -250,9 +274,10 @@ measurement.
 
 ### Per demo repo
 
-- [ ] Map loads crash-free from `npx gitnebula` — *measured: 1.19 s / 0.95 s /
-      2.69 s, all exit 0 (SM-1 budget 60 s), through the built binary rather
-      than `npx`; the cold-install path is story 4.1's AC-4*
+- [ ] Map loads crash-free from `npx gitnebula` — *measured: 1.12 s / 0.93 s /
+      2.79 s, all exit 0 (SM-1 budget 60 s), through the tarball installed into
+      an empty directory. "Loads" — the map opening in a browser — is the half
+      that is yours; the analysis half is measured*
 - [ ] The module map is visually sensible: recognizable top-level structure, no
       absurd giant/orphan nodes, no obviously wrong layer colours (FR-9) —
       *evidence:* [fastapi](dev/epic-4/4.4-dod-validation/map-fastapi.png) ·
@@ -265,7 +290,7 @@ measurement.
       (ADR-0002) — *the emitted documents are the input; regenerate with the
       command in "Demo repos, pinned" above*
 - [ ] Hot spots point at plausibly active areas (sanity vs `git log`,
-      ADR-0003) — *window: 90 days; commits in window 531 / 78 / 646*
+      ADR-0003) — *window: 90 days; commits in window 529 / 78 / 644*
 - [ ] Unresolved-import rate recorded and ≤ 20% (FR-11) — *measured: 0.00% /
       6.34% / 3.74%; the three classes of miss are broken down above*
 
@@ -317,7 +342,7 @@ streamlit"*.
 
 | brief §10 DoD item | verdict |
 | ------------------ | ------- |
-| 1. `npx gitnebula` on a medium repo < 60 s, working map | ⚠️ **the runtime is proved, the `npx` path is not** — 1.19 / 0.95 / 2.69 s measured through the built binary; cold install from a package tarball is story 4.1's AC-4 |
+| 1. `npx gitnebula` on a medium repo < 60 s, working map | ✅ 1.12 / 0.93 / 2.79 s, measured through the packed tarball installed into an empty directory — the `npx` path minus the registry download |
 | 2. Pan/zoom smooth at 100 modules / 2,000 files | ✅ 59 fps sustained headed, floor 55 |
 | 3. The full section-5 flow works | ✅ automated across epics 2–3; the *feel* half is the owner's walk above |
 | 4. Fully offline, no API key, no configuration | ✅ under `deny network*`, byte-identical output |
@@ -332,11 +357,12 @@ story's to close:**
 
 1. **The maintainer's checklist walk** (the section above). It is prepared and
    unticked by design — it is the owner gate, and no agent may tick it.
-2. **Epic 4's other rows landing**: `4.3-repo-quality` is merged into this base
-   (PR #36) and is accounted for above; `4.1-build-bundle` still has to land,
-   and it carries two of this report's rows — the cold-install proof and the
-   zero-external-requests check. `4.2-ci-pages-recipe` is consciously deferred,
-   which leaves DoD item 6 partial. Deferring 4.2 is a maintainer decision with a known cause (Actions
+2. **Epic 4's other rows landing**: `4.1-build-bundle` (PR #37) and
+   `4.3-repo-quality` (PR #36) are both merged into this base, and every row in
+   this report that depended on them — the cold-install timings, the bundle
+   size, the zero-external-requests check, the demo GIF — is measured against
+   the merged result rather than promised. `4.2-ci-pages-recipe` is consciously
+   deferred, which leaves DoD item 6 partial. Deferring 4.2 is a maintainer decision with a known cause (Actions
    billing), so it is a *scoping* condition on M3, not a defect: if M3 is to be
    declared with CI off and no Pages, that should be said out loud in the
    milestone rather than inferred from this report.
