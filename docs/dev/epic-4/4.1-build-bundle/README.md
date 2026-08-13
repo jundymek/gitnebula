@@ -54,13 +54,20 @@ parent. `gitnebula build -o site` silently wrote to `./gitnebula-bundle`.
 `enablePositionalOptions()` fixes it; a test asserting *where the files landed*
 is what caught it.
 
-A sixth came from the Codex review of this branch, and it was the most
-dangerous of the set because it produced a plausible wrong answer rather than a
-crash: the reuse rule keyed only on mtime versus HEAD, so an output directory
-reused for a second repository published the first repository's map under the
-second's name. Reuse now checks provenance — repository identity, remote,
-window, unrecorded flags, and `.gitnebula.yml` — and re-analyzes whenever any
-of that cannot be verified.
+A sixth came from review, and it was the most dangerous of the set because it
+produced a plausible wrong answer rather than a crash: the reuse rule keyed
+only on mtime versus HEAD, so an output directory reused for a second
+repository published the first repository's map under the second's name.
+Tightening it to check repository identity, remote, window and
+`.gitnebula.yml` mtime closed that case and a second review found the next
+layer — a checkout moved to an older commit still passes a timestamp test, and
+a `.gitnebula.yml` that is deleted rather than edited leaves no mtime to
+compare.
+
+That is where the reuse path was removed rather than patched a third time. See
+"Decisions" below: the emitted document records nothing that identifies the
+analysis it came from, and the two places provenance could be written are both
+barred here. Every `gitnebula build` now runs the pipeline.
 
 ## Files
 
@@ -81,7 +88,7 @@ of that cannot be verified.
 
 | file                       | change | why                                                                          |
 | -------------------------- | ------ | ---------------------------------------------------------------------------- |
-| `src/bundle.ts`            | NEW    | output assembly, the gzip measurement, and the reuse-provenance rule          |
+| `src/bundle.ts`            | NEW    | output assembly and the gzip measurement                                     |
 | `src/bundle.test.ts`       | NEW    | AC-1 and AC-2 at the unit level                                              |
 | `src/pack.test.ts`         | NEW    | AC-4's cold install, and AC-2 against the real dist                          |
 | `src/cli.ts`               | UPDATE | the `build` subcommand, positional options, shared analysis flags            |
@@ -108,15 +115,16 @@ have to rediscover:
   performs, not this story — every spec, doc and CI step (including this
   story's own test command) names the package as it is today, and the package
   is still `"private": true`.
-- **`build` reuses an `analysis.json` only when its provenance checks out.**
-  AC-1 allows reuse without defining "fresh". The first attempt defined it as
-  "newer than HEAD" and a review caught the hole: an output directory is a
-  destination, not a cache keyed on anything, so `build -o site repo-a` then
-  `build -o site repo-b` published repo-a's map under repo-b's name. Reuse now
-  requires the document to name the same repository and remote, cover the same
-  window, be newer than both HEAD and `.gitnebula.yml`, and the invocation to
-  have passed no flag the document does not record. `--force` overrides, and
-  the verdict — including the reason a file was rejected — is always printed.
+- **`build` never reuses an existing `analysis.json`.** AC-1 permits reusing "a
+  fresh `analysis.json`" — permits, not requires — and freshness turned out to
+  be unestablishable here. The document records no commit hash, no exclusion
+  list, no threshold and no configuration fingerprint, so every check available
+  is a proxy, and two rounds of review found a hole behind each one. Writing
+  real provenance is barred both ways: into `analysis.json` is a contract
+  change (never a side effect of another story), and beside it breaks AC-1's
+  own two-file rule. The pipeline costs 0.28 s on this repository; a bundle
+  that publishes a different repository's map while reporting success costs
+  more. `--force` went with it, having nothing left to escape.
 - **The `file://` hint lives in `viz`.** The spec's Touches line scopes viz to
   "build config only", but AC-3 asks for browser-side behaviour that can only
   live in the loader. The AC wins; the divergence is flagged in the PR.

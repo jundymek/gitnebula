@@ -13,12 +13,10 @@ import { openBrowser as defaultOpenBrowser } from "./browser.js";
 import {
   DEFAULT_BUNDLE_DIR,
   assembleBundle,
-  assessReuse,
   describeViewerSize,
   measureViewer,
   missingViewerError,
   prepareBundleDir,
-  type ReuseVerdict,
 } from "./bundle.js";
 import { cloneRepository, isRemoteTarget, type Checkout } from "./clone.js";
 import { DEFAULT_WINDOW_DAYS } from "./config.js";
@@ -26,7 +24,6 @@ import { DEFAULT_OUTPUT_FILENAME } from "./emit.js";
 import { StageError, describeThrown } from "./errors.js";
 import { runPipeline, type RunPipelineOptions } from "./pipeline.js";
 import { createReporter, type Reporter } from "./progress.js";
-import { resolveRepo } from "./repo.js";
 import {
   awaitShutdown,
   missingDistError,
@@ -65,8 +62,6 @@ interface ParsedFlags {
   /** commander's `--no-*` convention: these default to true. */
   readonly serve?: boolean;
   readonly open?: boolean;
-  /** `build` only: re-analyze even when the sibling file is already fresh. */
-  readonly force?: boolean;
 }
 
 /**
@@ -167,10 +162,6 @@ export function createProgram(
       .option(
         "-o, --out <dir>",
         `directory to write the bundle into (default: ./${DEFAULT_BUNDLE_DIR})`,
-      )
-      .option(
-        "--force",
-        `re-analyze even when ${DEFAULT_OUTPUT_FILENAME} in the output directory is already current for HEAD`,
       ),
   ).action((target: string, flags: ParsedFlags) => {
     onInvoke({ kind: "build", target, flags });
@@ -249,9 +240,7 @@ export async function run(
     // minute analyzing and only then discovers it has no viewer to copy has
     // wasted the minute and told the user nothing they could not have been
     // told first.
-    const bundle = bundling
-      ? planBundle(repoTarget, cwd, flags, windowDays, options)
-      : null;
+    const bundle = bundling ? planBundle(cwd, flags, options) : null;
 
     const pipelineOptions: RunPipelineOptions = {
       target: repoTarget,
@@ -281,18 +270,7 @@ export async function run(
     };
 
     if (bundle !== null) {
-      if (bundle.reuse.reuse) {
-        reporter.notice(
-          `reusing ${bundle.analysisPath} — ${bundle.reuse.because} (pass --force to re-analyze)`,
-        );
-      } else {
-        // Why the existing file was not good enough, whenever there was one to
-        // reject: a silent re-analysis looks like the reuse rule not working.
-        if (existsSync(bundle.analysisPath)) {
-          reporter.notice(`re-analyzing — ${bundle.reuse.because}`);
-        }
-        await runPipeline(pipelineOptions);
-      }
+      await runPipeline(pipelineOptions);
       assembleBundle(bundle.vizDist, bundle.outDir);
 
       const size = measureViewer(bundle.outDir);
@@ -337,25 +315,6 @@ interface BundlePlan {
   readonly outDir: string;
   readonly analysisPath: string;
   readonly vizDist: string;
-  /** Whether the analysis stage is skipped, and the reason either way. */
-  readonly reuse: ReuseVerdict;
-}
-
-/**
- * The flags that change what the analysis produces and that the emitted
- * document does not record. Their presence makes a reuse decision
- * unverifiable, so it is not made (see `assessReuse`).
- *
- * `--window-days` is absent deliberately: the document carries
- * `repo.analysisWindowDays`, so that one *can* be compared.
- */
-function unrecordedFlags(flags: ParsedFlags): string[] {
-  const named: [string, unknown][] = [
-    ["--exclude", flags.exclude],
-    ["--hotspot-threshold", flags.hotspotThreshold],
-    ["--window-anchor", flags.windowAnchor],
-  ];
-  return named.filter(([, value]) => value !== undefined).map(([name]) => name);
 }
 
 /**
@@ -367,10 +326,8 @@ function unrecordedFlags(flags: ParsedFlags): string[] {
  * the output directory cannot be created.
  */
 function planBundle(
-  repoTarget: string,
   cwd: string,
   flags: ParsedFlags,
-  windowDays: number,
   options: RunOptions,
 ): BundlePlan {
   const vizDist = options.vizDist ?? resolveVizDist(import.meta.url);
@@ -386,32 +343,7 @@ function planBundle(
   prepareBundleDir(outDir);
   const analysisPath = join(outDir, DEFAULT_OUTPUT_FILENAME);
 
-  if (flags.force === true) {
-    return {
-      outDir,
-      analysisPath,
-      vizDist,
-      reuse: { reuse: false, because: "--force was passed" },
-    };
-  }
-
-  // The same preflight the pipeline's `repo` stage runs, and cheap; asking it
-  // here is what lets the reuse decision compare *identities* rather than
-  // timestamps.
-  const repo = resolveRepo(resolve(cwd, repoTarget));
-
-  return {
-    outDir,
-    analysisPath,
-    vizDist,
-    reuse: assessReuse({
-      analysisPath,
-      repoRoot: repo.root,
-      repo: { name: repo.name, remoteUrl: repo.remoteUrl },
-      windowDays,
-      unrecordedFlags: unrecordedFlags(flags),
-    }),
-  };
+  return { outDir, analysisPath, vizDist };
 }
 
 /**

@@ -6,7 +6,6 @@ import {
   mkdirSync,
   readFileSync,
   readdirSync,
-  utimesSync,
   writeFileSync,
 } from "node:fs";
 import { basename, join } from "node:path";
@@ -18,7 +17,6 @@ import {
   DEFAULT_BUNDLE_DIR,
   VIEWER_GZIP_BUDGET_BYTES,
   assembleBundle,
-  assessReuse,
   describeViewerSize,
   formatBytes,
   measureViewer,
@@ -138,52 +136,27 @@ describe("gitnebula build — the bundle is exactly two files (AC-1)", () => {
   });
 });
 
-describe("gitnebula build — reusing an analysis.json (AC-1)", () => {
-  /** A marker the pipeline would overwrite; surviving proves reuse happened. */
-  const MARKER = "markedByTheTest";
+describe("gitnebula build — the analysis is never reused (AC-1)", () => {
+  // AC-1 permits reusing "a fresh analysis.json". Two rounds of review showed
+  // freshness cannot be established from what the emitted document records —
+  // no commit hash, no exclusions, no threshold, no configuration
+  // fingerprint — and that writing provenance anywhere is barred here: inside
+  // the document is a contract change, beside it breaks the two-file rule. So
+  // the command analyzes every time, and this is the test that says so.
+  it("overwrites an analysis.json that is already sitting in the output", async () => {
+    const dist = fakeVizDist();
+    const first = await build([fixtureRepo], dist);
+    const outDir = join(first.cwd, DEFAULT_BUNDLE_DIR);
+    const analysisPath = join(outDir, "analysis.json");
 
-  /**
-   * Adds an extra field to a real emitted document. It has to stay valid JSON
-   * that still names its repository and window — the reuse rule reads all
-   * three, so a marker that broke any of them would make every case below look
-   * like a re-analysis for the wrong reason.
-   */
-  function mark(path: string): void {
-    const document = JSON.parse(readFileSync(path, "utf8")) as Record<
+    const marked = JSON.parse(readFileSync(analysisPath, "utf8")) as Record<
       string,
       unknown
     >;
-    document[MARKER] = true;
-    writeFileSync(path, JSON.stringify(document), "utf8");
-  }
+    marked["markedByTheTest"] = true;
+    writeFileSync(analysisPath, JSON.stringify(marked), "utf8");
 
-  it("skips the analysis for the same repository at the same HEAD", async () => {
-    const dist = fakeVizDist();
-    const first = await build([fixtureRepo], dist);
-    const outDir = join(first.cwd, DEFAULT_BUNDLE_DIR);
-    mark(join(outDir, "analysis.json"));
-
-    const chunks: string[] = [];
     const code = await run(["build", fixtureRepo, "-o", outDir], {
-      cwd: first.cwd,
-      vizDist: dist,
-      reporter: createSilentReporter(),
-      write: (chunk) => chunks.push(chunk),
-    });
-
-    expect(code).toBe(0);
-    expect(readFileSync(join(outDir, "analysis.json"), "utf8")).toContain(
-      MARKER,
-    );
-  });
-
-  it("re-analyzes under --force", async () => {
-    const dist = fakeVizDist();
-    const first = await build([fixtureRepo], dist);
-    const outDir = join(first.cwd, DEFAULT_BUNDLE_DIR);
-    mark(join(outDir, "analysis.json"));
-
-    const code = await run(["build", fixtureRepo, "-o", outDir, "--force"], {
       cwd: first.cwd,
       vizDist: dist,
       reporter: createSilentReporter(),
@@ -191,15 +164,13 @@ describe("gitnebula build — reusing an analysis.json (AC-1)", () => {
     });
 
     expect(code).toBe(0);
-    expect(readFileSync(join(outDir, "analysis.json"), "utf8")).not.toContain(
-      MARKER,
-    );
+    expect(readFileSync(analysisPath, "utf8")).not.toContain("markedByTheTest");
   });
 
-  // The failure a review of this branch caught before it shipped: an output
-  // directory is a destination, not a cache, and a newer-than-HEAD test alone
-  // will happily publish one repository's map under another's name.
-  it("re-analyzes when the output directory holds another repository's map", async () => {
+  // The failure this replaced: an output directory is a destination, not a
+  // cache keyed on anything, so a reuse rule keyed on age published one
+  // repository's map under another's name.
+  it("describes the repository it was pointed at, whatever was there before", async () => {
     const dist = fakeVizDist();
     const first = await build([fixtureRepo], dist);
     const outDir = join(first.cwd, DEFAULT_BUNDLE_DIR);
@@ -225,141 +196,27 @@ describe("gitnebula build — reusing an analysis.json (AC-1)", () => {
     ) as { repo: { name: string } };
     expect(document.repo.name).toBe(basename(other));
   });
-});
 
-describe("assessReuse — provenance, not age", () => {
-  /** The question `build` asks about the fixture repository. */
-  function question(analysisPath: string, overrides = {}) {
-    return {
-      analysisPath,
-      repoRoot: fixtureRepo,
-      repo: { name: "history-repo", remoteUrl: null },
-      windowDays: FIXTURE_WINDOW_DAYS,
-      unrecordedFlags: [],
-      ...overrides,
-    };
-  }
+  it("honours a --window-days that differs from the previous run", async () => {
+    const dist = fakeVizDist();
+    const first = await build([fixtureRepo], dist);
+    const outDir = join(first.cwd, DEFAULT_BUNDLE_DIR);
 
-  /** A document that would legitimately be reusable. */
-  function reusableDocument(): string {
-    const path = join(makeTempDir(temps, "gitnebula-out-"), "analysis.json");
-    writeFileSync(
-      path,
-      JSON.stringify({
-        schemaVersion: "1.0",
-        repo: {
-          name: "history-repo",
-          remoteUrl: null,
-          analysisWindowDays: FIXTURE_WINDOW_DAYS,
-        },
-      }),
-      "utf8",
+    const code = await run(
+      ["build", fixtureRepo, "-o", outDir, "--window-days", "30"],
+      {
+        cwd: first.cwd,
+        vizDist: dist,
+        reporter: createSilentReporter(),
+        write: () => {},
+      },
     );
-    return path;
-  }
 
-  it("reuses a document that matches the repository, window and HEAD", () => {
-    // The fixture repository's commits are pinned in the past (AD-14), so a
-    // file written now is newer than its HEAD.
-    const verdict = assessReuse(question(reusableDocument()));
-    expect(verdict.reuse).toBe(true);
-    expect(verdict.because).toContain("this repository");
-  });
-
-  it("refuses when there is no file", () => {
-    const dir = makeTempDir(temps, "gitnebula-out-");
-    const verdict = assessReuse(question(join(dir, "analysis.json")));
-    expect(verdict).toEqual({
-      reuse: false,
-      because: "no analysis.json is there yet",
-    });
-  });
-
-  it("refuses a document describing a different repository", () => {
-    const verdict = assessReuse(
-      question(reusableDocument(), {
-        repo: { name: "something-else", remoteUrl: null },
-      }),
-    );
-    expect(verdict.reuse).toBe(false);
-    expect(verdict.because).toContain("history-repo");
-  });
-
-  it("refuses a document made from a different remote", () => {
-    const verdict = assessReuse(
-      question(reusableDocument(), {
-        repo: { name: "history-repo", remoteUrl: "git@example.com:a/b.git" },
-      }),
-    );
-    expect(verdict.reuse).toBe(false);
-    expect(verdict.because).toContain("different remote");
-  });
-
-  it("refuses a document analyzed over a different window", () => {
-    const verdict = assessReuse(
-      question(reusableDocument(), { windowDays: 30 }),
-    );
-    expect(verdict.reuse).toBe(false);
-    expect(verdict.because).toContain("not 30");
-  });
-
-  // The document records neither exclusions nor the threshold, so a run that
-  // passes them cannot be compared against it — and what cannot be compared is
-  // not evidence.
-  it("refuses when a flag the document does not record was passed", () => {
-    const verdict = assessReuse(
-      question(reusableDocument(), {
-        unrecordedFlags: ["--exclude", "--hotspot-threshold"],
-      }),
-    );
-    expect(verdict.reuse).toBe(false);
-    expect(verdict.because).toContain("--exclude, --hotspot-threshold");
-  });
-
-  it("refuses an unreadable document", () => {
-    const path = join(makeTempDir(temps, "gitnebula-out-"), "analysis.json");
-    writeFileSync(path, "{ not json", "utf8");
-    expect(assessReuse(question(path)).because).toContain("unreadable");
-  });
-
-  it("refuses a document older than HEAD", () => {
-    const repo = makeTempDir(temps, "gitnebula-repo-");
-    git(repo, "init", "-q");
-    git(repo, "config", "user.email", "t@example.com");
-    git(repo, "config", "user.name", "T");
-    writeFileSync(join(repo, "a.txt"), "a", "utf8");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-qm", "first");
-
-    const path = reusableDocument();
-    const longAgo = new Date("2000-01-01T00:00:00Z");
-    utimesSync(path, longAgo, longAgo);
-
-    expect(assessReuse(question(path, { repoRoot: repo })).because).toBe(
-      "it predates HEAD",
-    );
-  });
-
-  it("refuses a document older than .gitnebula.yml", () => {
-    // A config change alters the analysis without touching a commit, so HEAD
-    // alone cannot see it.
-    const repo = makeTempDir(temps, "gitnebula-repo-");
-    git(repo, "init", "-q");
-    git(repo, "config", "user.email", "t@example.com");
-    git(repo, "config", "user.name", "T");
-    writeFileSync(join(repo, "a.txt"), "a", "utf8");
-    git(repo, "add", "-A");
-    git(repo, "commit", "-qm", "first");
-
-    const path = reusableDocument();
-    const config = join(repo, ".gitnebula.yml");
-    writeFileSync(config, "exclude:\n  - vendor/**\n", "utf8");
-    const later = new Date(Date.now() + 60_000);
-    utimesSync(config, later, later);
-
-    expect(assessReuse(question(path, { repoRoot: repo })).because).toContain(
-      ".gitnebula.yml",
-    );
+    expect(code).toBe(0);
+    const document = JSON.parse(
+      readFileSync(join(outDir, "analysis.json"), "utf8"),
+    ) as { repo: { analysisWindowDays: number } };
+    expect(document.repo.analysisWindowDays).toBe(30);
   });
 });
 

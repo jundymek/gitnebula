@@ -11,18 +11,26 @@
 // The Viewer is not built here. AC-5 keeps `pnpm build` as the only build
 // entry; this module copies what that produced and refuses, by name, when it
 // has not.
-import { execFileSync } from "node:child_process";
-import {
-  cpSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-} from "node:fs";
+//
+// The analysis is always re-run, never reused. AC-1 permits reusing "a fresh
+// analysis.json", and two rounds of review on this branch showed that
+// freshness cannot be established here: the emitted document records no commit
+// hash, no exclusion list, no threshold and no configuration fingerprint, so
+// every available signal is a proxy. mtime-versus-HEAD accepts a document from
+// a different repository; adding repository identity still accepts a checkout
+// moved to an older commit, or a `.gitnebula.yml` that was deleted rather than
+// edited. Each patch left a smaller hole, none closed it.
+//
+// Closing it needs provenance written somewhere, and both places are barred:
+// inside `analysis.json` is a contract change, which is never a side effect of
+// another story, and a sidecar file breaks AC-1's "exactly two files". So the
+// honest implementation is the one that cannot be wrong — analyze every time.
+// The pipeline costs 0.28 s on this repository; publishing a map of the wrong
+// repository costs a reader's trust in every map after it.
+import { cpSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 
-import { CONFIG_FILENAME } from "./config.js";
 import { DEFAULT_OUTPUT_FILENAME } from "./emit.js";
 import { StageError } from "./errors.js";
 
@@ -99,158 +107,6 @@ export function formatBytes(bytes: number): string {
 /** The one line AC-2 asks CI to print. */
 export function describeViewerSize(size: ViewerSize): string {
   return `viewer assets: ${formatBytes(size.gzipped)} gzipped of ${formatBytes(size.budget)} budget (${((size.gzipped / size.budget) * 100).toFixed(1)}%)`;
-}
-
-export interface ReuseQuestion {
-  /** The candidate file: `analysis.json` in the output directory. */
-  readonly analysisPath: string;
-  /** Working-tree root of the repository this run was asked about. */
-  readonly repoRoot: string;
-  /** Identity of that repository, as `resolveRepo` reports it. */
-  readonly repo: { readonly name: string; readonly remoteUrl: string | null };
-  /** The window this run would analyze. */
-  readonly windowDays: number;
-  /**
-   * Names of analysis-shaping flags this invocation passed. The document
-   * records none of them, so their presence makes reuse unverifiable.
-   */
-  readonly unrecordedFlags: readonly string[];
-}
-
-export interface ReuseVerdict {
-  readonly reuse: boolean;
-  /** One clause, printed either way, so the decision is never silent. */
-  readonly because: string;
-}
-
-/**
- * May the `analysis.json` already sitting in the output directory stand in for
- * this run?
- *
- * The tempting answer is "if it is newer than HEAD" — and that answer is
- * wrong, which a review of this branch caught before it shipped. An output
- * directory is a *destination*, not a cache keyed by anything: run
- * `build -o site repo-a` and then `build -o site repo-b` and the mtime test
- * happily publishes repo-a's map under repo-b's name. The same hole swallows
- * a changed `--window-days`, a new exclusion, a different threshold.
- *
- * So the question is provenance, not age, and the honest default is to
- * re-analyze. Reuse requires every one of:
- *
- *   - the file parses, and names the same repository (name and remote URL);
- *   - it was analyzed over the same window;
- *   - this invocation passed no flag the document does not record — an
- *     unrecorded flag cannot be compared, and what cannot be compared is not
- *     evidence;
- *   - it is newer than HEAD, and newer than `.gitnebula.yml`.
- *
- * Uncommitted working-tree edits are still deliberately not considered: a file
- * the user has not committed is not in the map's history, and making the
- * answer depend on dirty state would make it unstable. `--force` overrides
- * everything, and the verdict is printed either way.
- */
-export function assessReuse(question: ReuseQuestion): ReuseVerdict {
-  let writtenAt: number;
-  try {
-    writtenAt = statSync(question.analysisPath).mtimeMs;
-  } catch {
-    return { reuse: false, because: "no analysis.json is there yet" };
-  }
-
-  if (question.unrecordedFlags.length > 0) {
-    return {
-      reuse: false,
-      because: `${question.unrecordedFlags.join(", ")} would change the analysis and the existing document does not record ${question.unrecordedFlags.length === 1 ? "it" : "them"}`,
-    };
-  }
-
-  let document: {
-    repo?: {
-      name?: unknown;
-      remoteUrl?: unknown;
-      analysisWindowDays?: unknown;
-    };
-  };
-  try {
-    document = JSON.parse(
-      readFileSync(question.analysisPath, "utf8"),
-    ) as typeof document;
-  } catch {
-    return {
-      reuse: false,
-      because: "the existing analysis.json is unreadable",
-    };
-  }
-
-  const repo = document.repo ?? {};
-  if (repo.name !== question.repo.name) {
-    return {
-      reuse: false,
-      because: `the existing analysis.json describes ${describeName(repo.name)}, not ${question.repo.name}`,
-    };
-  }
-  // `null` and a missing remote are the same fact; anything else must match
-  // exactly, or two repositories sharing a directory name would be conflated.
-  if ((repo.remoteUrl ?? null) !== question.repo.remoteUrl) {
-    return {
-      reuse: false,
-      because: "the existing analysis.json was made from a different remote",
-    };
-  }
-  if (repo.analysisWindowDays !== question.windowDays) {
-    return {
-      reuse: false,
-      because: `the existing analysis.json covers ${String(repo.analysisWindowDays)} days, not ${question.windowDays}`,
-    };
-  }
-
-  const committedAt = headCommittedAt(question.repoRoot);
-  if (committedAt === null) {
-    return { reuse: false, because: "HEAD has no commit to compare against" };
-  }
-  if (writtenAt < committedAt) {
-    return { reuse: false, because: "it predates HEAD" };
-  }
-
-  const configuredAt = modifiedAt(join(question.repoRoot, CONFIG_FILENAME));
-  if (configuredAt !== null && writtenAt < configuredAt) {
-    return { reuse: false, because: `it predates ${CONFIG_FILENAME}` };
-  }
-
-  return {
-    reuse: true,
-    because: "it describes this repository at HEAD, over the same window",
-  };
-}
-
-function describeName(name: unknown): string {
-  return typeof name === "string" && name.length > 0
-    ? name
-    : "no named repository";
-}
-
-/** A file's mtime in ms, or null when it is not there. */
-function modifiedAt(path: string): number | null {
-  try {
-    return statSync(path).mtimeMs;
-  } catch {
-    return null;
-  }
-}
-
-/** HEAD's commit instant in ms, or null for a repository with no commits. */
-function headCommittedAt(repoRoot: string): number | null {
-  try {
-    const raw = execFileSync("git", ["log", "-1", "--format=%cI"], {
-      cwd: repoRoot,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    }).trim();
-    const parsed = Date.parse(raw);
-    return Number.isNaN(parsed) ? null : parsed;
-  } catch {
-    return null;
-  }
 }
 
 /**
