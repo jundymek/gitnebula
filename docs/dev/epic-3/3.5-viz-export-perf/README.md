@@ -89,10 +89,13 @@ checked. Playwright's `test.use({ reducedMotion })` did not reach `matchMedia`
 in the page on this version: the audit ran green against an unemulated browser,
 which is exactly the failure AC-5 exists to catch.
 
-**Search fly-to is not audited on this branch.** `flyTo` belongs to story 3.3
-and still throws its `notYet` error here, so the test probes for it, records an
-annotation naming 3.3, and skips with that reason rather than asserting
-nothing. It becomes live the moment 3.3 merges — no edit needed.
+**Search fly-to is audited, as of 3.3 merging.** The test was written to probe
+for `flyTo` and skip with a recorded reason while story 3.3 still owed it. 3.3
+merged into the epic branch during this story, the probe found a real
+implementation, and the assertion went live with no edit: under reduced motion
+the camera is at its destination one frame after `flyTo` is called, rather than
+easing into place. All three legs of AC-5 are now asserted, and the suite runs
+8 passed / 0 skipped.
 
 ## CI: the decision, with the numbers behind it (AC-4)
 
@@ -111,17 +114,24 @@ automatic workflow in the repo, which is not this story's decision to make.
 not the renderer, and a hard threshold would fail for reasons unrelated to the
 code under review.
 
-**The variance numbers this rests on.** Locally the harness is extremely
-stable — three consecutive headless runs produced *identical* sustained fps
-(119 / 119 / 119), identical medians, and ≤ 0.1 ms spread at p95 and worst
-frame. So the instability that would justify a non-blocking job is not in the
-harness; it is in the environment. That is the honest statement, and it is why
-the job is manual rather than merely tolerant: a threshold that is meaningful
-locally and meaningless on a hosted runner should not be dressed up as a gate.
+**The variance numbers this rests on.** Three consecutive headless runs, with
+unfold merged: phase `b` produced *identical* sustained fps (119 / 119 / 119)
+with ≤ 0.1 ms spread at p95 and worst frame; phase `c`, where unfold actually
+runs, produced 81 / 85 / 82 sustained — a 4 fps spread, all of it well clear of
+the 55 floor, arising from which frame a batch of modules happens to enter the
+viewport on. The headed configuration reads 59 sustained in both phases across
+runs.
+
+So the harness itself is stable to within a few frames per second; the
+instability that would justify a non-blocking job is in the environment, not
+the measurement. That is the honest statement, and it is why the job is manual
+rather than merely tolerant: a threshold that is meaningful locally and
+meaningless on a software-rasterised hosted runner should not be dressed up as
+a gate.
 
 The headed configuration reads 59 sustained fps against the same script — the
-vsync ceiling of a 60 Hz display, and the number a person actually sees. Both
-clear the 55 floor.
+vsync ceiling of a 60 Hz display, and the number a person actually sees. Every
+configuration clears the 55 floor.
 
 **Revisit in story 4.2** with a runner-calibrated floor, or keep the job manual
 and treat `PERFORMANCE.md` as the record.
@@ -163,16 +173,24 @@ and treat `PERFORMANCE.md` as the record.
 
 ## A note for the cohort
 
-`buildScene` is **pamela's** method (story 3.3). It is written here only
-because this story has no blocking dependency and the export needed a scene
-before her PR could land. The resolution rule, agreed with her in writing and
-deliberately order-independent: on any conflict take **pamela's `buildScene`
-body** and **rambo's `exportPNG` body**, whoever is rebasing onto whom. Her
+`buildScene` is **pamela's** method (story 3.3), and the rule agreed with her
+in writing was applied for real: her PR #24 merged into the epic branch while
+this story was in flight, and the rebase kept **her `buildScene` body** and
+**this story's `exportPNG` body**, exactly as both PR bodies said it would. Her
 version is a superset — member file nodes, `member: true` edges, the search
-pulse target — and resolving by "take the epic branch's side" would silently
-drop unfold from the render path in a way that still compiles and still type
-checks.
+pulse target — so resolving the other way, or by "take the epic branch's side"
+without reading it, would have silently dropped unfold from the render path in
+a way that still compiles and still type checks.
 
-The export inherits all of it for free: it re-renders the scene, so unfolded
-members appear in exported PNGs the moment her work merges, with no change
-here.
+Two consequences of that merge landed here with no code change:
+
+- **The export inherits unfold for free.** It re-renders the scene, so exported
+  PNGs now include unfolded member nodes, member edges and the search-arrival
+  pulse without a line changing in `export.ts`.
+- **The perf numbers moved, and were re-measured.** See PERFORMANCE.md — phase
+  `c` fell from 119 to 81–85 sustained fps headless, and is unchanged at 59 on
+  a 60 Hz display.
+
+`notYet()` — story 2.5's helper for members that were declared but unowned —
+was removed in the same rebase. `flyTo` and `exportPNG` were its last two
+callers, so it had none left.

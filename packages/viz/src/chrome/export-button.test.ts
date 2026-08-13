@@ -14,6 +14,11 @@ function store(repoName = "gitnebula") {
     modules: 2,
     languages: {},
     settling: false,
+    // Story 3.3's slice. The export button reads only `repoName`, but the
+    // state is one object and the type is the contract for all of it.
+    hoveredId: null,
+    selectedId: null,
+    unfolded: 0,
   });
 }
 

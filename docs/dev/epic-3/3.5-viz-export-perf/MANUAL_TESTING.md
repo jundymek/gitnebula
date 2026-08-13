@@ -6,7 +6,8 @@ carry the reason they could not be executed here.
 
 **Environment.** Apple M4 Pro, macOS 26.5.2, Node 22.20.0, pnpm 10.34.5,
 Playwright 1.62.1 / Chromium 151.0.7922.34. Branch rebased onto
-`epic/3-deps-python` at `6f3b170` (alice's #21).
+`epic/3-deps-python` **after story 3.3 (PR #24) merged**, so everything below
+was executed against a tree that has viewport-scoped unfold in it.
 
 Start the Viewer for the interactive steps:
 
@@ -16,15 +17,18 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
 
 ## Automated suites
 
-- [x] `pnpm --filter @gitnebula/viz test` — **22 files, 195 tests, all passing.**
+- [x] `pnpm --filter @gitnebula/viz test` — **27 files, 292 tests, all passing**
+      (the count grew with 3.3's suite, which arrived in the same rebase).
 - [x] `pnpm --filter @gitnebula/viz typecheck` — clean.
 - [x] `pnpm lint` — ESLint and Prettier clean across the workspace.
-- [x] `pnpm --filter @gitnebula/viz perf` — **7 passed, 1 skipped** (the skip is
-      the fly-to leg of AC-5; see below). Run report printed and written to
-      `packages/viz/perf/report/`.
+- [x] `pnpm --filter @gitnebula/viz perf` — **8 passed, 0 skipped.** The fly-to
+      leg of AC-5 was skipped-with-reason until 3.3 merged; it now runs and
+      passes. Run report printed and written to `packages/viz/perf/report/`.
 - [x] `PERF_HEADED=1 pnpm --filter @gitnebula/viz perf` — passes against a real
-      display; 59 sustained fps in both phases. Numbers in
+      display; 59 sustained fps in both phases, unchanged by unfold. Numbers in
       [PERFORMANCE.md](PERFORMANCE.md).
+- [x] `pnpm --filter @gitnebula/viz typecheck` and `pnpm build` re-run after the
+      3.3 rebase — clean.
 
 ## Export (FR-22, AC-1, AC-2)
 
@@ -58,10 +62,16 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
 - [x] The run declares itself valid before reporting numbers — fixture is the
       2,100-node yardstick, page never hidden, layout reached Settled.
 - [x] The run counts renders as well as frames: 1231 renders / 1200 measured
-      frames (phase b), 1832 / 1800 (phase c). A renderer that had stopped
-      drawing would show a healthy fps and a render count near zero.
-- [x] Three consecutive headless runs for variance — identical sustained fps
-      (119 / 119 / 119), ≤ 0.1 ms spread at p95 and worst frame.
+      frames (phase b), 1772–1782 / 1740–1750 (phase c). A renderer that had
+      stopped drawing would show a healthy fps and a render count near zero.
+- [x] Three consecutive headless runs for variance, **post-unfold** — phase b
+      identical (119 / 119 / 119), phase c 81 / 85 / 82, all clear of the 55
+      floor.
+- [x] Re-measured after story 3.3 merged, rather than quoting the pre-unfold
+      figures. Phase c fell from 119 to 81–85 sustained headless and is
+      unchanged at 59 headed; phase b, which never crosses `UNFOLD_ZOOM`, did
+      not move — which is the control that says the difference is unfold and
+      not noise.
 - [x] The readable report is written to `packages/viz/perf/report/` and printed
       to the console at the end of the run.
 - [ ] **The CI job actually running on GitHub.** Not executed: this repository's
@@ -84,11 +94,11 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
       `test.use({ reducedMotion })` was found not to reach `matchMedia` on this
       version. Without that assertion the audit would have run green against an
       unemulated browser.
-- [ ] **Search fly-to is instant.** Not audited: `flyTo` is story 3.3's and
-      still throws its `notYet` error on this branch. The test probes for it,
-      records an annotation naming 3.3, and skips with that reason. It becomes
-      live with no edit once 3.3 merges into the epic branch — re-run
-      `pnpm --filter @gitnebula/viz perf` then.
+- [x] **Search fly-to is instant.** Audited for real now that 3.3 has merged:
+      one frame after `flyTo` is called under reduced motion the camera is
+      already at its destination, rather than easing into place. The test
+      needed no edit — it was written to probe, and the probe now finds an
+      implementation.
 - [ ] **Screen-reader and keyboard review of the export control.** Not
       executed: no assistive technology in this environment. The button is a
       real `<button>` with a `title`, focusable and activatable by keyboard,
@@ -96,7 +106,10 @@ pnpm --filter @gitnebula/viz dev      # serves the 2,000-node fixture at /analys
 
 ## Summary
 
-Ran 17 of 22 checks. The five left for a human are: the by-hand button click
-and OS download, the CI job on GitHub, the fly-to leg of the audit (blocked on
-story 3.3, by design), and a screen-reader pass — none of which can be
-executed headlessly in this worktree, and each stated above with its reason.
+Ran 20 of 23 checks. The three left for a human are the by-hand button click
+with an OS-level download, the CI job actually running on GitHub, and a
+screen-reader pass — none of which can be executed headlessly in this worktree,
+and each stated above with its reason.
+
+Everything was re-run after story 3.3 merged into the epic branch, so no result
+above describes a pre-unfold tree.
