@@ -74,7 +74,13 @@ when it lands, each document loses one line. No packaging was changed here.
   `packages/cli/dist/gitnebula.js` deliberately, and so do the Epic 4
   retrospective and 4.1's record. The escape hatch for a genuine instruction is
   an inline `<!-- stale-path-ok: <path> — reason -->` marker, never a file-wide
-  exclusion.
+  exclusion: it covers its own line and the line after it, so a command that
+  drifts into the same document later is still caught.
+- **The build lock reclaims orphans.** The holder writes its pid into the lock
+  directory; a waiting caller that finds the holder gone removes the lock and
+  proceeds. Without that, one killed vitest worker would block every later test
+  run until somebody deleted the directory by hand. Codex review raised both
+  this and the exemption's original document-wide scope; both are fixed.
 - `docs/dod-report.md` is in scope and passes: its one reference is the
   directory `packages/cli/dist/`, which exists after a build.
 

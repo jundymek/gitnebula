@@ -7,6 +7,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -51,6 +52,7 @@ const buildLock = join(
   ".cache",
   "gitnebula-build.lock",
 );
+const lockOwner = join(buildLock, "pid");
 const buildStamp = join(
   workspaceRoot,
   "node_modules",
@@ -95,10 +97,15 @@ export function buildWorkspace(): void {
       if (Date.now() > deadline) {
         throw new Error("timed out waiting for the workspace build lock");
       }
+      // A worker killed mid-build leaves the directory behind, and a lock
+      // nobody holds would block every later run until someone deleted it by
+      // hand. The holder writes its pid, so an orphan is recognisable.
+      reclaimIfAbandoned();
       sleep(250);
       continue;
     }
     try {
+      writeFileSync(lockOwner, String(process.pid));
       if (builtSince(requestedAt)) return;
       execFileSync("pnpm", ["build"], { cwd: workspaceRoot, stdio: "ignore" });
       writeFileSync(buildStamp, String(Date.now()));
@@ -106,6 +113,35 @@ export function buildWorkspace(): void {
       rmSync(buildLock, { recursive: true, force: true });
     }
     return;
+  }
+}
+
+/**
+ * Removes the lock if its holder is gone — either it never got as far as
+ * writing its pid, or that process no longer exists. A live holder is left
+ * alone, so this is safe to call from every waiting caller.
+ */
+function reclaimIfAbandoned(): void {
+  let pid: number;
+  try {
+    pid = Number(readFileSync(lockOwner, "utf8"));
+  } catch {
+    // No owner file yet. It appears immediately after the directory, so if it
+    // is still missing a moment later the holder died between the two writes.
+    // A lock that vanished in the meantime is not ours to worry about.
+    try {
+      if (Date.now() - statSync(buildLock).mtimeMs > 5_000) {
+        rmSync(buildLock, { recursive: true, force: true });
+      }
+    } catch {
+      /* the holder released it while we looked */
+    }
+    return;
+  }
+  try {
+    process.kill(pid, 0);
+  } catch {
+    rmSync(buildLock, { recursive: true, force: true });
   }
 }
 

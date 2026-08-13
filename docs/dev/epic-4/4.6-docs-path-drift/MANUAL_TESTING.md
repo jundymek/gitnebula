@@ -81,8 +81,15 @@ Walked on 2026-08-13, macOS 15 (darwin 25.5.0), Node 20, pnpm 10.34.5, from
 - [x] Green after the fix, and green under the full `pnpm test`.
 - [x] It really builds: deleting `packages/cli/dist`, `packages/viz/dist` and
       the build stamp, then running the suite alone, recreated both.
+- [x] The exemption marker is per-occurrence, not per-document: a scratch edit
+      adding a guarded reference plus a second, unguarded one to
+      `docs/recording-demo.md` failed on exactly the second
+      (`docs/recording-demo.md:96 → packages/cli/dist/ghost.js`). Edit reverted.
+- [x] Orphaned lock recovery: a lock directory owned by a dead pid, planted by
+      hand with the build stamp deleted, was reclaimed — suite green in 1.55s
+      rather than stalling on the five-minute timeout.
 
-**Outcome: 17 of 21 steps executed, all passing.** The four left unchecked are
+**Outcome: 19 of 23 steps executed, all passing.** The four left unchecked are
 `npx gitnebula` (unpublished until 4.5), the browser rendering of a hosted
 bundle, and the two demo-recording steps that would overwrite a committed
 asset — each with its reason above.

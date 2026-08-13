@@ -39,12 +39,15 @@ const DIST_REFERENCE = /packages\/[A-Za-z0-9._-]+\/dist(?:\/[A-Za-z0-9._-]+)*/g;
 /**
  * The escape hatch, for the day a genuine instruction has to name a path that
  * is not there — quoting the error a reader will hit, say. It is inline and
- * per-path on purpose:
+ * per-occurrence on purpose:
  *
  *     <!-- stale-path-ok: packages/cli/dist/old.js — quoted in the error below -->
+ *     …the line the marker guards…
  *
- * Widening the exclusion to a whole file instead would switch the check off
- * for every future line of that file, which is how these checks die.
+ * A marker covers its own line and the line after it, and nothing else. Making
+ * it cover a whole document would switch the check off for every future line
+ * of that document — including a runnable command that drifts in later — which
+ * is how these checks die.
  */
 const EXEMPTION = /<!--\s*stale-path-ok:\s*(\S+)/g;
 
@@ -55,15 +58,22 @@ interface Reference {
 }
 
 function referencesIn(document: string): Reference[] {
-  const text = readFileSync(join(workspaceRoot, document), "utf8");
+  const lines = readFileSync(join(workspaceRoot, document), "utf8").split("\n");
+
+  /** `"<line index>\0<path>"` for every occurrence a marker covers. */
   const exempt = new Set(
-    [...text.matchAll(EXEMPTION)].map((match) => match[1] as string),
+    lines.flatMap((line, index) =>
+      [...line.matchAll(EXEMPTION)].flatMap((match) => [
+        `${index}\0${match[1] as string}`,
+        `${index + 1}\0${match[1] as string}`,
+      ]),
+    ),
   );
 
-  return text.split("\n").flatMap((line, index) =>
+  return lines.flatMap((line, index) =>
     [...line.matchAll(DIST_REFERENCE)]
       .map((match) => match[0])
-      .filter((path) => !exempt.has(path))
+      .filter((path) => !exempt.has(`${index}\0${path}`))
       .map((path) => ({ document, line: index + 1, path })),
   );
 }
