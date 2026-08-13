@@ -308,6 +308,21 @@ describe("chrome — mode toggle wiring (AC-5)", () => {
     expect(store.getState().mode).toBe("heat");
   });
 
+  it("takes its starting mode from the engine, in both halves of the mirror", () => {
+    const fake = fakeEngine();
+    fake.engine.setMode("heat");
+    const { root, store } = mount();
+
+    connectEngine(store, fake.engine, { analysis });
+
+    // The store is the half a subscriber reads; the toggle is the half the
+    // user sees. Initialising only one of them is the bug this covers.
+    expect(store.getState().mode).toBe("heat");
+    expect(root.querySelector("#mode-heat")!.getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
   it("keeps the mode across panel interactions", () => {
     const fake = fakeEngine();
     const { root, store } = mount();

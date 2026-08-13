@@ -208,7 +208,11 @@ export function connectEngine(
     }),
   ];
   options.search?.setNodes(engine.nodes);
-  handle.modeToggle.setMode(engine.getMode());
+  // Both halves of the mirror, not just the visible one: a subscriber reading
+  // `state.mode` before the first `mode` event must see the engine's answer.
+  const mode = engine.getMode();
+  handle.setState({ mode });
+  handle.modeToggle.setMode(mode);
   // The PNG button (3.5) is mounted here rather than in `mountChrome` because
   // this is where the engine handle exists — the header only reserves the slot.
   document
