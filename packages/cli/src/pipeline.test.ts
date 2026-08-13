@@ -3,7 +3,7 @@ import { join } from "node:path";
 
 import type { AnalysisDocument } from "@gitnebula/contract";
 import { validateAnalysis } from "@gitnebula/contract";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { CONFIG_FILENAME, LLM_IGNORED_NOTICE } from "./config.js";
 import { DEFAULT_OUTPUT_FILENAME, serialize } from "./emit.js";
@@ -13,11 +13,18 @@ import { createReporter } from "./progress.js";
 import {
   FIXTURE_ANCHOR,
   FIXTURE_WINDOW_DAYS,
+  ensureFixtureRepo,
   fixtureRepo,
   git,
   makeTempDir,
   removeAll,
 } from "./test-support.js";
+
+// The fixture repository (AD-14) is built here rather than by a `pretest`:
+// the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
+// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// adding a fifth shell caller racing the other packages.
+beforeAll(() => ensureFixtureRepo());
 
 const temps: string[] = [];
 afterEach(() => removeAll(temps));

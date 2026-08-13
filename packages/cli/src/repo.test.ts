@@ -1,11 +1,23 @@
 import { writeFileSync } from "node:fs";
 import { basename, join } from "node:path";
 
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 import { StageError } from "./errors.js";
 import { resolveRepo } from "./repo.js";
-import { fixtureRepo, git, makeTempDir, removeAll } from "./test-support.js";
+import {
+  ensureFixtureRepo,
+  fixtureRepo,
+  git,
+  makeTempDir,
+  removeAll,
+} from "./test-support.js";
+
+// The fixture repository (AD-14) is built here rather than by a `pretest`:
+// the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
+// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// adding a fifth shell caller racing the other packages.
+beforeAll(() => ensureFixtureRepo());
 
 const temps: string[] = [];
 afterEach(() => removeAll(temps));

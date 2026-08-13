@@ -1,0 +1,126 @@
+# 3.6 — One owner for the fixture repository build
+
+`pnpm test` from the workspace root failed roughly half the time. Four callers
+invoked `test-fixtures/build-fixture-repo.sh`, whose first act is `rm -rf` on a
+shared directory, and `pnpm -r test` runs packages in parallel — so one package
+deleted the fixture repository while another was reading it.
+
+## Reproduction, before the change
+
+Clean `.generated/`, base of this branch, three runs of `pnpm test`:
+
+| run | result | package |
+| --- | --- | --- |
+| 1 | fail | `githist` — `Error: Command failed: sh .../build-fixture-repo.sh` |
+| 2 | fail | `githist` — same error |
+| 3 | fail | `scanner` — same error |
+
+The quieter half of the symptom was visible too: on a racing run `scanner`
+reported 142 passed / 3 skipped instead of 145 passed, which a reader watching
+only for red scrolls past.
+
+## The mechanism chosen
+
+The builder was made safe, rather than the callers removed. AC-2 and AC-3 pull
+in opposite directions: `contract`, `scanner` and `githist` have no `pretest`,
+so their in-suite build is the only thing that gives them a fixture when the
+package is run on its own, and deleting it would have broken every story agent's
+`pnpm --filter … test` loop.
+
+`test-fixtures/build-fixture-repo.sh` now has three properties, all three
+needed:
+
+1. **A `mkdir` lock** (`.generated/history-repo.lock`) — `mkdir` is atomic on
+   every POSIX filesystem, so it needs no dependency and no flock. Released by
+   an `EXIT`/`INT`/`TERM`/`HUP` trap. The wait is bounded at ~60 s and then
+   fails loudly naming the lock directory, because a build takes about a second
+   and a longer wait means a leaked lock, not a slow peer.
+2. **A no-op when a valid repository is already present** — `.generated/history-repo.stamp`
+   holds a checksum of the builder itself. If it matches and `git rev-parse HEAD`
+   succeeds, the script prints the HEAD hash and touches nothing. This is what
+   makes concurrent callers harmless rather than merely serialised: the common
+   case is ~10 ms and does not delete anything. Editing the builder changes the
+   checksum, so a stale fixture rebuilds on the next run.
+3. **Build off to the side, then swap** — the build writes
+   `history-repo.building` and is renamed over the live directory only once
+   complete, so a reader never observes a half-built or deleted repository.
+
+The stamp deliberately lives *outside* the repository working tree: inside it,
+it would appear as a fourth file in the scan and break `scanner`'s committed
+expectation.
+
+### Rejected, and why
+
+- **Delete the in-suite builds, keep only the root `pretest`.** Satisfies AC-2
+  and breaks AC-3 — three packages would then have no fixture standalone.
+- **Give every package its own `pretest`.** The same race with more callers.
+- **Run `pnpm -r test` serially (`--workspace-concurrency=1`).** Hides the
+  defect, costs everyone wall-clock, and leaves the next caller unsafe.
+- **A copy of the fixture per package.** Six copies, six chances to drift, and
+  the commit hashes are pinned by three merged snapshots.
+- **`flock`.** Not present on macOS by default; `mkdir` is portable and enough.
+- **Bringing `build-ts-fixture-repo.sh` under the same discipline.** It has one
+  caller (`deps`' `pretest`), writes a different tree, and is not the defect;
+  the story says to adopt it only if it costs nothing, and sharing the lock
+  logic would mean a new shared shell helper plus a change in a file `3.1` is
+  actively working in. Left alone deliberately.
+
+## `cli`'s workaround, removed (AC-6)
+
+Story 2.4 gave `packages/cli` a conditional `pretest`
+(`[ -d …/history-repo ] || sh …`), a workaround for one package. It is gone.
+`cli`'s four fixture-dependent suites now call `ensureFixtureRepo()` in
+`beforeAll`, the same shape `scanner` and `githist` use — safe under the lock,
+free when the repository is already built.
+
+## Verification
+
+| criterion | evidence |
+| --- | --- |
+| AC-1 | `pnpm test` from a clean checkout (`rm -rf test-fixtures/.generated` before each), **10 runs, 10 passed**. 578 tests: contract 103, scanner 145, githist 74, deps 24 (1 skipped), viz 148, cli 84. |
+| AC-2 | Lock + stamp + swap, above. Six concurrent builders on a clean `.generated/` all exit 0 and print the same hash — asserted in `packages/cli/src/fixture-build.test.ts`. |
+| AC-3 | `pnpm --filter @gitnebula/<pkg> test`, each from a clean `.generated/`: contract 103, scanner 145, githist 74, deps 24+1 skipped, cli 84, viz 148 — all exit 0. |
+| AC-4 | `git -C test-fixtures/.generated/history-repo log --format=%H` before and after the change: **identical**, HEAD `70cc4d3ce32dc991795fd87c077cf3cf9f967b55`. The crafted history was not touched; the build directory's path does not enter a commit hash. |
+| AC-5 | `packages/cli/src/fixture-build.test.ts`, two assertions. Both were seen red before being relied on: the concurrency case fails against the old builder (`Error: Command failed`), the caller case fails with a `pretest` added to `packages/viz`. |
+| AC-6 | `packages/cli` has no `pretest`. Removed in this story, not by an earlier one. |
+
+Fixture hashes (AC-4), unchanged, newest first:
+
+```
+70cc4d3ce32dc991795fd87c077cf3cf9f967b55
+7d277ce81e2be716de15337016a16df20bf33e86
+80b35ed1d334dff13bc837f1f9277b25f16c1edf
+ae333690adfd4053de9418de02158d646faa581e
+e0d4c037b3667f56702db506cb1b9f7a97d3006a
+a16021fd5f51894b592a8f0c43f8af4cd54f4b6b
+a2e4398799a24fbe374af5f8bedeb0fd51cd4d40
+```
+
+`pnpm lint` and `pnpm typecheck` both exit 0.
+
+## Files
+
+| file | change | why |
+| --- | --- | --- |
+| `test-fixtures/build-fixture-repo.sh` | UPDATE | lock, stamp, build-and-swap; crafted history untouched |
+| `test-fixtures/README.md` | UPDATE | documents the concurrency contract for the next caller |
+| `packages/cli/package.json` | UPDATE | conditional `pretest` workaround removed (AC-6) |
+| `packages/cli/src/test-support.ts` | UPDATE | `ensureFixtureRepo()` replaces the `pretest` |
+| `packages/cli/src/{cli,e2e,repo,pipeline}.test.ts` | UPDATE | build the fixture in `beforeAll` |
+| `packages/cli/src/fixture-build.test.ts` | NEW | AC-5 regression guard |
+| `docs/implementation-artifacts/sprint-status.yaml` | UPDATE | this story's row only |
+
+## Manual testing
+
+Not applicable, and no `MANUAL_TESTING.md` ships with this story: it changes no
+UI, no route and no keyboard behaviour. Its entire surface is the test harness,
+and every acceptance criterion is an executed command whose result is recorded
+in the table above.
+
+## Note for the maintainer
+
+The spec's scheduling note stands: **`4.2-ci-pages-recipe` must not merge before
+this story.** 4.2 turns `.github/workflows/ci.yml` on and CI runs exactly the
+command that was failing. That ordering is not expressible from inside this
+story — 4.2's own `Depends_on` lists only `4.1-build-bundle`, and editing an
+existing spec is not this story's to do.
