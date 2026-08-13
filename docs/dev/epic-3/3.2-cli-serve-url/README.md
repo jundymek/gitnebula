@@ -120,6 +120,14 @@ have nothing to do with the code under test. The failure that surfaced was not
 even a leak; it was a directory in the `before` snapshot that someone else
 cleaned up first.
 
+It also had a nastier, deterministic form, found by superman while measuring
+3.6: **one** stale `gitnebula-clone-*` directory in the shared temp dir — the
+residue of a single earlier flaky failure — turned the two `cli.test.ts` URL
+assertions permanently red on that machine, until someone deleted it by hand.
+The suite poisoned itself. Neither file reads the shared temp directory any
+more, so both forms are gone: the suite passes with stale directories sitting
+right next to it.
+
 ## Testing
 
 ```sh
