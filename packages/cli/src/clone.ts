@@ -52,6 +52,18 @@ export interface CloneOptions {
   readonly now?: () => number;
   /** Test seam for the clone itself. Defaults to running real git. */
   readonly gitClone?: (args: readonly string[]) => Promise<void>;
+  /**
+   * Directory the checkout is created under. Defaults to the system temp
+   * directory, which is what a real run uses.
+   *
+   * It is injectable so a test can assert on a directory it owns. Asserting
+   * that cleanup happened by listing the *shared* temp directory is a race:
+   * vitest runs this package's suites in parallel workers, and a neighbour
+   * creating or disposing its own checkout between the snapshot and the
+   * assertion makes the two listings differ for reasons that have nothing to
+   * do with the code under test.
+   */
+  readonly tempDir?: string;
 }
 
 export interface Checkout {
@@ -77,7 +89,7 @@ export async function cloneRepository(
   url: string,
   options: CloneOptions,
 ): Promise<Checkout> {
-  const parent = mkdtempSync(join(tmpdir(), TEMP_PREFIX));
+  const parent = mkdtempSync(join(options.tempDir ?? tmpdir(), TEMP_PREFIX));
   const root = join(parent, "repo");
 
   let disposed = false;

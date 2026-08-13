@@ -5,7 +5,6 @@
 // closed loopback port.
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
@@ -70,9 +69,25 @@ function commitAt(cwd: string, subject: string, date: string): void {
   });
 }
 
-/** Names of the clone temp directories currently in the system temp dir. */
-function cloneTemps(): string[] {
-  return readdirSync(tmpdir()).filter((name) => name.startsWith(TEMP_PREFIX));
+/**
+ * A directory this test owns, handed to `cloneRepository` as its temp parent
+ * so cleanup can be asserted exactly.
+ *
+ * Listing the *shared* system temp directory instead — snapshot before, compare
+ * after — is what made this suite flaky (3 failures in 8 runs on the epic head,
+ * reported by chuck on 2026-08-13): vitest runs this package's suites in
+ * parallel workers, `cli.test.ts` creates and disposes checkouts of its own,
+ * and either side of that listing can move for reasons unrelated to the code
+ * under test. The observed failure was a directory present in the `before`
+ * snapshot that a neighbour disposed before the assertion ran.
+ */
+function ownTempDir(): string {
+  return makeTempDir(temps, "gitnebula-clonehome-");
+}
+
+/** The checkout directories left inside `parent` — the exact set this test made. */
+function leftBehind(parent: string): string[] {
+  return readdirSync(parent).filter((name) => name.startsWith(TEMP_PREFIX));
 }
 
 describe("a URL is told apart from a path (AC-4)", () => {
@@ -99,6 +114,7 @@ describe("the shallow clone and its temp directory (AC-4)", () => {
     const checkout = await cloneRepository(makeOriginUrl(), {
       windowDays: 90,
       now: () => CLONE_NOW,
+      tempDir: ownTempDir(),
     });
     checkouts.push(checkout);
 
@@ -120,6 +136,7 @@ describe("the shallow clone and its temp directory (AC-4)", () => {
     const checkout = await cloneRepository("https://example.invalid/x.git", {
       windowDays: 30,
       now: () => CLONE_NOW,
+      tempDir: ownTempDir(),
       gitClone: async (args) => {
         calls.push([...args]);
         mkdirSync(args[args.length - 1] as string, { recursive: true });
@@ -135,6 +152,7 @@ describe("the shallow clone and its temp directory (AC-4)", () => {
     const attempts: string[][] = [];
     const checkout = await cloneRepository("https://example.invalid/x.git", {
       windowDays: 90,
+      tempDir: ownTempDir(),
       gitClone: async (args) => {
         attempts.push([...args]);
         if (attempts.length === 1)
@@ -152,18 +170,25 @@ describe("the shallow clone and its temp directory (AC-4)", () => {
   });
 
   it("removes the temp directory when the run fails after the clone", async () => {
-    const before = cloneTemps();
-    const checkout = await cloneRepository(makeOriginUrl(), { windowDays: 90 });
+    const home = ownTempDir();
+    const checkout = await cloneRepository(makeOriginUrl(), {
+      windowDays: 90,
+      tempDir: home,
+    });
+    expect(leftBehind(home)).toHaveLength(1);
 
     // What `run`'s `finally` does when the pipeline throws.
     checkout.dispose();
 
-    expect(cloneTemps()).toEqual(before);
+    expect(leftBehind(home)).toEqual([]);
     expect(existsSync(checkout.root)).toBe(false);
   });
 
   it("is safe to dispose twice", async () => {
-    const checkout = await cloneRepository(makeOriginUrl(), { windowDays: 90 });
+    const checkout = await cloneRepository(makeOriginUrl(), {
+      windowDays: 90,
+      tempDir: ownTempDir(),
+    });
     checkout.dispose();
     expect(() => checkout.dispose()).not.toThrow();
   });
@@ -171,22 +196,25 @@ describe("the shallow clone and its temp directory (AC-4)", () => {
 
 describe("an unreachable URL aborts in the AD-7 shape (AC-5)", () => {
   it("names the URL, suggests the remedy, and leaves no temp dir", async () => {
-    const before = cloneTemps();
+    const home = ownTempDir();
     // Loopback, port 1: refused immediately, so the test neither waits on a
     // DNS timeout nor touches the network (AD-8).
     const url = "http://127.0.0.1:1/nothing.git";
 
-    const attempt = cloneRepository(url, { windowDays: 90 });
+    const attempt = cloneRepository(url, { windowDays: 90, tempDir: home });
     await expect(attempt).rejects.toThrow(StageError);
     await expect(attempt).rejects.toThrow(
       `clone: cannot clone ${url} — check the URL or your network`,
     );
-    expect(cloneTemps()).toEqual(before);
+    // Exactly the directories this test caused, and there are none: the
+    // failure path removes the checkout before it throws.
+    expect(leftBehind(home)).toEqual([]);
   });
 
   it("quotes the shallow attempt's git output as the underlying cause", async () => {
     const attempt = cloneRepository("https://example.invalid/x.git", {
       windowDays: 90,
+      tempDir: ownTempDir(),
       gitClone: async (args) => {
         throw new Error(
           args.some((arg) => arg.startsWith("--shallow-since"))

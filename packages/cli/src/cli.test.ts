@@ -7,7 +7,6 @@ import {
   readdirSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import type { AnalysisDocument } from "@gitnebula/contract";
@@ -152,6 +151,13 @@ describe("failures reach the terminal in the AD-7 shape (AC-2)", () => {
     );
   });
 });
+
+/** The checkout directories left inside `parent` — the exact set a test made. */
+function leftBehindClones(parent: string): string[] {
+  return readdirSync(parent).filter((name) =>
+    name.startsWith("gitnebula-clone-"),
+  );
+}
 
 /** A stand-in viz dist, so these tests do not depend on a viz build. */
 function makeDist(): string {
@@ -304,33 +310,31 @@ describe("URL mode (AC-4, AC-5)", () => {
       stdio: "ignore",
     });
 
-    const attempt = invoke([`file://${origin}`]);
+    const cloneTempDir = makeTempDir(temps, "gitnebula-clonehome-");
+    const attempt = invoke([`file://${origin}`], { cloneTempDir });
 
     await expect(attempt.code).resolves.toBe(0);
     const written = JSON.parse(
       readFileSync(join(attempt.cwd, "analysis.json"), "utf8"),
     ) as AnalysisDocument;
     expect(written.repo.name).toBe("origin");
-    // AC-4: nothing is left behind in the system temp directory.
-    expect(
-      readdirSync(tmpdir()).filter((name) =>
-        name.startsWith("gitnebula-clone-"),
-      ),
-    ).toEqual([]);
+    // AC-4: `run`'s `finally` disposed the checkout. Asserted against the
+    // directory this test handed the clone, not against the shared temp dir —
+    // see the note in clone.test.ts.
+    expect(leftBehindClones(cloneTempDir)).toEqual([]);
   });
 
   it("exits non-zero and cleans up when the URL cannot be cloned", async () => {
-    const attempt = invoke(["http://127.0.0.1:1/nothing.git"]);
+    const cloneTempDir = makeTempDir(temps, "gitnebula-clonehome-");
+    const attempt = invoke(["http://127.0.0.1:1/nothing.git"], {
+      cloneTempDir,
+    });
 
     await expect(attempt.code).resolves.toBe(1);
     expect(attempt.output()).toContain(
       "clone: cannot clone http://127.0.0.1:1/nothing.git — check the URL or your network",
     );
     expect(existsSync(join(attempt.cwd, "analysis.json"))).toBe(false);
-    expect(
-      readdirSync(tmpdir()).filter((name) =>
-        name.startsWith("gitnebula-clone-"),
-      ),
-    ).toEqual([]);
+    expect(leftBehindClones(cloneTempDir)).toEqual([]);
   });
 });
