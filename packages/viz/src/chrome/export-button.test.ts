@@ -19,6 +19,10 @@ function store(repoName = "gitnebula") {
     hoveredId: null,
     selectedId: null,
     unfolded: 0,
+    // Story 3.4's slice, added for the same reason.
+    selected: null,
+    isolated: false,
+    mode: "structure",
   });
 }
 
