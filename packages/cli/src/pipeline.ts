@@ -71,12 +71,6 @@ export async function runPipeline(
       ? analyzedAt
       : normalizeAnchor(options.windowAnchor);
 
-  if (analyzers.stubbedAnalyzers.length > 0) {
-    reporter.notice(
-      `note: running with inert stubs for ${analyzers.stubbedAnalyzers.join(", ")} — their stories have not merged yet.`,
-    );
-  }
-
   const repo = await reporter.runStage("repo", async () =>
     resolveRepo(resolve(cwd, options.target ?? ".")),
   );

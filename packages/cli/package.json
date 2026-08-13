@@ -11,7 +11,7 @@
   },
   "scripts": {
     "build": "tsup",
-    "pretest": "sh ../../test-fixtures/build-fixture-repo.sh >/dev/null",
+    "pretest": "[ -d ../../test-fixtures/.generated/history-repo ] || sh ../../test-fixtures/build-fixture-repo.sh >/dev/null",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

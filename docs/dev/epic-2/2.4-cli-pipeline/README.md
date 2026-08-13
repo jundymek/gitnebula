@@ -169,6 +169,27 @@ The package's own `pretest` builds the fixture repository (AD-14), so the story
 command is self-sufficient — it does not depend on the root `pretest` having
 run first.
 
+The M2 evidence, from the end-to-end suite:
+
+```
+history-repo: 3 modules, 3 files, 0 edges, 0 co-change pairs, 5 commits in 365d
+```
+
+Two empties in there are correct rather than missing:
+
+- **no co-change pairs** — the crafted history's only repeated file pair
+  (`core/scoring.py` + `web/api.ts`) appears in 2 commits, and ADR-0005 admits
+  pairs only at `count >= 3`. The fixture is deliberately not extended to push
+  it over the bound: its commit hashes are pinned by scanner's snapshots and by
+  this one, and changing the script would invalidate both.
+- **no edges** — the fixture's two code files import nothing. Import resolution
+  is covered by deps' own crafted fixtures.
+
+The suite also names the cases the fixture exists to exercise — the rename
+carrying its history onto `core/scoring.py`, `legacy/old.ts` falling outside the
+window, `web/api.ts`'s three authors — so a regenerated expectation gets read
+rather than rubber-stamped.
+
 The end-to-end suite (AC-5) compares a full run over the fixture repo against
 `src/__fixtures__/fixture-repo.analysis.json`, byte for byte, with `analyzedAt`
 replaced by a constant. Regenerate it deliberately, and read the diff:

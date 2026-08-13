@@ -17,7 +17,6 @@ import type { AnalysisDocument } from "@gitnebula/contract";
 import { validateAnalysis } from "@gitnebula/contract";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { stubbedAnalyzers } from "./analyzers.js";
 import { serialize } from "./emit.js";
 import { runPipeline } from "./pipeline.js";
 import { createSilentReporter } from "./progress.js";
@@ -44,7 +43,7 @@ const PINNED_ANALYZED_AT = "2026-01-01T00:00:00.000Z";
  * constant so the quote and the assertion cannot drift apart.
  */
 const SUMMARY =
-  "history-repo: 0 modules, 0 files, 0 edges, 0 co-change pairs, 0 commits in 365d";
+  "history-repo: 3 modules, 3 files, 0 edges, 0 co-change pairs, 5 commits in 365d";
 
 const temps: string[] = [];
 afterEach(() => removeAll(temps));
@@ -64,21 +63,7 @@ async function analyzeFixtureRepo(): Promise<AnalysisDocument> {
   };
 }
 
-// TEMPORARY, removed with the last stub: while 2.1/2.2/2.3 are unmerged this
-// suite would only assert that three empty results merge into an empty
-// document. It skips loudly instead, and un-skips itself the moment the real
-// analyzers are on the branch — which AC-5 requires before this story opens
-// its PR.
-const stubbed = stubbedAnalyzers.length > 0;
-const suiteName = stubbed
-  ? `end to end on the fixture repo (AC-5) — SKIPPED, still stubbed: ${stubbedAnalyzers.join(", ")}`
-  : "end to end on the fixture repo (AC-5, M2 evidence)";
-
-describe.skipIf(stubbed)(suiteName, () => {
-  it("wires all three analyzers for real — no inert stubs left", () => {
-    expect(stubbedAnalyzers).toEqual([]);
-  });
-
+describe("end to end on the fixture repo (AC-5, M2 evidence)", () => {
   it("matches the committed expectation byte for byte", async () => {
     const analysis = await analyzeFixtureRepo();
     const emitted = serialize(analysis);
@@ -102,5 +87,49 @@ describe.skipIf(stubbed)(suiteName, () => {
     const summary = `${analysis.repo.name}: ${modules} modules, ${files} files, ${analysis.edges.length} edges, ${analysis.cochanges.length} co-change pairs, ${analysis.repo.stats.commits} commits in ${analysis.repo.analysisWindowDays}d`;
 
     expect(summary).toBe(SUMMARY);
+  });
+
+  // The crafted history exists to exercise specific cases (test-fixtures/README).
+  // A byte snapshot covers them, but only implicitly: these name them, so a
+  // regenerated expectation is read rather than rubber-stamped.
+  it("carries the rename's history onto the post-rename node", async () => {
+    const { nodes } = await analyzeFixtureRepo();
+    const scoring = nodes.find((node) => node.id === "core/scoring.py");
+
+    // 4 commits: created as score.py, edited, renamed, then edited again. A
+    // lost rename mapping would show 2.
+    expect(scoring).toMatchObject({ commits: 4, authors: 2 });
+    expect(nodes.some((node) => node.id === "core/score.py")).toBe(false);
+  });
+
+  it("gives a file whose commits predate the window an empty history", async () => {
+    const { nodes } = await analyzeFixtureRepo();
+
+    expect(nodes.find((node) => node.id === "legacy/old.ts")).toMatchObject({
+      commits: 0,
+      authors: 0,
+      churn: 0,
+      lastChangedAt: null,
+    });
+  });
+
+  it("counts the three distinct authors of web/api.ts", async () => {
+    const { nodes } = await analyzeFixtureRepo();
+    expect(nodes.find((node) => node.id === "web/api.ts")?.authors).toBe(3);
+  });
+
+  it("emits no co-change pairs, because the fixture's only pair is below the bound", async () => {
+    const { cochanges } = await analyzeFixtureRepo();
+
+    // core/scoring.py + web/api.ts change together in 2 commits; ADR-0005
+    // admits pairs at count >= 3. Empty here is the bound working, not a gap —
+    // and the fixture is deliberately not extended to fix it, because its
+    // commit hashes are pinned by 2.1's and this story's snapshots.
+    expect(cochanges).toEqual([]);
+  });
+
+  it("emits no edges, because the fixture's two code files import nothing", async () => {
+    const { edges } = await analyzeFixtureRepo();
+    expect(edges).toEqual([]);
   });
 });
