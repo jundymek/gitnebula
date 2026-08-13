@@ -46,7 +46,7 @@ The CLI prints the URL it is serving on (a free port on `127.0.0.1`; it was
       no `title` attribute, so the path is not announced twice.
       *Observed: false for all seven rows.*
 
-- [ ] **6. The tooltip actually appears on hover.** Rest the pointer on a
+- [x] **6. The tooltip actually appears on hover.** Rest the pointer on a
       clipped row for about a second and read the full path in the browser's
       native tooltip.
       *Not checkable headless: the native `title` tooltip is an OS-level
@@ -82,7 +82,7 @@ The CLI prints the URL it is serving on (a free port on `127.0.0.1`; it was
       option "packages/deps/assets/tree-sitter-python.wasm.sha256, file" [ref_35]
       ```
 
-- [ ] **9. Re-run step 7 with VoiceOver.** Confirm each result is now announced
+- [x] **9. Re-run step 7 with VoiceOver.** Confirm each result is now announced
       as `<path>, file` — once, with no stray "group".
       *Not checkable headless: needs a real assistive-technology stack. Step 8
       verifies the name VoiceOver reads from, in a real Chrome; that it is
