@@ -42,7 +42,7 @@ development_status:
   4.1-build-bundle: review
   4.2-ci-pages-recipe: backlog
   4.3-repo-quality: review
-  4.4-dod-validation: backlog
+  4.4-dod-validation: review
   # Added 2026-08-13 by the epic/4-build-bundle supervisor, out of supervision
   # rather than planning: nothing in the repo covers publishing, and
   # packages/cli is still private, named @gitnebula/cli and versioned 0.0.0,
