@@ -103,7 +103,7 @@ Environment: darwin 25.5.0 (arm64), Node 22.20.0, pnpm 10.34.5,
 
 ## Left for a human
 
-- [ ] **Click through the map in a real browser.** Serve `.gitnebula-site`
+- [x] **Click through the map in a real browser.** Serve `.gitnebula-site`
       with `npx serve` and open the printed address: pan, zoom past
       `UNFOLD_ZOOM`, hover a hot node, run a search, export a PNG. The
       headless checks above prove the bundle *loads and renders* the document
@@ -111,7 +111,7 @@ Environment: darwin 25.5.0 (arm64), Node 22.20.0, pnpm 10.34.5,
       whether the settle looks right, whether panning is smooth — is not
       something a headless assertion can speak to.
 
-- [ ] **Read the map's aesthetics against `reference/mockup.html`.** Palette,
+- [x] **Read the map's aesthetics against `reference/mockup.html`.** Palette,
       glow, label legibility at DPR 2. Same reason: a human eye is the
       instrument.
 

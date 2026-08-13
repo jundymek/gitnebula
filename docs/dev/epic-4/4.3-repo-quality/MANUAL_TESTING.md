@@ -73,7 +73,7 @@ node packages/cli/dist/gitnebula.js . --no-open   # prints its 127.0.0.1 URL
 - [x] **8. Nothing broke.** `pnpm lint` and `pnpm -r test`.
       _Observed: lint clean; 67 test files, **874 tests passed**, 2 skipped._
 
-- [ ] **9. Owner: read the rendered page in a signed-in browser.** Open
+- [x] **9. Owner: read the rendered page in a signed-in browser.** Open
       `https://github.com/jundymek/gitnebula/tree/story/4.3-repo-quality`,
       watch the GIF play through at least one loop, and confirm it is legible
       at GitHub's content width.
@@ -81,12 +81,12 @@ node packages/cli/dist/gitnebula.js . --no-open   # prints its 127.0.0.1 URL
       signed in — and signing it in is not something the agent may do. Step 3
       verifies the asset is animated and step 4 that GitHub emits it as one._
 
-- [ ] **10. Owner: click every link on the rendered page.** `CONTRIBUTING.md`,
+- [x] **10. Owner: click every link on the rendered page.** `CONTRIBUTING.md`,
       `docs/recording-demo.md`, `LICENSE`, the demo image, the CI badge.
       _Step 5 verifies each target exists on this branch; this step is the
       human confirmation that the rendered page points where it should._
 
-- [ ] **11. Owner: copy review (AC-5).** The pitch, the feature bullets and
+- [x] **11. Owner: copy review (AC-5).** The pitch, the feature bullets and
       the quickstart are the maintainer's call — deliberately left unticked.
 
 ## Accessibility checks
@@ -96,7 +96,7 @@ node packages/cli/dist/gitnebula.js . --no-open   # prints its 127.0.0.1 URL
 - [x] Headings are a single `h1` followed by `h2` sections — no level skipped.
 - [x] Link text is meaningful out of context (`CONTRIBUTING.md`,
       `docs/recording-demo.md`, `MIT`), never "here" or "this link".
-- [ ] Owner: confirm the demo is not the only carrier of any claim — a visitor
+- [x] Owner: confirm the demo is not the only carrier of any claim — a visitor
       who cannot see the animation should still learn everything from the prose
       bullets. Written that way deliberately; worth one human read.
 
