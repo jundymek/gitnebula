@@ -66,7 +66,117 @@ function analysisFixture(): Plugin {
   };
 }
 
-// Story 4.1 turns the build into the single self-contained index.html (AD-11).
+/**
+ * ADR-0004 / AD-11: the production build is **one file**. `index.html` carries
+ * its JS and CSS inline, uses the system font stack, and issues zero external
+ * requests — the only thing it ever fetches is the sibling `analysis.json`
+ * (AD-12).
+ *
+ * This is thirty lines rather than a plugin dependency on purpose. The whole
+ * job is one `generateBundle` hook, and a bundle whose self-containment is
+ * guaranteed by a third-party package is a worse trade than owning the hook.
+ *
+ * Inlining is done by string replacement on the emitted HTML rather than by
+ * regenerating it, so whatever `index.html` declares — attributes, extra
+ * markup, a second entry later — survives untouched.
+ */
+function singleFile(): Plugin {
+  return {
+    name: "gitnebula-single-file",
+    apply: "build",
+    enforce: "post",
+    generateBundle(_options, bundle) {
+      let html: { fileName: string; source: string } | null = null;
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (output.type === "asset" && fileName.endsWith(".html")) {
+          html = { fileName, source: String(output.source) };
+        }
+      }
+      if (html === null) return;
+
+      // AD-8: nothing in the hand-written HTML may point off-origin. Checked
+      // before inlining, while the document is still small enough for the
+      // question to have a clear answer.
+      const remote = /(?:src|href)="(https?:)?\/\//.exec(html.source);
+      if (remote !== null) {
+        this.error(
+          `single-file build: index.html requests ${remote[0]} — the bundle makes zero external requests (AD-8).`,
+        );
+      }
+
+      let source = html.source;
+      for (const [fileName, output] of Object.entries(bundle)) {
+        if (fileName === html.fileName) continue;
+
+        // Both replacements pass a *function*, never a string. A string
+        // replacement re-reads `$&`, `` $` `` and `$'` out of the code being
+        // inserted, and minified JS contains those sequences: the first build
+        // of this plugin spliced a second copy of the page into the middle of
+        // the bundle, because `$'` means "everything after the match". The
+        // page still rendered, which is what makes it worth a comment.
+        const replaced =
+          output.type === "chunk"
+            ? source.replace(
+                new RegExp(
+                  `<script[^>]*src="[^"]*${escapeForRegExp(fileName)}"[^>]*></script>`,
+                ),
+                // `</script>` inside the code would close the tag early. The
+                // escape is inert everywhere it can legally appear.
+                () =>
+                  `<script type="module">\n${output.code.replace(/<\/script/gi, "<\\/script")}\n</script>`,
+              )
+            : fileName.endsWith(".css")
+              ? source.replace(
+                  new RegExp(
+                    `<link[^>]*href="[^"]*${escapeForRegExp(fileName)}"[^>]*>`,
+                  ),
+                  () => `<style>\n${String(output.source)}\n</style>`,
+                )
+              : source;
+
+        // An emitted file whose reference could not be found would be deleted
+        // below and silently vanish from a bundle that still needs it — the
+        // exact two-file failure AC-1 forbids, arriving as a blank page rather
+        // than a build error. Anything not a chunk or a stylesheet lands here
+        // too, which is intended: raise `assetsInlineLimit` or stop importing
+        // it.
+        if (replaced === source) {
+          this.error(
+            `single-file build: ${fileName} was emitted but could not be inlined into index.html — the bundle must be one file (ADR-0004).`,
+          );
+        }
+        source = replaced;
+        delete bundle[fileName];
+      }
+
+      (bundle[html.fileName] as { source: string }).source = source;
+    },
+  };
+}
+
+function escapeForRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export default defineConfig({
-  plugins: [analysisFixture()],
+  plugins: [analysisFixture(), singleFile()],
+  build: {
+    // Every asset becomes a data URI or an inline block; nothing is emitted
+    // beside the HTML.
+    assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+    cssCodeSplit: false,
+    // A preload polyfill would emit a second chunk to inline for no benefit:
+    // there is nothing left to preload once everything is in the document.
+    modulePreload: { polyfill: false },
+    rollupOptions: {
+      output: {
+        // No `inlineDynamicImports`: the Viewer has no dynamic imports, and
+        // if one appears the plugin above fails the build by name rather than
+        // quietly folding it in.
+        // Hashing names a file for cache-busting. There is no file.
+        entryFileNames: "index.js",
+        assetFileNames: "index[extname]",
+      },
+    },
+  },
 });

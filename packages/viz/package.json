@@ -12,7 +12,8 @@
     "perf-spike": "vite perf-spike",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "perf": "playwright test -c perf/playwright.config.ts"
+    "perf": "playwright test -c perf/playwright.config.ts",
+    "bundle-check": "playwright test -c bundle/playwright.config.ts"
   },
   "dependencies": {
     "@gitnebula/contract": "workspace:*",

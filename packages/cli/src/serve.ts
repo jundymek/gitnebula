@@ -138,16 +138,21 @@ function isInside(root: string, candidate: string): boolean {
  * would create.
  *
  * Two candidates, in the order they exist in practice: the copy cli's prepack
- * places next to the bundle (AD-11), then the workspace build for a
+ * places in the package's assets (AD-11), then the workspace build for a
  * source-mode run.
+ *
+ * Both are two directories up from the module asking, which is not a
+ * coincidence: the bundle is emitted at `dist/bin/gitnebula.js` precisely so
+ * that a package-root-relative asset path means the same thing bundled as it
+ * does from `src/…` (see tsup.config.ts).
  *
  * @returns the directory, or null when the viewer has not been built.
  */
 export function resolveVizDist(moduleUrl: string): string | null {
   const here = resolve(fileURLToPath(new URL(".", moduleUrl)));
   const candidates = [
-    // Bundled: dist/gitnebula.js sits beside assets/viz (AD-11).
-    join(here, "assets", "viz"),
+    // Bundled: dist/bin/gitnebula.js → packages/cli/assets/viz (AD-11).
+    join(here, "..", "..", "assets", "viz"),
     // Source mode: packages/cli/src → packages/viz/dist.
     join(here, "..", "..", "viz", "dist"),
   ];

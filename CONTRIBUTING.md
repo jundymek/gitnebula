@@ -23,6 +23,45 @@ pnpm build     # tsup (cli) + vite (viz) — the only two build edges
 `pnpm lint && pnpm test` must both exit 0 before every commit. Run them from
 the repository root so the workspace resolves.
 
+The workspace is six packages under `packages/`, one per module:
+`contract` (the `analysis.json` schema and its types), `scanner`, `deps`,
+`githist`, `viz` (the browser viewer) and `cli` (the pipeline and the
+`gitnebula` binary). Only `cli` and `viz` have a build step; the rest are
+consumed from source inside the workspace.
+
+To try a change end to end, run the tool on this repository:
+
+```bash
+pnpm build
+node packages/cli/dist/gitnebula.js .     # writes analysis.json, serves the map
+```
+
+## Tests and fixture repositories
+
+Tests are vitest, one suite per package, and they never reach for the network
+or for your own checkouts. Anything that needs a git history builds a
+**deterministic fixture repository** into the gitignored
+`test-fixtures/.generated/` — same commit hashes on every machine (AD-14):
+
+```sh
+./test-fixtures/build-fixture-repo.sh      # githist: prints the HEAD hash
+./test-fixtures/build-ts-fixture-repo.sh   # deps, TS/JS
+./test-fixtures/build-py-fixture-repo.sh   # deps, Python
+```
+
+You rarely run these by hand: the root `pretest` hook and the packages that
+need them build them on demand, concurrently and safely. Editing a builder
+script changes its checksum, which invalidates the stamp and rebuilds the
+fixture on the next test run — so **regenerating a fixture means editing its
+script, never editing `.generated/`**, and nothing under `.generated/` is ever
+committed. If a fixture looks stale, delete `test-fixtures/.generated/` and run
+the tests again.
+
+The performance harness (`pnpm --filter @gitnebula/viz perf`) and the demo
+recorder (`node scripts/record-demo.mjs`, see
+[docs/recording-demo.md](docs/recording-demo.md)) drive the real viewer through
+Playwright. Both are dev tooling: nothing they use enters the bundle.
+
 ## Commit messages: Conventional Commits, scope = module
 
 Commits follow [Conventional Commits](https://www.conventionalcommits.org/)

@@ -26,6 +26,21 @@ export default tseslint.config(
     },
   },
   {
+    // Repository tooling: Node scripts that also carry `page.evaluate`
+    // callbacks, which are serialized and run inside the browser — hence the
+    // DOM globals next to the Node ones. Nothing here ships.
+    files: ["scripts/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        URL: "readonly",
+        console: "readonly",
+        process: "readonly",
+        setTimeout: "readonly",
+        document: "readonly",
+      },
+    },
+  },
+  {
     // AD-4: the analysis pipeline is deterministic — the same repo at the
     // same commit must produce byte-identical analysis.json. Timestamps come
     // from git data, randomness from a contract-provided seed. viz and cli
