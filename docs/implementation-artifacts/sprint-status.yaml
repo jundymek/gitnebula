@@ -22,7 +22,7 @@ development_status:
   2.5-viz-engine-core: done
   # Epic 3 — Full Exploration Experience
   3.1-deps-python: backlog
-  3.2-cli-serve-url: backlog
+  3.2-cli-serve-url: review
   3.3-viz-navigation: backlog
   3.4-viz-panel-modes: backlog
   3.5-viz-export-perf: backlog
