@@ -33,6 +33,11 @@ development_status:
   # same day without ever being scheduled: story 3.2's author reopened and fixed
   # the flake himself in PR #26. Removed rather than left as a phantom backlog
   # row; the spec and the reasoning are in the history (PR #22).
+  # Added 2026-08-13 by the epic/3-deps-python supervisor at epic closure, from
+  # the maintainer's own manual pass: search results truncate long paths and
+  # carry no title, so the full path cannot be read without opening the result.
+  # No AC covers it. Unassigned — the wave is the maintainer's call.
+  3.8-viz-search-path-tooltip: backlog
   # Epic 4 — Ship It (-> M3)
   4.1-build-bundle: backlog
   4.2-ci-pages-recipe: backlog
