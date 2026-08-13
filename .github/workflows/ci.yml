@@ -40,4 +40,48 @@ jobs:
         run: pnpm typecheck
 
       - name: Test
+        # Includes the cold-start pack e2e (story 4.1, AC-4): it runs
+        # `pnpm build`, `npm pack`, installs the tarball into a temp directory
+        # with plain npm and runs the installed binary. It is the only test in
+        # the workspace that reaches the registry.
         run: pnpm test
+
+  bundle:
+    name: Static bundle — size budget and zero external requests
+    runs-on: ubuntu-latest
+    # Story 4.1, AC-2 and AC-3. A separate job because it is the only one that
+    # needs a browser, and because its two checks are about the *artefact*
+    # rather than the sources.
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        # The only build entry (AD-11, AC-5).
+        run: pnpm build
+
+      - name: Bundle this repository, and print the gzipped viewer size
+        # AC-1 and AC-2 in one command, run the way a user runs it: the
+        # built binary building gitnebula's own map. `build` prints the
+        # measured size against ADR-0004's 2 MB budget and exits non-zero
+        # when it is over. The map of itself is also what README publishing
+        # (story 4.2) consumes.
+        run: |
+          node packages/cli/dist/bin/gitnebula.js build -o .gitnebula-site
+          ls -l .gitnebula-site
+
+      - name: Install Playwright's Chromium
+        run: pnpm --filter @gitnebula/viz exec playwright install --with-deps chromium
+
+      - name: The bundle requests only its own two files
+        # AC-3: the served bundle's network log, and the `file://` hint.
+        run: pnpm --filter @gitnebula/viz bundle-check
