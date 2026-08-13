@@ -11,7 +11,8 @@
 import type { AnalysisDocument } from "@gitnebula/contract";
 
 import type { GraphEngine } from "../engine/index.js";
-import { renderHeader, type HeaderActions } from "./header.js";
+import { renderExportButton } from "./export-button.js";
+import { EXPORT_SLOT_ID, renderHeader, type HeaderActions } from "./header.js";
 import { renderHint } from "./hint.js";
 import { renderLegend } from "./legend.js";
 // Types only: the bootstrap constructs these and hands them in, so chrome
@@ -95,6 +96,11 @@ export function connectEngine(
     }),
   ];
   options.search?.setNodes(engine.nodes);
+  // The PNG button (3.5) is mounted here rather than in `mountChrome` because
+  // this is where the engine handle exists — the header only reserves the slot.
+  document
+    .getElementById(EXPORT_SLOT_ID)
+    ?.replaceChildren(renderExportButton(store, engine));
   return () => {
     for (const unsubscribe of off) unsubscribe();
     options.search?.destroy();

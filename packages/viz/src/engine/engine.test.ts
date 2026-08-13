@@ -259,10 +259,16 @@ describe("CanvasGraphEngine — AC-7 interface completeness", () => {
     expect(engine.chainOf("missing")).toEqual([]);
   });
 
-  it("names the owning story for members it does not implement", async () => {
-    // `flyTo` was on this list until story 3.3 implemented it; what remains is
-    // `exportPNG`, which story 3.5 owns.
-    await expect(engine.exportPNG()).rejects.toThrow(/3\.5-viz-export-perf/);
+  it("has no member left that is declared but unimplemented", async () => {
+    // This test used to assert that `flyTo` and `exportPNG` rejected with the
+    // name of the story that owed them. Story 3.3 implemented the first and
+    // story 3.5 the second, so the list is empty — and an empty list is worth
+    // asserting rather than deleting: the interface promise was that a
+    // declared member either works or names its owner, never silently no-ops.
+    await expect(engine.flyTo("mod-000/")).resolves.not.toThrow();
+    // `exportPNG` is exercised in `engine-export.test.ts`, which stubs the
+    // canvas encoder — jsdom has no `toBlob`, and calling it here would hang
+    // rather than fail.
   });
 
   it("unsubscribes cleanly", () => {

@@ -36,6 +36,7 @@ import {
   type Viewport,
 } from "./camera.js";
 import { Emitter } from "./emitter.js";
+import { renderSceneToPng } from "./export.js";
 import { buildGraph, type Graph } from "./graph.js";
 import { MemberLayout, ModuleLayout, type LayoutNode } from "./layout.js";
 import { hashString, mulberry32, seedFor, type Rng } from "./prng.js";
@@ -55,6 +56,7 @@ import type {
   CameraState,
   EngineOptions,
   EngineNode,
+  ExportPngOptions,
   FitOptions,
   FlyToOptions,
   GraphEngine,
@@ -65,18 +67,11 @@ import type {
 } from "./types.js";
 import type { AnalysisDocument } from "@gitnebula/contract";
 
-/**
- * Declared on the interface (AC-7), owned by a later story. Throwing names the
- * story: a silent no-op would let a caller believe the map moved when it did
- * not.
- */
-function notYet<T>(member: string, story: string): Promise<T> {
-  return Promise.reject(
-    new Error(
-      `GraphEngine.${member} is declared for story ${story} and not implemented in 2.5`,
-    ),
-  );
-}
+// `notYet()` lived here from story 2.5: members the interface declared before
+// anyone implemented them rejected with the name of the story that owed them,
+// so a caller could never mistake a stub for a working call. Stories 3.3
+// (`flyTo`) and 3.5 (`exportPNG`) were the last two debts, so the helper has
+// no callers left and is gone rather than kept warm for a hypothetical.
 
 interface CameraFlight {
   readonly from: CameraState;
@@ -142,6 +137,8 @@ export class CanvasGraphEngine implements GraphEngine {
   private frameHandle: number | null = null;
   private settleStartMs: number | null = null;
   private settleAnnounced = false;
+  /** Clock of the last drawn frame — the export re-renders at that instant. */
+  private lastFrameMs = 0;
 
   private dragging = false;
   private dragOrigin: ScreenPoint | null = null;
@@ -680,8 +677,26 @@ export class CanvasGraphEngine implements GraphEngine {
 
   // ---- export (story 3.5) ------------------------------------------------
 
-  exportPNG(): Promise<Blob> {
-    return notYet("exportPNG", "3.5-viz-export-perf");
+  /**
+   * Re-render the frame the user is looking at into an offscreen surface at
+   * `scale`× density (AD-5 — never a scaled canvas snapshot).
+   *
+   * The clock is the **last drawn frame's**, not a fresh reading: the hot-spot
+   * pulse is a function of time, so exporting at "now" would catch the pulse
+   * at a different phase than the pixels on screen and the two would legibly
+   * disagree. Reusing the frame clock is what makes AC-1's parity check able
+   * to compare pixel for pixel.
+   */
+  exportPNG(options: ExportPngOptions = {}): Promise<Blob> {
+    const scene = this.buildScene(this.lastFrameMs);
+    if (!scene) {
+      return Promise.reject(
+        new Error(
+          "viz: nothing to export — load an analysis document before exporting",
+        ),
+      );
+    }
+    return renderSceneToPng(scene, { scale: options.scale });
   }
 
   // ---- events ------------------------------------------------------------
@@ -882,7 +897,12 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private draw(timeMs: number): void {
     const scene = this.buildScene(timeMs);
-    if (scene) renderFrame(this.ctx, scene);
+    if (!scene) return;
+    // Story 3.5: the export re-renders at the clock of the frame the user is
+    // looking at, so the hot-spot pulse and the search-arrival pulse come out
+    // at the phase they were on screen rather than at a fresh instant.
+    this.lastFrameMs = timeMs;
+    renderFrame(this.ctx, scene);
   }
 
   // ---- pointer input (FR-15) ---------------------------------------------
