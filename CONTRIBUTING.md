@@ -33,8 +33,22 @@ To try a change end to end, run the tool on this repository:
 
 ```bash
 pnpm build
-node packages/cli/dist/gitnebula.js .     # writes analysis.json, serves the map
+node packages/cli/scripts/prepack.mjs      # see below — needed once per build
+node packages/cli/dist/bin/gitnebula.js . # writes analysis.json, serves the map
 ```
+
+Two things about that invocation. The binary lives one directory deeper than
+you might expect, and the depth is load-bearing —
+`packages/cli/tsup.config.ts` explains why. And `packages/cli/assets/` — the
+built viewer and `tree-sitter-python.wasm` — is populated by `prepack`, which
+npm runs on `pack`/`publish` and never during development, so a plain
+`pnpm build` leaves the binary unable to find either: serving stops at "the
+viewer has not been built", `gitnebula build` refuses for the same reason, and
+a repository containing Python fails its `deps` stage with
+`ENOENT … tree-sitter-python.wasm`. Running the prepack script by hand is the
+whole fix; re-run it after a rebuild. None of this affects the published
+tarball, which `src/pack.test.ts` installs and runs cold, and story 4.5's AC-6
+closes the dev-checkout gap for good.
 
 ## Tests and fixture repositories
 
