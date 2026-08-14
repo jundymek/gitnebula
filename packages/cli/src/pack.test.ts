@@ -30,6 +30,7 @@ import {
   fixtureRepo,
   makeTempDir,
   removeAll,
+  withBuildLock,
   workspaceRoot,
 } from "./test-support.js";
 
@@ -54,13 +55,21 @@ beforeAll(() => {
   buildWorkspace();
 }, 300_000);
 
-/** Packs the package (running its prepack) and returns the tarball's path. */
+/**
+ * Packs the package (running its prepack) and returns the tarball's path.
+ *
+ * Under the build lock: prepack rewrites `packages/cli/assets/` from scratch,
+ * and since story 4.5 so does `pnpm build`. Two workers doing that at once
+ * would have one of them reading a directory the other had just emptied.
+ */
 function pack(destination: string): string {
-  execFileSync("npm", ["pack", "--pack-destination", destination], {
-    cwd: cliRoot,
-    stdio: ["ignore", "ignore", "pipe"],
-    encoding: "utf8",
-  });
+  withBuildLock(() =>
+    execFileSync("npm", ["pack", "--pack-destination", destination], {
+      cwd: cliRoot,
+      stdio: ["ignore", "ignore", "pipe"],
+      encoding: "utf8",
+    }),
+  );
   const tarball = readdirSync(destination).find((name) =>
     name.endsWith(".tgz"),
   );
@@ -120,7 +129,7 @@ describe("npm pack — the published tarball (AC-4)", () => {
   });
 
   // A manifest that names an entry point the tarball does not carry is a
-  // promise the installed package cannot keep: `import "@gitnebula/cli"` would
+  // promise the installed package cannot keep: `import "gitnebula"` would
   // die on ERR_MODULE_NOT_FOUND. cli is a binary — `bin` is its whole public
   // surface — so the guard is that whatever it *does* advertise, it ships.
   it("advertises no entry point it does not ship", () => {
@@ -186,8 +195,25 @@ describe("cold start — installed with npm, outside the workspace (AC-4)", () =
       { cwd: home, stdio: ["ignore", "ignore", "pipe"] },
     );
 
+    // Story 4.5's AC-4, spelled out rather than left implicit in the path
+    // above. What npm links into `.bin` is the *key* of `bin`, and nothing
+    // else: not the package name, not the directory the sources live in. The
+    // three coincided while the package was `@gitnebula/cli` in
+    // `packages/cli` — a scoped package links `gitnebula` from `bin` too —
+    // so no test could tell which one it was reading. The rename to
+    // `gitnebula` makes them coincide again, and that is exactly when an
+    // assertion on the wrong one stops being detectable. `npx gitnebula`
+    // (FR-1) resolves this name and no other.
+    const manifest = JSON.parse(
+      readFileSync(join(cliRoot, "package.json"), "utf8"),
+    ) as { bin: Record<string, string> };
+    expect(Object.keys(manifest.bin)).toEqual(["gitnebula"]);
+
     const binary = join(home, "node_modules", ".bin", "gitnebula");
     expect(existsSync(binary)).toBe(true);
+    expect(readdirSync(join(home, "node_modules", ".bin"))).toContain(
+      "gitnebula",
+    );
 
     const served = await serveOnce(binary, home);
 

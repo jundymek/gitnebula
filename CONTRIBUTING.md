@@ -33,22 +33,19 @@ To try a change end to end, run the tool on this repository:
 
 ```bash
 pnpm build
-node packages/cli/scripts/prepack.mjs      # see below — needed once per build
 node packages/cli/dist/bin/gitnebula.js . # writes analysis.json, serves the map
 ```
 
-Two things about that invocation. The binary lives one directory deeper than
-you might expect, and the depth is load-bearing —
-`packages/cli/tsup.config.ts` explains why. And `packages/cli/assets/` — the
-built viewer and `tree-sitter-python.wasm` — is populated by `prepack`, which
-npm runs on `pack`/`publish` and never during development, so a plain
-`pnpm build` leaves the binary unable to find either: serving stops at "the
-viewer has not been built", `gitnebula build` refuses for the same reason, and
-a repository containing Python fails its `deps` stage with
-`ENOENT … tree-sitter-python.wasm`. Running the prepack script by hand is the
-whole fix; re-run it after a rebuild. None of this affects the published
-tarball, which `src/pack.test.ts` installs and runs cold, and story 4.5's AC-6
-closes the dev-checkout gap for good.
+The binary lives one directory deeper than you might expect, and the depth is
+load-bearing — `packages/cli/tsup.config.ts` explains why.
+
+`pnpm build` runs the two build edges in order, viz then cli, and cli's ends by
+copying the built viewer and `tree-sitter-python.wasm` into
+`packages/cli/assets/`, where the binary looks for them. Both are gitignored
+regenerated artefacts. Until story 4.5 only `npm pack`'s `prepack` produced
+them, so a plain `pnpm build` left a binary that could not serve a map at all
+and died on the first Python file it met; `src/dev-checkout.test.ts` is what
+keeps that from coming back.
 
 ## Tests and fixture repositories
 
@@ -111,6 +108,36 @@ branch:
   squash body, not the branch commits, is what survives on the base branch.
 - The PR description must be understandable without reading the code, and CI
   must be green.
+
+## Releasing
+
+Exactly one package reaches npm: `gitnebula`, the one in `packages/cli`
+(AD-11). The other five are `private` and are consumed from source inside the
+workspace; `packages/cli`'s build inlines the four Node ones into the binary,
+so they have no separate existence on the registry.
+
+Publishing is the maintainer's, from a clean checkout of the merged base with
+their own npm credentials:
+
+```bash
+git switch master && git pull            # a clean tree; nothing uncommitted
+pnpm install && pnpm lint && pnpm test   # the suite includes the cold-install e2e
+pnpm build                               # the only build entry
+
+npm version 0.1.0 --workspace packages/cli --no-git-tag-version  # or edit by hand
+cd packages/cli && npm publish --dry-run # read the file list before the real one
+npm publish                              # add --otp=<code> if 2FA is on
+cd ../.. && git commit -am "chore(cli): release v0.1.0"
+git tag v0.1.0 && git push && git push --tags
+```
+
+The tag is `v<version>` and names the CLI's version, not the contract's.
+**The two move independently** (AD-11): `schemaVersion` in `analysis.json` is
+the data contract's own version and changes only when the contract does, which
+is a deliberate, versioned act with its own story and an ADR (see
+`docs/adr/`). A CLI release that changes no contract field leaves
+`schemaVersion` exactly where it was, and a `schemaVersion` bump does not
+imply a major CLI release.
 
 ## Determinism
 

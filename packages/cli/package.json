@@ -1,12 +1,30 @@
 {
-  "name": "@gitnebula/cli",
-  "version": "0.0.0",
-  "private": true,
-  "description": "Turn any git repository into an interactive architecture map.",
+  "name": "gitnebula",
+  "version": "0.1.0",
+  "description": "Turn any git repository into an interactive architecture map. One command, no config, fully offline.",
+  "keywords": [
+    "git",
+    "architecture",
+    "visualization",
+    "dependency-graph",
+    "code-analysis",
+    "codebase",
+    "churn",
+    "hotspots",
+    "cli",
+    "offline"
+  ],
+  "homepage": "https://github.com/jundymek/gitnebula#readme",
+  "bugs": "https://github.com/jundymek/gitnebula/issues",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jundymek/gitnebula.git",
+    "directory": "packages/cli"
+  },
   "license": "MIT",
   "type": "module",
   "bin": {
-    "gitnebula": "./dist/bin/gitnebula.js"
+    "gitnebula": "dist/bin/gitnebula.js"
   },
   "files": [
     "dist",
@@ -17,8 +35,8 @@
     "node": ">=20.19"
   },
   "scripts": {
-    "build": "tsup",
-    "prepack": "node scripts/prepack.mjs",
+    "build": "tsup && node scripts/assemble-assets.mjs",
+    "prepack": "node scripts/assemble-assets.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -1,10 +1,27 @@
-// AD-11's prepack: assemble the publishable package out of artefacts the two
-// build edges have already produced.
+// Assemble `packages/cli/assets/` out of artefacts the two build edges have
+// already produced (AD-11).
 //
-// It deliberately does **not** build anything. AC-5 keeps `pnpm build` as the
-// only build entry, and a prepack that quietly rebuilds would make `npm pack`
-// a third one — with its own idea of which sources are current. So it copies,
-// and it aborts by name when an input is missing.
+// It deliberately does **not** build anything. 4.1's AC-5 keeps `pnpm build`
+// as the only build entry, and a step that quietly rebuilt would be a second
+// one — with its own idea of which sources are current. So it copies, and it
+// aborts by name when an input is missing.
+//
+// Two callers, both of which need exactly this (story 4.5, AC-6):
+//
+//   cli's `build`    — after tsup, so a plain `pnpm build` leaves a binary
+//                      that runs. Until 4.5 only the caller below existed,
+//                      npm runs it only on `pack`/`publish`, and so every
+//                      development checkout had an empty `assets/`: serving
+//                      aborted whatever the repository contained, and the
+//                      first Python file died on ENOENT. The published
+//                      tarball was never affected, which is why nothing
+//                      caught it for three stories.
+//   cli's `prepack`  — unchanged, and kept rather than trusted to the build:
+//                      `npm pack` on a tree nobody built must fail by name
+//                      instead of shipping an empty `assets/`.
+//
+// This is why the workspace `build` runs viz **before** cli: the first caller
+// needs `packages/viz/dist` to already exist.
 //
 // What lands in `packages/cli/assets/`, and why there:
 //
@@ -16,8 +33,8 @@
 //   assets/viz/index.html            the self-contained Viewer (ADR-0004),
 //                                    found by `resolveVizDist` in serve.ts.
 //
-// Both are regenerated artefacts, so both are gitignored; the tarball is the
-// only place they are meant to persist.
+// Both are regenerated artefacts, so both are gitignored: the tarball is the
+// only place they persist beyond the build that produced them.
 import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -76,7 +93,7 @@ const missing = inputs.filter((input) => !existsSync(input.proof));
 if (missing.length > 0) {
   for (const input of missing) {
     process.stderr.write(
-      `prepack: ${input.what} is missing at ${input.proof} — ${input.remedy}\n`,
+      `assets: ${input.what} is missing at ${input.proof} — ${input.remedy}\n`,
     );
   }
   process.exit(1);
@@ -90,5 +107,5 @@ mkdirSync(assets, { recursive: true });
 for (const input of inputs) {
   if (input.from === null || input.to === null) continue;
   cpSync(input.from, input.to, { recursive: true });
-  process.stdout.write(`prepack: ${input.to.slice(cliRoot.length + 1)}\n`);
+  process.stdout.write(`assets: ${input.to.slice(cliRoot.length + 1)}\n`);
 }
