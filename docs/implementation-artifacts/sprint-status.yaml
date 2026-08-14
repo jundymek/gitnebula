@@ -56,7 +56,7 @@ development_status:
   # stage 3 so the supervisor also folds M3's outcome into the Epic 4
   # retrospective (which was written at 4.1-4.4 closure and deliberately left
   # DoD item 1 open pending this story).
-  4.5-npm-release: review
+  4.5-npm-release: done
   # Added 2026-08-13 by the epic/4-build-bundle supervisor at epic closure, on
   # the maintainer's instruction: 4.1 moved the binary to dist/bin/gitnebula.js
   # and three top-level docs still name the old path, so the one command a
