@@ -137,34 +137,57 @@ function isInside(root: string, candidate: string): boolean {
  * directory is not a package edge, and AD-2 forbids the edge that importing
  * would create.
  *
- * Two candidates, in the order they exist in practice: the copy cli's prepack
- * places in the package's assets (AD-11), then the workspace build for a
- * source-mode run.
+ * The copy the cli package's own build puts in `assets/` is the answer in both
+ * layouts that matter — the installed package, and a workspace that has been
+ * built (AD-11, and story 4.5's AC-6, which made `pnpm build` produce it). It
+ * is tried first for that reason.
  *
- * Both are two directories up from the module asking, which is not a
- * coincidence: the bundle is emitted at `dist/bin/gitnebula.js` precisely so
- * that a package-root-relative asset path means the same thing bundled as it
- * does from `src/…` (see tsup.config.ts).
+ * The other two are the same fallback — the workspace's own `packages/viz/dist`
+ * — reached from the two places this module can be running from, because the
+ * bundle sits one directory deeper than the source does:
  *
- * @returns the directory, or null when the viewer has not been built.
+ *     packages/cli/src/serve.ts        →  ../../viz/dist
+ *     packages/cli/dist/bin/….js       →  ../../../viz/dist
+ *
+ * Only the first of those existed before story 4.5, so for the built binary
+ * the fallback was dead: with `assets/` empty there was no second candidate at
+ * all, and a dev checkout could not serve a map whatever the repository
+ * contained. Populating `assets/` from the build is the real fix; this line
+ * makes the fallback do what it always claimed to.
+ *
+ * @returns the directory, or null when no built viewer is reachable.
  */
 export function resolveVizDist(moduleUrl: string): string | null {
   const here = resolve(fileURLToPath(new URL(".", moduleUrl)));
   const candidates = [
-    // Bundled: dist/bin/gitnebula.js → packages/cli/assets/viz (AD-11).
+    // Bundled or installed: dist/bin/gitnebula.js → packages/cli/assets/viz.
     join(here, "..", "..", "assets", "viz"),
     // Source mode: packages/cli/src → packages/viz/dist.
     join(here, "..", "..", "viz", "dist"),
+    // Bundled inside the workspace: dist/bin → packages/viz/dist.
+    join(here, "..", "..", "..", "viz", "dist"),
   ];
   return candidates.find((dir) => existsSync(join(dir, "index.html"))) ?? null;
 }
 
-/** The AD-7 abort for a run that reached serve with no viewer to serve. */
-export function missingDistError(): StageError {
+/**
+ * The AD-7 abort for a run that reached serve with no viewer to serve.
+ *
+ * It used to say "the viewer has not been built" and send the reader to
+ * `pnpm --filter @gitnebula/viz build`. In the one situation anybody ever hit
+ * it, both halves were false: `packages/viz/dist/index.html` was sitting right
+ * there, and running that command again changed nothing — what was missing was
+ * the copy under `packages/cli/assets/`, which only `npm pack` produced. A
+ * remedy that does not work is worse than no remedy, because the reader spends
+ * their time proving it. So the cause names the directory that was searched,
+ * and the remedy names the command that actually populates it.
+ */
+export function missingDistError(distDir?: string): StageError {
+  const where = distDir === undefined ? "" : ` (looked in ${distDir})`;
   return new StageError(
     SERVE_STAGE,
-    "the viewer has not been built",
-    "run `pnpm --filter @gitnebula/viz build`, then re-run gitnebula — or pass --no-serve to stop after writing analysis.json",
+    `no built viewer to serve${where}`,
+    "in a checkout of the repository, run `pnpm build` from the workspace root and re-run gitnebula; from an installed copy this is a packaging bug, please report it — or pass --no-serve to stop after writing analysis.json",
   );
 }
 
@@ -178,7 +201,7 @@ export async function startServer(
   options: ServeOptions,
 ): Promise<RunningServer> {
   if (!existsSync(join(options.distDir, "index.html")))
-    throw missingDistError();
+    throw missingDistError(options.distDir);
 
   const server = createServer((request, response) => {
     handle(request, response, options);

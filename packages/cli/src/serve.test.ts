@@ -273,7 +273,7 @@ describe("Ctrl+C shuts the server down cleanly (AC-3)", () => {
 });
 
 describe("a missing viewer build is an actionable abort (AC-2)", () => {
-  it("names the viz build command in the AD-7 shape", async () => {
+  it("names the directory it searched and a remedy that works", async () => {
     const empty = makeTempDir(temps, "gitnebula-nodist-");
 
     const attempt = startServer({
@@ -282,10 +282,18 @@ describe("a missing viewer build is an actionable abort (AC-2)", () => {
       port: 45260,
     });
     await expect(attempt).rejects.toThrow(StageError);
+    // Story 4.5: the old wording claimed the viewer had not been built and
+    // sent the reader to `pnpm --filter @gitnebula/viz build`, both of which
+    // were false in the only case anyone ever hit — see missingDistError.
     await expect(attempt).rejects.toThrow(
-      /^serve: the viewer has not been built — run `pnpm --filter @gitnebula\/viz build`/,
+      new RegExp(
+        `^serve: no built viewer to serve \\(looked in ${empty}\\) — .*\`pnpm build\``,
+      ),
     );
     expect(missingDistError().stage).toBe("serve");
+    // Without a directory to name — `resolveVizDist` found no candidate at
+    // all — the cause says so rather than inventing one of the three.
+    expect(missingDistError().cause).toBe("no built viewer to serve");
   });
 
   it("returns null rather than guessing when no candidate dist exists", () => {
@@ -293,6 +301,50 @@ describe("a missing viewer build is an actionable abort (AC-2)", () => {
     expect(
       resolveVizDist(new URL(`file://${empty}/src/serve.ts`).href),
     ).toBeNull();
+  });
+});
+
+/**
+ * Story 4.5, AC-6. The bundle sits one directory deeper than the source, so
+ * every candidate has to be spelled twice — and the workspace fallback was
+ * only ever spelled for the source layout. The e2e in `dev-checkout.test.ts`
+ * catches that against the real tree; this is the same thing at unit speed,
+ * against a fake one, so a failure points at the line rather than at a build.
+ */
+describe("resolveVizDist across the layouts the module runs in (AC-6)", () => {
+  /** A workspace root with `packages/viz/dist/index.html` in it. */
+  function makeWorkspace(): string {
+    const root = makeTempDir(temps, "gitnebula-layout-");
+    const vizDist = join(root, "packages", "viz", "dist");
+    mkdirSync(vizDist, { recursive: true });
+    writeFileSync(join(vizDist, "index.html"), "<!doctype html><title>viz");
+    return root;
+  }
+
+  const from = (dir: string): string | null =>
+    resolveVizDist(new URL(`file://${dir}/module.js`).href);
+
+  it("finds the workspace viewer from packages/cli/src", () => {
+    const root = makeWorkspace();
+    expect(from(join(root, "packages", "cli", "src"))).toBe(
+      join(root, "packages", "viz", "dist"),
+    );
+  });
+
+  it("finds the workspace viewer from packages/cli/dist/bin", () => {
+    const root = makeWorkspace();
+    expect(from(join(root, "packages", "cli", "dist", "bin"))).toBe(
+      join(root, "packages", "viz", "dist"),
+    );
+  });
+
+  it("prefers the package's own assets over the workspace viewer", () => {
+    const root = makeWorkspace();
+    const assets = join(root, "packages", "cli", "assets", "viz");
+    mkdirSync(assets, { recursive: true });
+    writeFileSync(join(assets, "index.html"), "<!doctype html><title>viz");
+
+    expect(from(join(root, "packages", "cli", "dist", "bin"))).toBe(assets);
   });
 });
 

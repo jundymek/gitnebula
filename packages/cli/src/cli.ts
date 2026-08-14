@@ -411,7 +411,7 @@ function planBundle(
  * Serves the map on the loopback interface, opens a browser at it, and blocks
  * until Ctrl+C — the tail of a zero-config `npx gitnebula` (FR-5).
  *
- * @throws {StageError} stage `serve` when the viewer has not been built.
+ * @throws {StageError} stage `serve` when no built viewer can be found.
  */
 async function serveUntilInterrupted(
   analysisPath: string,

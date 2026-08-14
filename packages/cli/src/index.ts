@@ -1,11 +1,12 @@
-// @gitnebula/cli — pipeline orchestration, config, emit, the loopback viewer
-// server and URL mode. Published as `gitnebula` (AD-11).
+// gitnebula — pipeline orchestration, config, emit, the loopback viewer server
+// and URL mode. AD-11's one published package; it was `@gitnebula/cli` inside
+// the workspace until story 4.5 renamed it for the first release.
 //
 // Story 1.1's scaffold exports (`pipelineEdges`, a placeholder `main`) are
 // gone: the AD-2 edges they existed to prove are now proven by the pipeline
 // importing all three analyzers for real.
 
-export const packageName = "@gitnebula/cli";
+export const packageName = "gitnebula";
 
 export { openBrowser } from "./browser.js";
 export { main, run, type RunOptions } from "./cli.js";
