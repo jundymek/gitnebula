@@ -29,7 +29,8 @@
   "files": [
     "dist",
     "assets",
-    "LICENSE"
+    "LICENSE",
+    "README.md"
   ],
   "engines": {
     "node": ">=20.19"

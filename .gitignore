@@ -8,10 +8,13 @@ build/
 
 # What `packages/cli`'s prepack assembles for the tarball (AD-11): the built
 # Viewer, the grammar copied out of `packages/deps/assets` (which IS committed,
-# hence the explicit paths), and the licence copied from the workspace root.
-# All three are regenerated artefacts; the tarball is where they belong.
+# hence the explicit paths), and the licence and readme copied from the
+# workspace root — the readme with its relative links rewritten absolute, since
+# npm renders it off-repository. All four are regenerated artefacts; the tarball
+# is where they belong.
 packages/cli/assets/
 packages/cli/LICENSE
+packages/cli/README.md
 packages/cli/*.tgz
 
 # The bundle `gitnebula build` writes when run in this repository — its default

@@ -35,7 +35,14 @@
 //
 // Both are regenerated artefacts, so both are gitignored: the tarball is the
 // only place they persist beyond the build that produced them.
-import { cpSync, existsSync, mkdirSync, rmSync } from "node:fs";
+import {
+  cpSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -44,6 +51,32 @@ const cliRoot = join(here, "..");
 const workspaceRoot = join(cliRoot, "..", "..");
 
 const assets = join(cliRoot, "assets");
+
+// The branch the rewritten README points at. `master` is this repository's base
+// branch; a permalink to a tag would rot differently — it would keep pointing at
+// the tagged revision's files, which is wrong for a README describing the
+// current package.
+const REPO = "https://github.com/jundymek/gitnebula";
+const RAW = "https://raw.githubusercontent.com/jundymek/gitnebula/master";
+
+/**
+ * npm renders the README on its own page, where a relative link resolves
+ * against `npmjs.com`, not against the repository — so every one of them 404s.
+ * The root README is the single source of truth (a hand-maintained second copy
+ * drifts), so it is copied and its relative targets are rewritten to absolute
+ * ones: images to `raw.githubusercontent.com`, everything else to `/blob/`.
+ *
+ * Deliberately narrow: it rewrites markdown link and image targets that are
+ * relative, and nothing else. Anything already absolute (`https:`, `#anchor`,
+ * `mailto:`) is left exactly as written.
+ */
+function absolutizeLinks(markdown) {
+  return markdown.replace(
+    /(!?)\[([^\]]*)\]\((?!https?:|#|mailto:)([^)\s]+)\)/g,
+    (_match, bang, text, target) =>
+      `${bang}[${text}](${bang ? RAW : `${REPO}/blob/master`}/${target})`,
+  );
+}
 
 /** Each input, the file that proves it exists, and how to produce it. */
 const inputs = [
@@ -81,6 +114,14 @@ const inputs = [
     remedy: "restore LICENSE at the workspace root",
   },
   {
+    what: "the readme",
+    from: join(workspaceRoot, "README.md"),
+    proof: join(workspaceRoot, "README.md"),
+    to: join(cliRoot, "README.md"),
+    transform: absolutizeLinks,
+    remedy: "restore README.md at the workspace root",
+  },
+  {
     what: "the cli bundle",
     from: null,
     proof: join(cliRoot, "dist", "bin", "gitnebula.js"),
@@ -106,6 +147,10 @@ mkdirSync(assets, { recursive: true });
 
 for (const input of inputs) {
   if (input.from === null || input.to === null) continue;
-  cpSync(input.from, input.to, { recursive: true });
+  if (input.transform) {
+    writeFileSync(input.to, input.transform(readFileSync(input.from, "utf8")));
+  } else {
+    cpSync(input.from, input.to, { recursive: true });
+  }
   process.stdout.write(`assets: ${input.to.slice(cliRoot.length + 1)}\n`);
 }
