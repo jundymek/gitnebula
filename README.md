@@ -50,22 +50,21 @@ npx gitnebula --window-days 180       # widen the git history window (default 90
 Optional `.gitnebula.yml` in the repository root sets `excludes`, `windowDays`,
 `hotspotThreshold` and `layers`; command-line flags win over the file.
 
-Before the first npm release, `npx` has nothing to fetch — run it from a clone
-instead:
+`npx` fetches the published package, so there is nothing to install and nothing
+left behind. To keep it around, `npm install -g gitnebula` and run `gitnebula`.
+Node.js ≥ 20.19 is the only requirement; git is read through the `git` already
+on your PATH.
+
+To run it from a clone instead — a change you are trying out, or a look at the
+sources:
 
 ```bash
 pnpm install
 pnpm build
-node packages/cli/scripts/prepack.mjs      # one extra step, explained below
 node packages/cli/dist/bin/gitnebula.js .
 ```
 
-The third line is what npm runs for you when you install the package: it puts
-the built viewer and the Python grammar where the binary looks for them. A
-development checkout never packs, so skipping it leaves a binary that writes
-`analysis.json` but cannot serve the map, refuses `gitnebula build`, and loses
-the imports of any repository containing Python. More in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest of the development setup.
 
 ## A static bundle you can host
 

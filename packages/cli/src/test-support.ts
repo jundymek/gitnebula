@@ -21,7 +21,7 @@ export const workspaceRoot = join(here, "..", "..", "..");
 
 /**
  * The deterministic fixture repository (AD-14). Built by `ensureFixtureRepo`
- * below, so `pnpm --filter @gitnebula/cli test` is self-sufficient.
+ * below, so `pnpm --filter gitnebula test` is self-sufficient.
  */
 export const fixtureRepo = join(
   workspaceRoot,
@@ -66,27 +66,16 @@ function sleep(ms: number): void {
 }
 
 /**
- * `pnpm build`, from the workspace root, serialized across vitest workers.
+ * Blocks until this process holds the workspace build lock.
  *
- * Skipping the build when `dist/` already exists is the obvious optimisation
- * and it is wrong: `dist/` is exactly as old as whenever it was last built, so
- * a green run over it would be a green run over a binary the branch no longer
- * describes. `tsup` cleans its output directory, so a `dist/` predating story
- * 4.1's rename still holds `dist/gitnebula.js` — the very path story 4.6's
- * check exists to catch.
- *
- * But two suites each running `pnpm build` in parallel workers would race, one
- * cleaning `dist/` while the other reads it. Hence the lock: the first caller
- * builds and stamps; a caller that waited and finds a build completed *after*
- * it asked skips its own, because that build is fresh by definition.
- *
- * Calling the workspace's own build entry rather than tsup and vite directly
- * is also the point: 4.1's AC-5 says `pnpm build` is the only build entry, and
- * a test reaching past it to its two halves would be the second one.
+ * Two suites each running `pnpm build` in parallel workers would race, one
+ * cleaning `dist/` while the other reads it — and since story 4.5 the same is
+ * true of `packages/cli/assets/`, which `pnpm build` and `npm pack`'s prepack
+ * both write. Everything that writes either directory, or reads one while
+ * asserting what the build left there, holds this lock for the duration.
  */
-export function buildWorkspace(): void {
-  const requestedAt = Date.now();
-  const deadline = requestedAt + 300_000;
+function acquireBuildLock(): void {
+  const deadline = Date.now() + 300_000;
   mkdirSync(dirname(buildLock), { recursive: true });
 
   for (;;) {
@@ -104,16 +93,87 @@ export function buildWorkspace(): void {
       sleep(250);
       continue;
     }
-    try {
-      writeFileSync(lockOwner, String(process.pid));
-      if (builtSince(requestedAt)) return;
-      execFileSync("pnpm", ["build"], { cwd: workspaceRoot, stdio: "ignore" });
-      writeFileSync(buildStamp, String(Date.now()));
-    } finally {
-      rmSync(buildLock, { recursive: true, force: true });
-    }
+    writeFileSync(lockOwner, String(process.pid));
     return;
   }
+}
+
+function releaseBuildLock(): void {
+  rmSync(buildLock, { recursive: true, force: true });
+}
+
+/** Runs `work` holding the build lock. */
+export function withBuildLock<T>(work: () => T): T {
+  acquireBuildLock();
+  try {
+    return work();
+  } finally {
+    releaseBuildLock();
+  }
+}
+
+/**
+ * {@link withBuildLock} for work that has to await something — a served
+ * request, a spawned binary. The lock is held until the promise settles, which
+ * a synchronous `finally` around an un-awaited promise would not do.
+ */
+export async function withBuildLockAsync<T>(
+  work: () => Promise<T>,
+): Promise<T> {
+  acquireBuildLock();
+  try {
+    return await work();
+  } finally {
+    releaseBuildLock();
+  }
+}
+
+/**
+ * `pnpm build`, from the workspace root, serialized across vitest workers.
+ *
+ * Skipping the build when `dist/` already exists is the obvious optimisation
+ * and it is wrong: `dist/` is exactly as old as whenever it was last built, so
+ * a green run over it would be a green run over a binary the branch no longer
+ * describes. `tsup` cleans its output directory, so a `dist/` predating story
+ * 4.1's rename still holds `dist/gitnebula.js` — the very path story 4.6's
+ * check exists to catch.
+ *
+ * A caller that waited on the lock and finds a build completed *after* it
+ * asked skips its own, because that build is fresh by definition.
+ *
+ * Calling the workspace's own build entry rather than tsup and vite directly
+ * is also the point: 4.1's AC-5 says `pnpm build` is the only build entry, and
+ * a test reaching past it to its two halves would be the second one.
+ */
+export function buildWorkspace(): void {
+  const requestedAt = Date.now();
+  withBuildLock(() => {
+    if (builtSince(requestedAt)) return;
+    runWorkspaceBuild();
+  });
+}
+
+/**
+ * `pnpm build` over a tree whose `packages/cli/assets/` has been removed
+ * first — story 4.5's AC-6, and the state a fresh clone is actually in.
+ *
+ * Never skipped on the stamp: an earlier `npm pack` in another suite runs
+ * prepack, which repopulates `assets/`, and a run that reused that would be
+ * asserting somebody else's copy rather than what the build produced. The
+ * caller is expected to hold the lock across its assertions too, for the same
+ * reason.
+ */
+export function rebuildWithoutAssets(): void {
+  rmSync(join(workspaceRoot, "packages", "cli", "assets"), {
+    recursive: true,
+    force: true,
+  });
+  runWorkspaceBuild();
+}
+
+function runWorkspaceBuild(): void {
+  execFileSync("pnpm", ["build"], { cwd: workspaceRoot, stdio: "ignore" });
+  writeFileSync(buildStamp, String(Date.now()));
 }
 
 /**

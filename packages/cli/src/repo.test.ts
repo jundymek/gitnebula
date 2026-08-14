@@ -15,7 +15,7 @@ import {
 
 // The fixture repository (AD-14) is built here rather than by a `pretest`:
 // the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
-// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// so this keeps `pnpm --filter gitnebula test` self-sufficient without
 // adding a fifth shell caller racing the other packages.
 beforeAll(() => ensureFixtureRepo());
 

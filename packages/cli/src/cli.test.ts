@@ -24,7 +24,7 @@ import {
 
 // The fixture repository (AD-14) is built here rather than by a `pretest`:
 // the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
-// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// so this keeps `pnpm --filter gitnebula test` self-sufficient without
 // adding a fifth shell caller racing the other packages.
 beforeAll(() => ensureFixtureRepo());
 
@@ -292,7 +292,7 @@ describe("the run ends in a served map (AC-1, AC-2, AC-3)", () => {
 
     expect(code).toBe(1);
     expect(chunks.join("")).toMatch(
-      /^serve: the viewer has not been built — run `pnpm --filter @gitnebula\/viz build`/m,
+      /^serve: no built viewer to serve \(looked in .*\) — .*`pnpm build`/m,
     );
     // The analysis is still on disk: only the serving tail failed.
     expect(existsSync(join(cwd, "analysis.json"))).toBe(true);

@@ -7,7 +7,7 @@
 // is a promise this test holds the pipeline to.
 //
 // To regenerate after an analyzer's behaviour legitimately changes:
-//   UPDATE_ANALYSIS_SNAPSHOT=1 pnpm --filter @gitnebula/cli test
+//   UPDATE_ANALYSIS_SNAPSHOT=1 pnpm --filter gitnebula test
 // and read the diff before committing it.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -48,7 +48,7 @@ const SUMMARY =
 
 // The fixture repository (AD-14) is built here rather than by a `pretest`:
 // the builder is concurrency-safe and no-ops on a valid repository (story 3.6),
-// so this keeps `pnpm --filter @gitnebula/cli test` self-sufficient without
+// so this keeps `pnpm --filter gitnebula test` self-sufficient without
 // adding a fifth shell caller racing the other packages.
 beforeAll(() => ensureFixtureRepo());
 
