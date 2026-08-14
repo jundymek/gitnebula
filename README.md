@@ -121,10 +121,12 @@ Setup, the commands that must pass, and the commit conventions are in
 re-record it for the next version — is in
 [docs/recording-demo.md](docs/recording-demo.md).
 
-[![CI](https://github.com/jundymek/gitnebula/actions/workflows/ci.yml/badge.svg)](https://github.com/jundymek/gitnebula/actions/workflows/ci.yml)
-
-CI runs ESLint and Prettier, `tsc --noEmit` and the full vitest suite of every
-package on Node 20.
+The same checks run in
+[CI](https://github.com/jundymek/gitnebula/actions/workflows/ci.yml) — ESLint
+and Prettier, `tsc --noEmit` and the full vitest suite of every package on
+Node 20, plus the static bundle's size budget. It is `workflow_dispatch`-only
+for now: verification runs locally during implementation, and wiring it to
+push and pull requests is what story 4.2 revisits.
 
 ## License
 
