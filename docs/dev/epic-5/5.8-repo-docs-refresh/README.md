@@ -109,7 +109,24 @@ read the scanner's `binary` flag, so only `loc` is lost — the node is drawn at
 minimum size with its dependencies intact. The claim was asserted from the
 warning line rather than measured; the numbers above are from the emitted
 `analysis.json`. Story 5.10's AC-5 asks this same question, and this is the
-answer. It is the same defect story 5.1's agent found and
+answer.
+
+**How to look for the byte, if you are the one who picks up 5.10.** Count
+bytes; do not grep. Story 5.6's owner ran `grep -rlP '\x00'` over the whole
+tree and it reported **nothing** — including `layout.ts`, which demonstrably
+contains one — and she caught the false negative only by re-counting the bytes
+in a second language. A grep that silently finds nothing looks exactly like a
+clean tree. The check that works:
+
+```bash
+node -e 'const b=require("fs").readFileSync(process.argv[1]);
+  let n=0; for (const c of b) if (c===0) n++;
+  if (n) console.log(n, process.argv[1]);' <file>
+```
+
+Two of the three people who looked at this defect were misled by a tool that
+renders or reports the byte as absent. That is the argument for 5.10's AC-2
+asking for an automated check rather than another careful reading. It is the same defect story 5.1's agent found and
 fixed in their own fixture, still present in shipped engine source. `engine/` is
 not this story's territory and both wave-B peers are editing it, so it is
 reported rather than patched — the reasoning is `DECISIONS.md` D8. Story 5.7's
