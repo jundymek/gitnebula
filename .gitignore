@@ -51,5 +51,8 @@ packages/viz/perf-spike/results.json
 # docs/dev/epic-3/3.5-viz-export-perf/PERFORMANCE.md, where they are reviewed
 # rather than overwritten.
 packages/viz/perf/report/
+# Story 5.7's 3D run of the same harness, same reasoning; its numbers are
+# transcribed into docs/dev/epic-5/5.7-viz-3d-view/PERFORMANCE.md.
+packages/viz/perf/report-3d/
 packages/viz/test-results/
 packages/viz/playwright-report/

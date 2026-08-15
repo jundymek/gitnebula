@@ -17,6 +17,7 @@ import {
   FILTER_SLOT_ID,
   MODE_SLOT_ID,
   renderHeader,
+  VIEW_SLOT_ID,
   type HeaderActions,
 } from "./header.js";
 import { renderFilterEmpty, type FilterEmptyHandle } from "./filter-empty.js";
@@ -44,6 +45,12 @@ export interface MountOptions {
    * unchanged for the stories building alongside this one.
    */
   readonly overlays?: readonly HTMLElement[];
+  /**
+   * Story 5.7's 2D/3D switch, placed in the header's view slot. Optional and
+   * a plain element, so chrome never learns what a view is — and so every
+   * existing caller keeps working unchanged.
+   */
+  readonly viewSwitch?: HTMLElement;
 }
 
 /** What `connectEngine` needs beyond the handle. */
@@ -271,6 +278,13 @@ export function mountChrome(
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
   header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
+  // Story 5.7's 2D/3D switch. Chrome *places* it and nothing more — the
+  // control is constructed by `app.ts`, which owns swapping the engine, since
+  // chrome may not name a canvas or build an engine (AD-5, boundary.test.ts).
+  // Exactly the arrangement `options.stage` already uses.
+  if (options.viewSwitch) {
+    header.querySelector(`#${VIEW_SLOT_ID}`)?.append(options.viewSwitch);
+  }
 
   // Story 5.5: the legend reads the document so it can name the heatmap's
   // near-uniform case, and follows the engine's mode (wired in

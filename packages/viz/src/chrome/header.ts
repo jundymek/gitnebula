@@ -21,6 +21,8 @@ export const MODE_SLOT_ID = "mode-slot";
 export const EXPORT_SLOT_ID = "export-slot";
 /** Story 5.3's layer filter, filled by `mountChrome`. Do not rename. */
 export const FILTER_SLOT_ID = "filter-slot";
+/** Story 5.7's 2D/3D switch, filled by `mountChrome`. Do not rename. */
+export const VIEW_SLOT_ID = "view-slot";
 
 export function renderHeader(
   store: Store<ChromeState>,
@@ -81,6 +83,11 @@ export function renderHeader(
   const filterSlot = document.createElement("div");
   filterSlot.id = FILTER_SLOT_ID;
 
+  // Story 5.7's 2D/3D switch. Appended after the filter slot, before export —
+  // its own line and its own slot, so the wave's agents never edit one line.
+  const viewSlot = document.createElement("div");
+  viewSlot.id = VIEW_SLOT_ID;
+
   header.append(
     brand,
     repo,
@@ -90,6 +97,7 @@ export function renderHeader(
     startHere,
     replay,
     filterSlot,
+    viewSlot,
     exportSlot,
   );
 
