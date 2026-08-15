@@ -145,6 +145,17 @@ still present*, because the langgraph-shaped fixture contains no node in the
 failing shape. Reverting the fix and watching the test stay green is what
 caught it.
 
+A **third** pass found two more, one of them a regression this branch's own
+earlier fix introduced: making a scope unfold its module meant the
+search-driven exit — which clears the scope directly rather than through
+`setScope` — never released the pin, so the abandoned module stayed unfolded
+for the rest of the session. The other: connectivity was judged without
+story 5.3's layer filter, so a file whose only dependency sat in a hidden
+layer survived connected-only and was drawn edgeless anyway. Connected-only
+now evaluates against the frame both filters leave, and the visible set is
+*keyed* on the layer set rather than invalidated by it — so neither story's
+setter has to know the other exists.
+
 A second review pass then found two more, which turned out to be one design
 mistake: chrome was **inferring** whether to offer a way back out of a scope,
 rather than being told. Leaving a scope with `Escape` announced *"left the

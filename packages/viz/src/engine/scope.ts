@@ -20,6 +20,21 @@ export interface SceneFilter {
   readonly scopeId: string | null;
   /** Drop nodes that carry no edge at all (AC-3). */
   readonly connectedOnly: boolean;
+  /**
+   * Ids another filter is already allowing through, or undefined for "no
+   * other filter is active".
+   *
+   * Connected-only has to answer "does this node have an edge **in the frame**",
+   * and the frame is narrowed by story 5.3's layer filter as well as by this
+   * story's scope. Without this, a visible file whose only dependency sits in
+   * a hidden layer survives the filter and is then drawn with no edges at all
+   * — the exact thing the filter promises cannot happen — and the hidden count
+   * understates by the same amount.
+   *
+   * Nodes removed by this restriction are **not** counted in `hiddenByDegree`:
+   * they belong to the other filter's cause, and each filter names its own.
+   */
+  readonly restrictTo?: ReadonlySet<string>;
 }
 
 /** What survived, and what each cause removed — never one merged total. */
@@ -128,6 +143,15 @@ export function visibleNodeIds(
       ? new Set(graph.nodes.map((node) => node.id))
       : new Set(inScopeIds(graph, filter.scopeId));
   const hiddenByScope = total - surviving.size;
+
+  // Another filter's exclusions, applied before connectivity is judged so that
+  // "has an edge" means "has an edge in the frame". Deliberately not counted:
+  // this is somebody else's cause and their control states it.
+  if (filter.restrictTo) {
+    for (const id of [...surviving]) {
+      if (!filter.restrictTo.has(id)) surviving.delete(id);
+    }
+  }
 
   let hiddenByDegree = 0;
   if (filter.connectedOnly) {

@@ -190,6 +190,13 @@ export class CanvasGraphEngine implements GraphEngine {
    * kind of cost this story exists to remove.
    */
   private visibleCache: ReadonlySet<string> | null = null;
+  /**
+   * What the cached set was computed for: this story's two filters **and**
+   * story 5.3's layer set. Keying on the layers rather than subscribing to
+   * their change is what keeps the two stories uncoupled — neither setter has
+   * to know the other exists.
+   */
+  private visibleCacheKey: string | null = null;
   private hiddenByScope = 0;
   private hiddenByDegree = 0;
 
@@ -483,8 +490,16 @@ export class CanvasGraphEngine implements GraphEngine {
       graphForScope &&
       !inScopeIds(graphForScope, this.scopeId).has(id)
     ) {
-      this.lastScopeId = this.scopeId;
+      const abandoned = this.scopeId;
+      this.lastScopeId = abandoned;
       this.scopeId = null;
+      // The pin `setScope` took out to reveal this module's files goes with
+      // it. Without this the abandoned module stays unfolded for the rest of
+      // the session, outside the semantic-zoom rule and holding a member
+      // layout nobody is looking at — every other way of leaving a scope hands
+      // it back to the viewport rule, and a search-driven exit must not be the
+      // odd one out.
+      this.releasePins([abandoned]);
       this.invalidateVisible();
       this.emitScope(id);
     }
@@ -867,11 +882,35 @@ export class CanvasGraphEngine implements GraphEngine {
       this.hiddenByDegree = 0;
       return null;
     }
-    if (this.visibleCache) return this.visibleCache;
+
+    // Connected-only asks "does this node have an edge **in the frame**", and
+    // story 5.3's layer filter narrows that frame too. So its exclusions are
+    // fed in as a restriction — otherwise a file whose only dependency sits in
+    // a hidden layer survives this filter and is drawn edgeless anyway.
+    //
+    // The layer filter belongs to another story and this one must not reach
+    // into its setter to invalidate a cache, so the cache is keyed on the
+    // active layers instead: a change there produces a different key and the
+    // set is rebuilt on the next read, with no coupling in either direction.
+    const layers = this.getLayerFilter();
+    const restrictTo =
+      layers.length === ALL_LAYERS.length
+        ? undefined
+        : new Set(
+            graph.nodes
+              .filter((node) => this.isLayerVisible(node))
+              .map((node) => node.id),
+          );
+    const key = `${this.scopeId ?? ""}|${this.connectedOnly}|${layers.join(",")}`;
+    if (this.visibleCache && this.visibleCacheKey === key) {
+      return this.visibleCache;
+    }
     const result = visibleNodeIds(graph, {
       scopeId: this.scopeId,
       connectedOnly: this.connectedOnly,
+      restrictTo,
     });
+    this.visibleCacheKey = key;
     this.visibleCache = result.visible;
     this.hiddenByScope = result.hiddenByScope;
     this.hiddenByDegree = result.hiddenByDegree;

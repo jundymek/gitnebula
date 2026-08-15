@@ -202,6 +202,61 @@ describe("AC-3 — connected-only agrees with what is drawn", () => {
   });
 });
 
+describe("AC-3 — connected-only holds when the layer filter is on too", () => {
+  // Third Codex finding: connectivity was judged against the whole graph, so a
+  // file whose only dependency sits in a layer story 5.3 has hidden survived
+  // this filter and was then drawn with no edges at all — precisely what the
+  // filter promises cannot happen.
+  it("leaves no edgeless node in the frame with both filters active", () => {
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+
+    engine.setConnectedOnly(true);
+    // Drop a layer, which removes nodes some survivors depended on.
+    engine.setLayerFilter(
+      engine.getLayerFilter().filter((layer) => layer !== "test"),
+    );
+
+    const built = scene();
+    const touched = new Set<string>();
+    for (const edge of built.edges) {
+      touched.add(edge.sourceId);
+      touched.add(edge.targetId);
+    }
+    for (const item of built.nodes) {
+      expect(touched.has(item.node.id)).toBe(true);
+    }
+  });
+
+  it("recomputes when the layer filter changes, without being told", () => {
+    // The two filters belong to different stories and neither setter knows
+    // about the other, so the visible set is keyed on the layer set rather
+    // than invalidated by it. A stale cache here would be invisible until a
+    // user toggled a layer and saw nothing change.
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+    engine.setConnectedOnly(true);
+
+    const before = scene().nodes.length;
+    engine.setLayerFilter(
+      engine.getLayerFilter().filter((layer) => layer !== "test"),
+    );
+    expect(scene().nodes.length).toBeLessThan(before);
+  });
+});
+
 describe("AC-6 — interaction state never outlives the node it points at", () => {
   // Third Codex finding: the panel kept describing a node the filters had just
   // removed, and its hover chain kept lighting nodes that were still drawn.
@@ -463,6 +518,25 @@ describe("AC-5 — search out of the scope leaves it and flies", () => {
     await engine.flyTo(target, { durationMs: 0 });
     const drawn = new Set(scene().nodes.map((item) => item.node.id));
     expect(drawn.has(target)).toBe(true);
+  });
+
+  it("hands the abandoned module back to the viewport rule", async () => {
+    // Found by the third Codex pass, and a regression I introduced with the
+    // fix that made scoping unfold its module: this path clears the scope
+    // directly, so it skipped the pin release every other exit does. The
+    // module stayed unfolded for the rest of the session.
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setCamera({ k: 1 });
+    engine.setScope(focus);
+    expect(engine.isUnfolded(focus)).toBe(true);
+
+    await engine.flyTo(outOfScopeTarget(focus), { durationMs: 0 });
+
+    // At overview zoom the viewport rule keeps nothing unfolded, so an
+    // unreleased pin is the only thing that could hold this open.
+    engine.setCamera({ k: 1 });
+    expect(engine.isUnfolded(focus)).toBe(false);
   });
 
   it("keeps the scope when the target is inside it", async () => {
