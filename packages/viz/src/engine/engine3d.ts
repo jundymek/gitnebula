@@ -70,6 +70,7 @@ import {
   clampPitch,
   FOCAL_LENGTH,
   orbitDistance,
+  project,
   type Orientation,
 } from "./project3d.js";
 import {
@@ -80,6 +81,7 @@ import {
   type Scene3D,
 } from "./render3d.js";
 import { inScopeIds, visibleNodeIds } from "./scope.js";
+import { UNFOLD_VIEWPORT_MARGIN } from "./unfold.js";
 import type {
   CameraState,
   EngineNode,
@@ -310,6 +312,15 @@ export class Nebula3DEngine implements GraphEngine {
     this.canvas.width = Math.max(1, Math.round(width * dpr));
     this.canvas.height = Math.max(1, Math.round(height * dpr));
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The viewport is the fourth input to the viewport-scoped unfold test,
+    // alongside camera, orientation and the settled layout — so changing it
+    // has to re-ask, exactly as the other three do. Under reduced motion there
+    // is no auto-rotation to paper over a stale set, so a widened window would
+    // leave the modules it revealed collapsed until an unrelated pan.
+    //
+    // Safe during construction: `updateUnfolds` returns early until a document
+    // is loaded, and `resize()` runs from the constructor before there is one.
+    this.updateUnfolds();
   }
 
   destroy(): void {
@@ -367,6 +378,10 @@ export class Nebula3DEngine implements GraphEngine {
       yaw: orientation.yaw ?? this.orientation.yaw,
       pitch: clampPitch(orientation.pitch ?? this.orientation.pitch),
     };
+    // Rotating changes which modules are on screen exactly as panning does,
+    // and the viewport rule reads `this.orientation`. `setCamera` recomputes
+    // for the same reason; this is that reason on the other axis.
+    this.updateUnfolds();
   }
 
   /** Whether idle auto-rotation is running (AC-6 asserts this is false). */
@@ -675,12 +690,50 @@ export class Nebula3DEngine implements GraphEngine {
     const graph = this.graph;
     const layout = this.layout;
     if (!graph || !layout) return;
+    // Nothing unfolds while the global layout is still moving: members spawn
+    // at their module's position and their wake is settled once, so a module
+    // still travelling would leave its files stranded behind it. The 2D engine
+    // returns here for the same reason.
+    if (!layout.settled) return;
+
     const wanted = new Set<string>(this.pinnedUnfolds);
     if (this.scopePin !== null) wanted.add(this.scopePin);
     if (this.camera.k >= UNFOLD_ZOOM) {
+      // **Viewport-scoped**, which is the whole of ADR-0006 — the ADR is named
+      // for it. Unfolding every module in the repository at once is not
+      // semantic zoom, it is "draw everything above 1.8x", and on a large
+      // repository it puts every file of every module through projection and
+      // render on every frame.
+      //
+      // The 2D rule is a world-space rectangle, which does not transfer: in
+      // perspective a module's screen position depends on depth and
+      // orientation, not on x/y alone. So the test is done in screen space —
+      // project the module and ask whether its disc lands on (or near) the
+      // viewport. `UNFOLD_VIEWPORT_MARGIN` is imported rather than restated,
+      // so the two views cannot drift on how much slack "near" means.
+      const marginX = this.viewport.width * UNFOLD_VIEWPORT_MARGIN;
+      const marginY = this.viewport.height * UNFOLD_VIEWPORT_MARGIN;
       for (const item of layout.nodes) {
         const node = graph.nodes[item.graphIndex]!;
         if (node.kind !== "module") continue;
+        const projected = project(
+          item,
+          this.camera,
+          this.orientation,
+          this.viewport,
+          this.targetZ,
+        );
+        // Behind the near plane: not on screen, whatever its x/y.
+        if (!projected) continue;
+        const screenRadius = node.radius * projected.scale;
+        if (
+          projected.x + screenRadius < -marginX ||
+          projected.x - screenRadius > this.viewport.width + marginX ||
+          projected.y + screenRadius < -marginY ||
+          projected.y - screenRadius > this.viewport.height + marginY
+        ) {
+          continue;
+        }
         wanted.add(node.id);
       }
     }
@@ -1137,6 +1190,13 @@ export class Nebula3DEngine implements GraphEngine {
       if (layout.settled) {
         this.announceSettled(layout.frames, timeMs - this.settleStartMs);
         if (!this.cameraTakenByUser) void this.fit();
+        // Unconditionally, and NOT only via the fit above: unfolding is gated
+        // on the layout being settled, so a reader who zoomed past the
+        // threshold while it was still moving had their request refused. This
+        // is the transition that makes it grantable, and if the camera was
+        // taken by hand there is no fit coming to trigger it — the map would
+        // stay fully collapsed at 4x until some unrelated pan nudged it.
+        this.updateUnfolds();
       }
     }
 
@@ -1152,6 +1212,15 @@ export class Nebula3DEngine implements GraphEngine {
         ...this.orientation,
         yaw: this.orientation.yaw + elapsed * AUTO_ROTATE_RAD_PER_MS,
       };
+      // Which modules are on screen is a function of orientation as well as
+      // camera, so the drift has to re-ask. Auto-rotation is ON BY DEFAULT, so
+      // without this the viewport rule is defeated in the ordinary case:
+      // modules rotating into view stay collapsed and modules rotating out
+      // stay materialised until some unrelated pan or zoom happens.
+      // `updateUnfolds` diffs against the current set and returns without
+      // allocating when nothing crossed the edge, so the per-frame cost is a
+      // projection of the ~100 top-level nodes.
+      this.updateUnfolds();
     }
 
     this.advanceFlight(timeMs);

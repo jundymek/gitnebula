@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { swapWithFallback, unavailabilityAfterSwap } from "./app.js";
+import {
+  failedSwitchReason,
+  swapWithFallback,
+  unavailabilityAfterSwap,
+} from "./app.js";
 import { connectEngine, mountChrome } from "./chrome/chrome.js";
 import { createSearchBox } from "./chrome/search.js";
 import {
@@ -457,5 +461,20 @@ describe("the return-to-scope offer survives a view swap (5.4 x 5.7)", () => {
       engine.setReturnScope(null);
       expect(engine.getReturnScope()).toBeNull();
     }
+  });
+});
+
+describe("failedSwitchReason — a failed switch reports against the right control", () => {
+  it("disables 3D when 3D was the view that failed", () => {
+    const reason = failedSwitchReason("3d", "2d", "context lost");
+    expect(reason).toContain("3D view could not be started");
+    expect(reason).toContain("context lost");
+  });
+
+  it("leaves the 3D button alone when 3D is the view still running", () => {
+    // The defect: switching 3D -> 2D, where 2D throws and 3D is restored,
+    // disabled the button for the view the reader is successfully looking at
+    // and explained it with a message about the other one.
+    expect(failedSwitchReason("2d", "3d", "no canvas")).toBeNull();
   });
 });

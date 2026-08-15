@@ -252,6 +252,270 @@ describe("AC-2 — determinism (AD-6)", () => {
   });
 });
 
+describe("semantic zoom is viewport-scoped (ADR-0006)", () => {
+  it("unfolds only the modules on screen, not every module in the repository", () => {
+    // ADR-0006 is named for this. Unfolding everything above 1.8x is not
+    // semantic zoom, it is "draw the whole repository", and it puts every file
+    // of every module through projection and render on every frame.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+
+    const moduleCount = engine.nodes.filter((n) => n.kind === "module").length;
+    expect(moduleCount).toBeGreaterThan(20);
+
+    // Zoomed in far enough that only part of the cloud is on screen.
+    engine.setCamera({ k: 4 });
+    const unfolded = engine.unfoldedModules().length;
+    expect(unfolded).toBeGreaterThan(0);
+    expect(unfolded).toBeLessThan(moduleCount);
+  });
+
+  it("collapses a module once the camera leaves it behind", () => {
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 4 });
+
+    const first = [...engine.unfoldedModules()];
+    expect(first.length).toBeGreaterThan(0);
+
+    // Pan a long way; a different part of the cloud is in frame now.
+    engine.setCamera({ x: 100000, y: 100000 });
+    for (const moduleId of first) {
+      expect(engine.isUnfolded(moduleId)).toBe(false);
+    }
+  });
+
+  it("keeps a scoped module open even when the camera is elsewhere", () => {
+    // Story 5.4's hold outranks the viewport rule, exactly as in 2D.
+    engine = create(true);
+    engine.load(loadContractFixture("root-files"));
+    run(engine, 5);
+    const moduleId = engine.nodes.find((n) => n.kind === "module")!.id;
+    engine.setScope(moduleId);
+    engine.setCamera({ x: 100000, y: 100000, k: 4 });
+    expect(engine.isUnfolded(moduleId)).toBe(true);
+  });
+});
+
+describe("nothing unfolds while the layout is still moving", () => {
+  it("holds off until the global layout has settled", () => {
+    // Members spawn at their module's position and their wake settles once, so
+    // unfolding around a module that is still travelling strands its files
+    // behind it. The 2D engine returns early for the same reason.
+    engine = create(false); // not reduced motion: the layout really settles over frames
+    engine.load(loadSyntheticFixture());
+
+    // One frame in, the layout is still moving.
+    engine.frame(0);
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules()).toEqual([]);
+
+    // Run it out; now the viewport rule may apply.
+    for (let i = 1; i < 900; i++) engine.frame(i * FRAME_MS);
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules().length).toBeGreaterThan(0);
+  });
+});
+
+describe("the unfold set is re-evaluated when its inputs change", () => {
+  it("grants a zoom that was refused while the layout was still settling", () => {
+    // The settle gate refuses unfolding while the layout moves. Something has
+    // to re-ask once it stops, and if the reader took the camera by hand there
+    // is no automatic fit coming to do it — the map would sit fully collapsed
+    // at 4x until an unrelated pan nudged it.
+    engine = create(false);
+    engine.load(loadContractFixture("root-files"));
+    engine.frame(0);
+
+    // Rotate by hand first: that ends idle auto-rotation for the session, so
+    // the per-frame drift cannot be what re-evaluates the unfold set. This
+    // test then isolates the settle transition as the only thing that can.
+    const canvas = document.querySelector("canvas")!;
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 0,
+        clientY: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointermove", {
+        pointerId: 1,
+        clientX: 40,
+        clientY: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 40,
+        clientY: 0,
+      }),
+    );
+    expect(engine.isAutoRotating()).toBe(false);
+
+    // Zoom by hand while it is still moving: refused, and `cameraTakenByUser`
+    // is now set, so no post-settle fit will run either.
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules()).toEqual([]);
+
+    // Nothing below touches the camera or the orientation. The only thing that
+    // happens is the layout reaching Settled.
+    for (let i = 1; i < 400; i++) engine.frame(i * FRAME_MS);
+    expect(engine.unfoldedModules().length).toBeGreaterThan(0);
+  });
+
+  it("re-evaluates when the camera is rotated by hand", () => {
+    // The viewport test reads `orientation`, so rotating changes its answer
+    // exactly as panning does. Asserted through the engine's own bookkeeping
+    // rather than a screenshot: a module far off-axis is in frame at one yaw
+    // and not at another.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 4 });
+
+    const seen = new Set<string>();
+    for (let turn = 0; turn < 8; turn++) {
+      engine.setOrientation({ yaw: (turn * Math.PI) / 4 });
+      for (const id of engine.unfoldedModules()) seen.add(id);
+    }
+    // Rotating a full circle brings strictly more modules through the frame
+    // than any single orientation shows, which is only true if rotation
+    // re-evaluates at all.
+    engine.setOrientation({ yaw: 0 });
+    expect(seen.size).toBeGreaterThan(engine.unfoldedModules().length);
+  });
+
+  it("re-evaluates when the viewport is resized", () => {
+    // The viewport is the fourth input to the same test. Under reduced motion
+    // there is no auto-rotation to paper over a stale set, so a resize that
+    // reveals modules would leave them collapsed until an unrelated pan.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 6 });
+    const narrow = [...engine.unfoldedModules()].sort();
+    expect(narrow.length).toBeGreaterThan(0);
+
+    // Grow the canvas: strictly more of the cloud is on screen now.
+    installFakeCanvas(2400, 1600);
+    engine.resize();
+    const wide = [...engine.unfoldedModules()].sort();
+    expect(wide.length).toBeGreaterThan(narrow.length);
+  });
+
+  it("re-evaluates as idle auto-rotation drifts the camera", () => {
+    // Auto-rotation is ON BY DEFAULT, so without this the viewport rule is
+    // defeated in the ordinary case: modules rotating into view stay collapsed
+    // and modules rotating out stay materialised until an unrelated pan.
+    //
+    // Asserted as *freshness* rather than as "the set changed": after drifting
+    // on the frame clock alone, a no-op camera nudge — which does nothing but
+    // force a re-evaluation — must not change the answer. If the drift had
+    // left the set stale, the nudge would repair it and the two would differ.
+    engine = create(false);
+    engine.load(loadSyntheticFixture());
+    // Not reduced motion, so the layout settles over frames — run it out first,
+    // because nothing unfolds before Settled.
+    let t = 0;
+    for (let i = 0; i < 260; i++) engine.frame((t = i * FRAME_MS));
+    // k = 6: the viewport edge cuts through the cloud there, so rotation
+    // genuinely moves modules across it. At the fit zoom the whole cloud is in
+    // frame and no amount of rotation changes the answer.
+    engine.setCamera({ k: 6 });
+    expect(engine.isAutoRotating()).toBe(true);
+
+    const yawBefore = engine.getOrientation().yaw;
+    for (let i = 1; i <= 340; i++) engine.frame(t + i * FRAME_MS);
+    const afterDrift = [...engine.unfoldedModules()].sort();
+
+    // The drift is large enough to matter: ~0.5 rad, where the set is measured
+    // to change every ~30 degrees at this zoom.
+    expect(engine.getOrientation().yaw - yawBefore).toBeGreaterThan(0.5);
+
+    // A camera call that changes nothing, purely to force a recomputation. If
+    // the drift had left the set stale, this would repair it and the two would
+    // differ.
+    engine.setCamera({});
+    expect([...engine.unfoldedModules()].sort()).toEqual(afterDrift);
+  });
+});
+
+describe("the unfold set is never left stale (the whole family)", () => {
+  it("is already fresh after every operation that moves the projection", () => {
+    // The individual triggers each have their own test above. This one closes
+    // the *family*: whatever moves the projection — camera, orientation,
+    // viewport, target depth, the layout settling — the unfold set must be
+    // current the moment the operation returns.
+    //
+    // Freshness is asserted by asking for a recomputation and requiring the
+    // answer not to change: `setCamera({})` alters nothing but forces
+    // `updateUnfolds`. If an operation had left the set stale, this would
+    // repair it and the two would differ.
+    //
+    // Written as an invariant rather than one case per trigger so that a
+    // future input to the viewport test is caught by an existing test instead
+    // of needing someone to remember to add one.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+
+    const target = engine.nodes.find((node) => node.kind === "module")!;
+    const operations: [string, () => void][] = [
+      ["zoom past the unfold threshold", () => engine!.setCamera({ k: 6 })],
+      ["pan", () => engine!.panBy(120, -80)],
+      ["zoom out", () => engine!.zoomAt({ x: 10, y: 10 }, 0.5)],
+      ["rotate", () => engine!.setOrientation({ yaw: 1.2, pitch: 0.3 })],
+      ["rotate again", () => engine!.setOrientation({ yaw: -2.0 })],
+      [
+        "resize",
+        () => {
+          installFakeCanvas(900, 700);
+          engine!.resize();
+        },
+      ],
+      [
+        "resize back",
+        () => {
+          installFakeCanvas(1200, 800);
+          engine!.resize();
+        },
+      ],
+      ["fit", () => void engine!.fit({ durationMs: 0 })],
+      [
+        "fly to a module",
+        () => void engine!.flyTo(target.id, { durationMs: 0 }),
+      ],
+      ["scope", () => engine!.setScope(target.id)],
+      ["leave the scope", () => engine!.setScope(null)],
+      [
+        "replay, then settle",
+        () => {
+          engine!.replay();
+          run(engine!, 5);
+        },
+      ],
+    ];
+
+    for (const [name, run_] of operations) {
+      run_();
+      const after = [...engine.unfoldedModules()].sort();
+      engine.setCamera({});
+      expect(
+        [...engine.unfoldedModules()].sort(),
+        `the unfold set was stale after: ${name}`,
+      ).toEqual(after);
+    }
+  });
+});
+
 describe("fit frames the whole cloud", () => {
   it("keeps every node inside the viewport, at any orientation", () => {
     // `fit` solves on the sphere that ENCLOSES the layout's bounding box. Half

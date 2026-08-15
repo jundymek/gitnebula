@@ -91,6 +91,32 @@ export function swapWithFallback(
   }
 }
 
+/**
+ * What the **3D button** should say after a switch failed and the previous view
+ * was restored — a reason (disabled) or null (leave it alone).
+ *
+ * `setUnavailable` disables the 3D control specifically, so it is only the
+ * right report when 3D is the view that failed. The other direction — 3D is
+ * running, a switch to 2D threw, 3D was restored — would otherwise disable the
+ * button for the view the reader is successfully looking at, and explain it
+ * with a message about the other one.
+ *
+ * There is deliberately no equivalent for 2D: 2D is the fallback, and failing
+ * to reach it while the current view still works is not a capability the
+ * reader has lost. That case is logged rather than invented into the UI.
+ */
+export function failedSwitchReason(
+  next: ViewKind,
+  previous: ViewKind,
+  because: string,
+): string | null {
+  if (next !== "3d") return null;
+  return (
+    `The 3D view could not be started (${because}). ` +
+    `Staying in ${previous.toUpperCase()}.`
+  );
+}
+
 export async function boot(root: Element): Promise<GraphEngine | null> {
   const result = await loadAnalysis();
   if (!result.ok) {
@@ -288,10 +314,25 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
         : String(result.cause);
 
     if (result.outcome === "kept") {
-      viewSwitch.setUnavailable(
-        `The ${next.toUpperCase()} view could not be started (${because}). ` +
-          `Staying in ${previous.toUpperCase()}.`,
-      );
+      // `setUnavailable` disables the **3D** button specifically, so it is only
+      // the right report when 3D was the view that failed. Going the other way
+      // — 3D is running, a switch to 2D threw, 3D was restored — it would
+      // disable the button for the view the reader is successfully looking at,
+      // and explain it with a message about the other one.
+      //
+      // There is no equivalent control to disable for 2D: 2D is the fallback,
+      // and a failure to reach it while the current view still works is not a
+      // capability the reader has lost. Reported to the console rather than
+      // invented into the UI, which would mean designing a status surface no
+      // acceptance criterion asks for.
+      const reason = failedSwitchReason(next, previous, because);
+      if (reason !== null) viewSwitch.setUnavailable(reason);
+      else {
+        console.warn(
+          `viz: could not switch to the 2D view (${because}); ` +
+            `staying in ${previous.toUpperCase()}.`,
+        );
+      }
       return;
     }
 
