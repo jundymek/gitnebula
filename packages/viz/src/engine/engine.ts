@@ -39,6 +39,7 @@ import {
 import { Emitter } from "./emitter.js";
 import { renderSceneToPng } from "./export.js";
 import { buildGraph, type Graph } from "./graph.js";
+import { ALL_LAYERS } from "./layers.js";
 import { MemberLayout, ModuleLayout, type LayoutNode } from "./layout.js";
 import { hashString, mulberry32, seedFor, type Rng } from "./prng.js";
 import {
@@ -66,7 +67,7 @@ import type {
   ScreenPoint,
   ViewMode,
 } from "./types.js";
-import type { AnalysisDocument } from "@gitnebula/contract";
+import type { AnalysisDocument, Layer } from "@gitnebula/contract";
 
 // `notYet()` lived here from story 2.5: members the interface declared before
 // anyone implemented them rejected with the name of the story that owed them,
@@ -168,6 +169,12 @@ export class CanvasGraphEngine implements GraphEngine {
    * against this before it is allowed to change anything.
    */
   private pressPointerId: number | null = null;
+
+  /**
+   * Story 5.3's layer filter: the layers the frame carries. All five by
+   * default, so an untouched Viewer behaves exactly as it did before.
+   */
+  private visibleLayers: ReadonlySet<Layer> = new Set(ALL_LAYERS);
 
   constructor(options: EngineOptions) {
     this.canvas = options.canvas;
@@ -543,6 +550,10 @@ export class CanvasGraphEngine implements GraphEngine {
     // unhoverable and unclickable, which is exactly what AC-2 needs.
     for (const item of [...this.memberNodes(), ...layout.nodes]) {
       const node = graph.nodes[item.graphIndex]!;
+      // Story 5.3: a filtered-out node is not on screen, so it is not under
+      // the pointer either. This is the half of AC-2 that dimming can never
+      // give you — a dimmed node still catches every pick.
+      if (!this.isLayerVisible(node)) continue;
       const dx = item.x - world.x;
       const dy = item.y - world.y;
       const distance = Math.hypot(dx, dy);
@@ -744,6 +755,79 @@ export class CanvasGraphEngine implements GraphEngine {
     return nodes;
   }
 
+  // ---- layer filter (story 5.3, FR-28) -----------------------------------
+
+  getLayerFilter(): readonly Layer[] {
+    return ALL_LAYERS.filter((layer) => this.visibleLayers.has(layer));
+  }
+
+  setLayerFilter(layers: readonly Layer[]): void {
+    const next = new Set(layers.filter((layer) => ALL_LAYERS.includes(layer)));
+    const unchanged =
+      next.size === this.visibleLayers.size &&
+      [...next].every((layer) => this.visibleLayers.has(layer));
+    if (unchanged) return;
+    this.visibleLayers = next;
+
+    // A node that just left the frame must not stay hovered or selected: the
+    // hover chain would keep highlighting an invisible node and story 3.4's
+    // panel would keep describing one. Routed through the existing setters, so
+    // the `hover` / `select` / `highlight` events fire exactly as chrome
+    // already expects — this story adds no event semantics to those three.
+    const hovered = this.getHovered();
+    if (hovered && !this.isLayerVisible(hovered)) this.setHovered(null);
+    const selected = this.getSelected();
+    if (selected && !this.isLayerVisible(selected)) {
+      this.setIsolated(null);
+      this.setSelected(null);
+    }
+
+    const hidden = this.hiddenByLayerFilter();
+    this.emitter.emit("filter", {
+      layers: this.getLayerFilter(),
+      hidden,
+      visible: (this.graph?.nodes.length ?? 0) - hidden,
+    });
+    // No re-settle, no re-seed, no simulation call (AC-6): the layout keeps
+    // running on the whole graph and only the frame narrows. Redrawing is the
+    // whole of the visual change, and the frozen-on-settle loop is not ticking
+    // the simulation, so one draw is what a toggle costs.
+    this.draw(this.lastFrameMs);
+  }
+
+  /** How many nodes the active filter removes from the frame. */
+  private hiddenByLayerFilter(): number {
+    const graph = this.graph;
+    if (!graph) return 0;
+    return graph.nodes.filter((node) => !this.isLayerVisible(node)).length;
+  }
+
+  /** Whether a node's layer survives the active filter. */
+  private isLayerVisible(node: EngineNode): boolean {
+    return this.visibleLayers.has(node.layer);
+  }
+
+  /**
+   * Drop what the layer filter excludes from an assembled scene (AC-2, AC-3).
+   *
+   * Called from `buildScene`, which means the live frame and `exportPNG` are
+   * filtered by one line of code rather than two that could disagree (AC-5).
+   */
+  private applyLayerFilter(
+    nodes: readonly RenderableNode[],
+    edges: readonly RenderableEdge[],
+  ): { nodes: readonly RenderableNode[]; edges: readonly RenderableEdge[] } {
+    if (this.visibleLayers.size === ALL_LAYERS.length) return { nodes, edges };
+    const kept = nodes.filter((item) => this.isLayerVisible(item.node));
+    const surviving = new Set(kept.map((item) => item.node.id));
+    return {
+      nodes: kept,
+      edges: edges.filter(
+        (edge) => surviving.has(edge.sourceId) && surviving.has(edge.targetId),
+      ),
+    };
+  }
+
   // ---- export (story 3.5) ------------------------------------------------
 
   /**
@@ -936,6 +1020,16 @@ export class CanvasGraphEngine implements GraphEngine {
       });
     }
 
+    // Story 5.3 — the layer filter narrows the frame, and this is the only
+    // place it does so. A node whose layer is off is ABSENT, not dimmed: it
+    // leaves the scene, so the renderer never sees it and `pick()` (which
+    // carries the matching guard) never returns it. An edge survives only when
+    // both of its endpoints do — a half-anchored edge would point at nothing.
+    //
+    // The all-on case returns the arrays untouched, so an unfiltered map
+    // allocates nothing extra per frame.
+    const filtered = this.applyLayerFilter(nodes, edges);
+
     const focusId = this.isolatedId ?? this.hoveredId;
     const chain = focusId === null ? null : new Set(this.chainOf(focusId));
 
@@ -943,8 +1037,8 @@ export class CanvasGraphEngine implements GraphEngine {
       viewport: this.viewport,
       camera: this.camera,
       stars: this.stars,
-      nodes,
-      edges,
+      nodes: filtered.nodes,
+      edges: filtered.edges,
       mode: this.mode,
       timeMs,
       reducedMotion: this.reducedMotion,

@@ -10,15 +10,18 @@
 
 import type { AnalysisDocument } from "@gitnebula/contract";
 
-import type { GraphEngine } from "../engine/index.js";
+import { ALL_LAYERS, type GraphEngine } from "../engine/index.js";
 import { renderExportButton } from "./export-button.js";
 import {
   EXPORT_SLOT_ID,
+  FILTER_SLOT_ID,
   MODE_SLOT_ID,
   renderHeader,
   type HeaderActions,
 } from "./header.js";
+import { renderFilterEmpty, type FilterEmptyHandle } from "./filter-empty.js";
 import { renderHint } from "./hint.js";
+import { renderLayerFilter, type LayerFilterHandle } from "./layer-filter.js";
 import { renderLegend } from "./legend.js";
 import { renderModeToggle, type ModeToggleHandle } from "./mode-toggle.js";
 import { renderPanel, type PanelHandle } from "./panel.js";
@@ -62,6 +65,9 @@ export interface ChromeHandle extends Store<ChromeState> {
   readonly modeToggle: ModeToggleHandle;
   /** Story 5.1's start-here panel (FR-26). */
   readonly startHere: StartHereHandle;
+  /** Story 5.3's layer filter and its empty state (FR-28). */
+  readonly layerFilter: LayerFilterHandle;
+  readonly filterEmpty: FilterEmptyHandle;
   /**
    * Give the chrome the engine its controls act on. Called by
    * `connectEngine`, because the engine cannot exist before the stage it
@@ -121,6 +127,9 @@ export function mountChrome(
     // Story 5.1: shut until the layout settles, then opened once (AC-3).
     startHereOpen: false,
     startHereShown: false,
+    // Story 5.3: every layer on until the reader says otherwise (FR-28).
+    visibleLayers: ALL_LAYERS,
+    filteredOutCount: 0,
   });
 
   // Set by `connectEngine`. The panel's controls are live from the moment
@@ -191,8 +200,25 @@ export function mountChrome(
     });
   });
 
+  // Story 5.3. The control only asks; the engine owns the filter and echoes it
+  // back on its `filter` event, which is what moves these buttons — the same
+  // shape the mode toggle uses, so a filter changed anywhere reaches the UI.
+  const layerFilter = renderLayerFilter({
+    onFilter(layers) {
+      engine?.setLayerFilter(layers);
+    },
+  });
+
+  const filterEmpty = renderFilterEmpty({
+    onReset() {
+      // AC-4's one click back to the unfiltered map.
+      engine?.setLayerFilter(ALL_LAYERS);
+    },
+  });
+
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
+  header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
 
   const main = document.createElement("main");
   main.append(
@@ -201,6 +227,7 @@ export function mountChrome(
     renderHint(),
     panel.element,
     startHere.element,
+    filterEmpty.element,
   );
   if (options.overlays) main.append(...options.overlays);
 
@@ -211,6 +238,8 @@ export function mountChrome(
     panel,
     modeToggle,
     startHere,
+    layerFilter,
+    filterEmpty,
     attachEngine(next) {
       engine = next;
     },
@@ -283,6 +312,18 @@ export function connectEngine(
       handle.setState({ mode });
       handle.modeToggle.setMode(mode);
     }),
+    // Story 5.3, appended as its own entry rather than folded into a handler
+    // above — the convention this wave's five agents agreed on for this array.
+    engine.on("filter", ({ layers, hidden, visible }) => {
+      handle.setState({ visibleLayers: layers, filteredOutCount: hidden });
+      handle.layerFilter.setLayers(layers);
+      handle.layerFilter.setHidden(hidden);
+      // The counts come from the event rather than from `engine.nodes`, which
+      // is deliberately the *unfiltered* set (search and the 5.1 ranking read
+      // it) — subtracting against it here would make chrome re-derive a number
+      // the engine already knows.
+      handle.filterEmpty.update({ visible });
+    }),
   ];
   options.search?.setNodes(engine.nodes);
   // Both halves of the mirror, not just the visible one: a subscriber reading
@@ -290,6 +331,12 @@ export function connectEngine(
   const mode = engine.getMode();
   handle.setState({ mode });
   handle.modeToggle.setMode(mode);
+  // Story 5.3, the same mirror: a subscriber reading `state.visibleLayers`
+  // before the first `filter` event must see the engine's answer, not a
+  // hopeful default. Nothing is hidden yet, so the empty state stays shut.
+  const layers = engine.getLayerFilter();
+  handle.setState({ visibleLayers: layers, filteredOutCount: 0 });
+  handle.layerFilter.setLayers(layers);
   // The PNG button (3.5) is mounted here rather than in `mountChrome` because
   // this is where the engine handle exists — the header only reserves the slot.
   document

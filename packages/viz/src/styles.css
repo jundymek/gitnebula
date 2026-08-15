@@ -660,3 +660,116 @@ canvas {
   margin-top: 3px;
   color: var(--ink-mute);
 }
+
+/* ---- story 5.3 (layer filter, FR-28) ------------------------------------
+ *
+ * The mode toggle's shape (UX-DR6) with one deliberate difference: it is
+ * multi-select, so an inactive toggle has to read as "switched off" rather
+ * than as "the other option". `aria-pressed` carries that for assistive
+ * technology; these rules carry it for everyone else.
+ */
+
+#layer-filter {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+#layer-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-hi);
+  border-radius: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+#layer-filter button:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+
+#layer-filter button:last-of-type {
+  border-radius: 0 6px 6px 0;
+}
+
+#layer-filter button + button {
+  border-left: none;
+}
+
+#layer-filter button[aria-pressed="true"] {
+  background: var(--line);
+}
+
+/* Off: the label recedes and the swatch loses its colour, so the active set
+ * is legible at a glance without opening anything (UX-DR13). */
+#layer-filter button.off {
+  color: var(--ink-mute);
+  background: transparent;
+}
+
+#layer-filter button.off .dot {
+  opacity: 0.25;
+}
+
+#layer-filter .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+#layer-filter .hidden-count {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+/* The empty state (AC-4, UX-DR14): a cause, an exit, and one click back. */
+#filter-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 320px;
+  padding: 18px 20px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: var(--sans);
+}
+
+#filter-empty[hidden] {
+  display: none;
+}
+
+#filter-empty .cause {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+#filter-empty .exit {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+#filter-empty button {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--line);
+  color: var(--ink);
+  border: 1px solid var(--line-hi);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}

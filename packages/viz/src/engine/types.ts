@@ -84,6 +84,17 @@ export interface GraphEngineEventMap {
     readonly focusId: string | null;
     readonly isolated: boolean;
   };
+  /**
+   * The layer filter changed (5.3). `layers` is the surviving set in
+   * `ALL_LAYERS` order; `hidden` and `visible` are node counts, so chrome can
+   * name the cause and decide on its empty state without counting nodes — or
+   * subtracting against `nodes`, which is deliberately the *unfiltered* set.
+   */
+  filter: {
+    readonly layers: readonly Layer[];
+    readonly hidden: number;
+    readonly visible: number;
+  };
 }
 
 export type GraphEngineEvent = keyof GraphEngineEventMap;
@@ -201,6 +212,25 @@ export interface GraphEngine {
   /** Module ids currently unfolded into their file nodes. */
   unfoldedModules(): readonly string[];
   isUnfolded(moduleId: string): boolean;
+
+  // ---- layer filter (story 5.3, FR-28) ---------------------------------
+
+  /** The layers currently drawn, in `ALL_LAYERS` order. */
+  getLayerFilter(): readonly Layer[];
+
+  /**
+   * Restrict the frame to `layers`.
+   *
+   * **Excluded means not drawn, never dimmed** — a node whose layer is absent
+   * leaves the scene entirely, so it cannot be hovered, picked, or counted as
+   * pointer hit-area. Dimming is the hover encoding's business (5.2) and this
+   * is deliberately not it.
+   *
+   * Filtering is a frame concern, not a layout concern: the simulation keeps
+   * running on the whole graph, so switching a layer back on restores nodes
+   * exactly where they were and never re-runs the settle.
+   */
+  setLayerFilter(layers: readonly Layer[]): void;
 
   // ---- export (story 3.5) ----------------------------------------------
 

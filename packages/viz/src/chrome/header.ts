@@ -19,6 +19,8 @@ export interface HeaderActions {
 /** Ids stories 3.4 and 3.5 fill in. Do not rename them. */
 export const MODE_SLOT_ID = "mode-slot";
 export const EXPORT_SLOT_ID = "export-slot";
+/** Story 5.3's layer filter, filled by `mountChrome`. Do not rename. */
+export const FILTER_SLOT_ID = "filter-slot";
 
 export function renderHeader(
   store: Store<ChromeState>,
@@ -73,6 +75,12 @@ export function renderHeader(
   const exportSlot = document.createElement("div");
   exportSlot.id = EXPORT_SLOT_ID;
 
+  // Story 5.3's layer filter. Placed after `replay` by agreement with story
+  // 5.1's owner, whose control goes before it — so two agents appending to
+  // this call in the same wave never edit the same line.
+  const filterSlot = document.createElement("div");
+  filterSlot.id = FILTER_SLOT_ID;
+
   header.append(
     brand,
     repo,
@@ -81,6 +89,7 @@ export function renderHeader(
     modeSlot,
     startHere,
     replay,
+    filterSlot,
     exportSlot,
   );
 

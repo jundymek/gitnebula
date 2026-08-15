@@ -33,6 +33,13 @@ export { fuzzySearch, scoreMatch, type FuzzyMatch } from "./fuzzy.js";
 
 export { hashString, seedFor } from "./prng.js";
 
+/**
+ * Story 5.3's layer list. The filter control draws one toggle per entry, so
+ * the order it renders in and the order the engine defaults to are one
+ * constant rather than two that can drift.
+ */
+export { ALL_LAYERS, LAYER_LABEL, isLayer } from "./layers.js";
+
 export type {
   CameraState,
   EngineNode,

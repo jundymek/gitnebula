@@ -7,6 +7,8 @@
  * fields, never reshaping the ones already here.
  */
 
+import type { Layer } from "@gitnebula/contract";
+
 import type { EngineNode, ViewMode } from "../engine/index.js";
 
 export type Listener<T> = (state: T) => void;
@@ -70,4 +72,16 @@ export interface ChromeState {
    * from reappearing on every later settle (a replay is not a first load).
    */
   readonly startHereShown: boolean;
+  // ---- story 5.3 (layer filter) — appended, nothing above is reshaped -----
+  /**
+   * The layers currently drawn, mirrored from the engine's `filter` event
+   * (FR-28). The engine owns the filter; this is what the control reads back,
+   * exactly as `mode` mirrors the engine's view mode.
+   */
+  readonly visibleLayers: readonly Layer[];
+  /**
+   * How many nodes the layer filter removes from the frame — its own cause,
+   * never a combined total with another filter's count (UX-DR14).
+   */
+  readonly filteredOutCount: number;
 }

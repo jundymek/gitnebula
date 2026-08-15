@@ -2,10 +2,17 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { connectEngine, mountChrome } from "./chrome.js";
-import { EXPORT_SLOT_ID, MODE_SLOT_ID } from "./header.js";
+import { EXPORT_SLOT_ID, FILTER_SLOT_ID, MODE_SLOT_ID } from "./header.js";
 import { HINT_LINES } from "./hint.js";
 import { LEGEND_ENTRIES } from "./legend.js";
-import { HOT_COLOR, LAYER_COLOR, UNFOLD_ZOOM } from "../engine/index.js";
+import type { Layer } from "@gitnebula/contract";
+
+import {
+  ALL_LAYERS,
+  HOT_COLOR,
+  LAYER_COLOR,
+  UNFOLD_ZOOM,
+} from "../engine/index.js";
 import type {
   GraphEngine,
   GraphEngineEvent,
@@ -129,6 +136,7 @@ function fakeEngine() {
   const listeners = new Map<GraphEngineEvent, (payload: never) => void>();
   let offCalls = 0;
   let mode: ViewMode = "structure";
+  let layers: readonly Layer[] = ALL_LAYERS;
   const isolated: (string | null)[] = [];
   const selected: (string | null)[] = [];
   const engine = {
@@ -154,6 +162,14 @@ function fakeEngine() {
     // Story 3.3's unfold/collapse handlers read these back.
     unfoldedModules: () => [],
     nodes: [],
+    // Story 5.3's slice of the seam. Same shape as `getMode`/`setMode`: the
+    // engine owns the filter and echoes every real change back on an event,
+    // which is what moves the control.
+    getLayerFilter: () => layers,
+    setLayerFilter(next: readonly Layer[]) {
+      layers = ALL_LAYERS.filter((layer) => next.includes(layer));
+      emit("filter", { layers, hidden: 0, visible: 1 });
+    },
   } as unknown as GraphEngine;
 
   function emit(event: GraphEngineEvent, payload: unknown): void {
@@ -337,5 +353,88 @@ describe("chrome — mode toggle wiring (AC-5)", () => {
     expect(root.querySelector("#mode-heat")!.getAttribute("aria-pressed")).toBe(
       "true",
     );
+  });
+});
+
+// ---- story 5.3 (layer filter) — appended, nothing above is reshaped -------
+
+describe("chrome — layer filter wiring (5.3, FR-28)", () => {
+  const analysis = loadSyntheticFixture();
+
+  it("puts the control in the header's filter slot", () => {
+    const { root } = mount();
+    const slot = root.querySelector(`#${FILTER_SLOT_ID}`);
+    expect(slot?.querySelector("#layer-filter")).not.toBeNull();
+    expect(slot?.querySelectorAll("button")).toHaveLength(ALL_LAYERS.length);
+  });
+
+  it("asks the engine rather than deciding for itself", () => {
+    const fake = fakeEngine();
+    const { root, store } = mount();
+    connectEngine(store, fake.engine, { analysis });
+
+    root.querySelector<HTMLButtonElement>("#layer-test")!.click();
+
+    expect(fake.engine.getLayerFilter()).toEqual([
+      "backend",
+      "frontend",
+      "infra",
+      "other",
+    ]);
+  });
+
+  it("mirrors the engine's answer into both the store and the buttons", () => {
+    const fake = fakeEngine();
+    const { root, store } = mount();
+    connectEngine(store, fake.engine, { analysis });
+
+    fake.emit("filter", { layers: ["backend"], hidden: 232, visible: 418 });
+
+    expect(store.getState().visibleLayers).toEqual(["backend"]);
+    expect(store.getState().filteredOutCount).toBe(232);
+    expect(
+      root.querySelector("#layer-backend")!.getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(
+      root.querySelector("#layer-test")!.getAttribute("aria-pressed"),
+    ).toBe("false");
+    expect(root.querySelector("#layer-filter-hidden")!.textContent).toBe(
+      "232 nodes hidden: layer filter",
+    );
+  });
+
+  it("shows the empty state only when nothing survives, and resets from it", () => {
+    const fake = fakeEngine();
+    const { root, store } = mount();
+    connectEngine(store, fake.engine, { analysis });
+    const empty = root.querySelector<HTMLElement>("#filter-empty")!;
+
+    fake.emit("filter", { layers: ["backend"], hidden: 1, visible: 12 });
+    expect(empty.hidden).toBe(true);
+
+    // Every node hidden — the AC-4 case.
+    fake.emit("filter", {
+      layers: [],
+      hidden: analysis.nodes.length,
+      visible: 0,
+    });
+    expect(empty.hidden).toBe(false);
+
+    root.querySelector<HTMLButtonElement>("#filter-reset")!.click();
+    expect(fake.engine.getLayerFilter()).toEqual([...ALL_LAYERS]);
+    expect(empty.hidden).toBe(true);
+  });
+
+  it("takes its starting filter from the engine, in both halves of the mirror", () => {
+    const fake = fakeEngine();
+    fake.engine.setLayerFilter(["infra"]);
+    const { root, store } = mount();
+
+    connectEngine(store, fake.engine, { analysis });
+
+    expect(store.getState().visibleLayers).toEqual(["infra"]);
+    expect(
+      root.querySelector("#layer-infra")!.getAttribute("aria-pressed"),
+    ).toBe("true");
   });
 });
