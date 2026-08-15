@@ -89,12 +89,24 @@ pnpm build
 # a tree that may not contain the UI the recorder drives — it would sit waiting
 # for a #start-here panel that release does not have.
 CLEAN=$(mktemp -d)/gitnebula
-git clone --single-branch --branch "$(git rev-parse --abbrev-ref HEAD)" . "$CLEAN"
+git clone --no-checkout . "$CLEAN"
+
+# Check out the exact commit you are recording. `-B <name> <commit>` rather
+# than `--branch $(git rev-parse --abbrev-ref HEAD)` because a detached HEAD —
+# a CI checkout, or a tag — reports the literal string `HEAD`, which is not a
+# branch anyone can clone.
+git -C "$CLEAN" checkout -B master "$(git rev-parse HEAD)"
+
+# `repo.defaultBranch` is read from the remote's advertised HEAD, not from the
+# branch you checked out, and it is what the panel's "open on github" links are
+# built from. A clone of a worktree inherits that worktree's branch, so without
+# this line every link in the demo points at your story branch.
+git -C "$CLEAN" symbolic-ref refs/remotes/origin/HEAD refs/remotes/origin/master
 
 # Point the clone's origin back at the canonical remote. `repo.name` is the last
 # segment of the remote URL, so a clone made from `.` would title the map after
-# your worktree path — and the panel's "open on github" link is built from the
-# same URL. The content recorded is still your local branch.
+# your worktree path — and it is the other half of the GitHub link. The content
+# recorded is still the commit you are on.
 git -C "$CLEAN" remote set-url origin https://github.com/jundymek/gitnebula
 
 # terminal 1 — serve the map of that clean checkout
