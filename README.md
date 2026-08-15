@@ -9,7 +9,7 @@ replays `git log`, then opens a map that leads with a reading order instead of
 an inventory: what the codebase is built around, where it is entered, and which
 files keep changing together.
 
-![gitnebula turning its own repository into a map: the layout settles, the start-here panel names what to read first, a file's panel opens, a module is scoped, and the map is filtered by layer](docs/assets/demo.gif)
+![gitnebula turning its own repository into a map: the layout settles, the start-here panel names what to read first, a file's panel opens with its history and the files it changes with, a module is scoped and filtered down, and the same graph is shown in 3D](docs/assets/demo.gif)
 
 ## Quickstart
 
@@ -22,23 +22,23 @@ Run it inside a git repository. gitnebula scans the tree, parses imports, reads
 
 ```
 ▸ repo
-✔ repo (0.03s)
+✔ repo (0.02s)
 ▸ config
 ✔ config (0.00s)
 ▸ scan
 ✔ scan (0.07s)
 ▸ deps
 ▸ githist
-✔ githist (0.02s)
-✔ deps (0.17s)
+✔ githist (0.12s)
+✔ deps (0.19s)
 ▸ assemble
 ✔ assemble (0.00s)
 ▸ enrich
 ✔ enrich (0.00s)
 ▸ emit
 ✔ emit (0.00s)
-  ! deps: external-import ×318 (e.g. @eslint/js in eslint.config.js)
-analysis.json — 368 nodes, 400 edges, 140 co-change pairs, history over the last 90 days (--window-days), in 0.27s
+  ! deps: external-import ×344 (e.g. @eslint/js in eslint.config.js)
+analysis.json — 397 nodes, 480 edges, 173 co-change pairs, history over the last 90 days (--window-days), in 0.29s
 serving http://127.0.0.1:4137/ — press Ctrl+C to stop
 ```
 
@@ -100,7 +100,7 @@ you: in this repository `chrome/chrome.ts` and `styles.css` keep changing
 together and there is no import between them, because a stylesheet is not an
 import. `show on map` marks that set on the canvas — a mark on those nodes, not
 a line between them, because co-change is not a dependency. Most files have no
-partners at all (318 of 368 here), so the section names its cause rather than
+partners at all (341 of 397 here), so the section names its cause rather than
 showing an empty box, and points at `--window-days` as the lever.
 
 **Then narrow the map.** Three levers, each of which _removes_ nodes rather
@@ -138,6 +138,16 @@ the pointer moves across it.
   its panel with the metrics and a link to the file on GitHub. A result outside
   the current scope leaves the scope rather than refusing to go there, and
   offers you the way back.
+- **A 3D view of the same graph.** `3D` in the header swaps the map for a
+  three-axis layout of the same `analysis.json`, where depth separates clusters
+  that overlap in the plane: drag to rotate, shift-drag to pan, and the same
+  click, drill-down and `Escape` as in 2D. `?view=3d` links straight to it.
+  There is no WebGL and no 3D library behind it — it is a perspective
+  projection onto the same canvas, which is why a whole second renderer costs
+  about 5 KB gzipped. **2D stays the default, and stays the faster of the
+  two**: 3D is smooth on the module-level map and slows down once a large
+  repository is fully unfolded (measured: it holds 55 fps to roughly 840 drawn
+  nodes). Where 3D cannot start, the map stays 2D and tells you why.
 - **PNG export.** A 2× re-render of exactly what is on screen — camera, mode,
   highlight and filters included — for slides and issues.
 - **Deterministic and offline.** The same repository at the same commit produces

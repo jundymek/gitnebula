@@ -97,7 +97,7 @@ development_status:
   # Depends_on is [] because the harness stores exactly one blocking
   # predecessor and seven cannot be declared — the ordering is the
   # supervisor's, exactly as it was for 4.3.
-  5.8-repo-docs-refresh: in-progress
+  5.8-repo-docs-refresh: backlog
   # 5.9 was written by the epic-5 supervisor during wave A, with the
   # maintainer's agreement, from a defect no story owned: the cli test command
   # in six specs matches no project and exits 0. Unassigned — the wave it

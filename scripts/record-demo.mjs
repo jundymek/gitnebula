@@ -154,7 +154,7 @@ async function main() {
   if ((await blastShow.count()) > 0 && (await blastShow.isVisible())) {
     await wait(1_400);
     await blastShow.click();
-    await wait(2_200);
+    await wait(2_000);
     await blastShow.click();
     await wait(500);
   }
@@ -214,7 +214,7 @@ async function main() {
   //    frame, and the chrome states how many went (5.4, UX-DR14).
   const connected = page.locator("#scope-bar .scope-bar-connected");
   await connected.click();
-  await wait(2_000);
+  await wait(1_700);
   await connected.click();
   await wait(600);
 
@@ -231,11 +231,25 @@ async function main() {
   await layerToggle.click();
   await wait(900);
 
-  // 9. Heatmap mode — the same map coloured by churn instead of by layer.
-  await page.locator("#mode-heat").click();
-  await wait(2_400);
+  // 9. The 3D view (5.7) — the same graph, with depth separating clusters that
+  //    overlap in the plane. 2D is the default and the tour returns to it: the
+  //    demo shows the alternative, it does not re-cast it as the product.
+  //    The idle auto-rotation is what makes depth read on video, so this beat
+  //    holds without touching the pointer — and does nothing under
+  //    prefers-reduced-motion, which is deliberate in the view, not a bug here.
+  const threeD = page.locator('#view-switch button[data-view="3d"]');
+  if ((await threeD.count()) > 0 && !(await threeD.isDisabled())) {
+    await threeD.click();
+    await wait(3_600);
+    await page.locator('#view-switch button[data-view="2d"]').click();
+    await wait(1_200);
+  }
 
-  // 10. PNG export — the button reports its own progress.
+  // 10. Heatmap mode — the same map coloured by churn instead of by layer.
+  await page.locator("#mode-heat").click();
+  await wait(2_200);
+
+  // 11. PNG export — the button reports its own progress.
   const download = page.waitForEvent("download", { timeout: 30_000 });
   await page.locator("#export").click();
   await download;

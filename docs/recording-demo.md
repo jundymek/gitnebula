@@ -14,11 +14,11 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh`, gitnebula analysing a **fresh clone** of its own repository |
+| Recorded from | `story/5.8-repo-docs-refresh` with all of Epic 5 merged, gitnebula analysing a **fresh clone** of its own repository (399 nodes, 480 edges, 175 co-change pairs) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
-| Raw length | ~28 s of WebM |
-| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering |
+| Raw length | 40 s of WebM |
+| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering — 3.7 MiB |
 
 The committed GIF is the ffmpeg encode of that WebM; the WebM itself is not
 committed.
@@ -28,8 +28,8 @@ carries build output, generated fixtures and whatever scratch files the current
 branch happens to have, and every one of them becomes a node on the map. The
 first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
 recipe below clones the repository into a temp directory for exactly this
-reason, which is also why the README's sample run reports 368 nodes where the
-same command in a live worktree reports over 400.
+reason, which is also why the README's sample run reports 397 nodes where the
+same command in a live worktree reports more.
 
 ## The scripted sequence
 
@@ -66,9 +66,14 @@ tour of the feature list.
    scoping never re-ran the layout.
 10. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
    then switched back on and restored in place.
-11. **Heatmap** — the same map coloured by churn.
-12. **PNG export** — click `↓ png` and wait for the download the viewer starts.
-13. **Back to structure** — end on the map the visitor first saw.
+11. **3D** — the same graph with depth separating clusters that overlap in the
+    plane (5.7), held long enough for the idle auto-rotation to read, then back
+    to 2D. The tour returns to 2D deliberately: 3D is the alternative, not the
+    product. Under `prefers-reduced-motion` there is no auto-rotation, so this
+    beat is a still frame — a property of the view, not a fault in the recipe.
+12. **Heatmap** — the same map coloured by churn.
+13. **PNG export** — click `↓ png` and wait for the download the viewer starts.
+14. **Back to structure** — end on the map the visitor first saw.
 
 Node positions are resolved at runtime through the engine's public `pick()`,
 never hardcoded: the layout is seeded per repository, so fixed coordinates would
