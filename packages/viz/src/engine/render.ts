@@ -8,15 +8,20 @@
  */
 
 import {
+  CHAIN_GLOW_BOOST,
+  CHAIN_RING_ALPHA,
+  CHAIN_RING_OFFSET_PX,
   EDGE_ALPHA_BASE,
   EDGE_ALPHA_CHAIN,
   EDGE_ALPHA_DIMMED,
+  EDGE_ALPHA_HOVER_REST,
   EDGE_ALPHA_MEMBER,
   EDGE_CURVE,
   HOT_COLOR,
   HOT_PULSE_MS,
   LAYER_COLOR,
   NODE_ALPHA_DIMMED,
+  NODE_ALPHA_HOVER_REST,
   PULSE_MAX_RADIUS_PX,
   VOID_COLOR,
 } from "./constants.js";
@@ -55,6 +60,17 @@ export interface RenderScene {
   readonly reducedMotion: boolean;
   /** Ids of the focused dependency chain, or null when nothing is focused. */
   readonly chain: ReadonlySet<string> | null;
+  /**
+   * Which interaction put `chain` there, and therefore how the rest of the map
+   * is encoded (story 5.2).
+   *
+   * `"isolate"` is the mockup's original hard dim — the user asked to see one
+   * chain and nothing else. `"hover"` is FR-29's resting encoding: the map
+   * stays legible and the chain is found by emphasis. Optional, and omitting
+   * it means `"isolate"`, so a scene built before this story keeps its exact
+   * meaning.
+   */
+  readonly chainMode?: "hover" | "isolate";
   readonly selectedId: string | null;
   /** File labels appear from 3.0× (story 3.3). */
   readonly showFileLabels: boolean;
@@ -80,6 +96,63 @@ export function nodeColor(node: EngineNode, mode: ViewMode): string {
     return `rgb(${r},${g},${b})`;
   }
   return node.hot ? HOT_COLOR : LAYER_COLOR[node.layer];
+}
+
+/**
+ * Is this node part of the focused chain? A scene with no chain has no
+ * outside, so everything is "in".
+ */
+export function inChain(scene: RenderScene, nodeId: string): boolean {
+  return scene.chain === null || scene.chain.has(nodeId);
+}
+
+/**
+ * Opacity of a node under the scene's focus state (story 5.2, AC-1).
+ *
+ * Two encodings, chosen by `chainMode`: hover leaves the map legible at
+ * `NODE_ALPHA_HOVER_REST`, isolate keeps the mockup's `NODE_ALPHA_DIMMED`.
+ * A pure function over the render state, so the encoding is asserted directly
+ * rather than inferred from the order of canvas calls.
+ */
+export function nodeAlpha(scene: RenderScene, nodeId: string): number {
+  if (inChain(scene, nodeId)) return 1;
+  return scene.chainMode === "hover"
+    ? NODE_ALPHA_HOVER_REST
+    : NODE_ALPHA_DIMMED;
+}
+
+/**
+ * Opacity of an edge under the scene's focus state (story 5.2, AC-1).
+ *
+ * An edge is "in the chain" only when both of its ends are — a half-lit edge
+ * points at something the user is not being shown.
+ */
+export function edgeAlpha(scene: RenderScene, edge: RenderableEdge): number {
+  if (scene.chain === null) {
+    return edge.member ? EDGE_ALPHA_MEMBER : EDGE_ALPHA_BASE;
+  }
+  if (scene.chain.has(edge.sourceId) && scene.chain.has(edge.targetId)) {
+    return EDGE_ALPHA_CHAIN;
+  }
+  return scene.chainMode === "hover"
+    ? EDGE_ALPHA_HOVER_REST
+    : EDGE_ALPHA_DIMMED;
+}
+
+/**
+ * Does this node carry the chain's emphasis — the brightness boost and the
+ * ring (story 5.2)?
+ *
+ * Hover only. Isolate already says "this and nothing else" by extinguishing
+ * the rest, and adding a mark there would change an encoding no story asked
+ * to change (AC-4).
+ */
+export function emphasised(scene: RenderScene, nodeId: string): boolean {
+  return (
+    scene.chainMode === "hover" &&
+    scene.chain !== null &&
+    scene.chain.has(nodeId)
+  );
 }
 
 /** The hot-spot pulse factor: ~380 ms sine, flat under reduced motion. */
@@ -126,14 +199,7 @@ export function renderFrame(
   for (const edge of scene.edges) {
     const s = toScreen({ x: edge.sx, y: edge.sy }, camera, viewport);
     const t = toScreen({ x: edge.tx, y: edge.ty }, camera, viewport);
-    let alpha = edge.member ? EDGE_ALPHA_MEMBER : EDGE_ALPHA_BASE;
-    if (scene.chain) {
-      alpha =
-        scene.chain.has(edge.sourceId) && scene.chain.has(edge.targetId)
-          ? EDGE_ALPHA_CHAIN
-          : EDGE_ALPHA_DIMMED;
-    }
-    ctx.strokeStyle = `rgba(150,170,215,${alpha})`;
+    ctx.strokeStyle = `rgba(150,170,215,${edgeAlpha(scene, edge)})`;
     ctx.lineWidth = edge.member ? 0.5 : 1;
     // Quadratic control point offset perpendicular to the chord: the curve
     // that keeps two-way dependencies from overdrawing each other (UX-DR5).
@@ -160,11 +226,17 @@ export function renderFrame(
     }
 
     const dim = scene.chain !== null && !scene.chain.has(node.id);
+    const lit = emphasised(scene, node.id);
     const color = nodeColor(node, scene.mode);
     const screenRadius = node.radius * camera.k;
-    const glow = glowRadius(node, screenRadius, pulse);
+    // The chain is *added to*, not carved out of the map (story 5.2): a
+    // hovered node and its one-hop neighbours bloom, everything else keeps a
+    // resting opacity it can still be read at.
+    const glow =
+      glowRadius(node, screenRadius, pulse) * (lit ? CHAIN_GLOW_BOOST : 1);
 
-    ctx.globalAlpha = dim ? NODE_ALPHA_DIMMED : 1;
+    const alpha = nodeAlpha(scene, node.id);
+    ctx.globalAlpha = alpha;
 
     const gradient = ctx.createRadialGradient(s.x, s.y, 0, s.x, s.y, glow);
     gradient.addColorStop(0, color);
@@ -180,6 +252,16 @@ export function renderFrame(
     ctx.arc(s.x, s.y, Math.max(screenRadius, 0.8), 0, TAU);
     ctx.fill();
 
+    // The chain ring, inside the selection ring's +5 px so the two marks stay
+    // distinguishable: a hovered neighbour is not a selected node.
+    if (lit) {
+      ctx.strokeStyle = `rgba(230,238,252,${CHAIN_RING_ALPHA})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, screenRadius + CHAIN_RING_OFFSET_PX, 0, TAU);
+      ctx.stroke();
+    }
+
     if (node.id === scene.selectedId) {
       ctx.strokeStyle = "rgba(230,238,252,0.85)";
       ctx.lineWidth = 1;
@@ -192,21 +274,33 @@ export function renderFrame(
     // which node the camera just flew to (story 3.3).
     if (scene.pulse && scene.pulse.id === node.id) {
       const t = Math.min(1, Math.max(0, scene.pulse.t));
-      ctx.globalAlpha = (dim ? NODE_ALPHA_DIMMED : 1) * (1 - t);
+      ctx.globalAlpha = alpha * (1 - t);
       ctx.strokeStyle = "rgba(230,238,252,0.9)";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(s.x, s.y, screenRadius + 5 + t * PULSE_MAX_RADIUS_PX, 0, TAU);
       ctx.stroke();
-      ctx.globalAlpha = dim ? NODE_ALPHA_DIMMED : 1;
+      ctx.globalAlpha = alpha;
     }
 
     if (node.kind === "module") {
       ctx.font = "12px ui-monospace, Menlo, monospace";
       ctx.textAlign = "center";
-      ctx.fillStyle = dim ? "rgba(214,222,236,0.16)" : "rgba(214,222,236,0.88)";
+      // Under hover the label rides the node's own resting opacity rather than
+      // being darkened a second time; under isolate the mockup's near-invisible
+      // label is the point, and stays exactly as it was.
+      ctx.fillStyle =
+        dim && scene.chainMode !== "hover"
+          ? "rgba(214,222,236,0.16)"
+          : "rgba(214,222,236,0.88)";
       ctx.fillText(node.path, s.x, s.y - screenRadius - 8);
-    } else if (scene.showFileLabels && !dim) {
+      // File labels survive a hover. Suppressing them is right for isolate,
+      // but at `FILE_LABEL_ZOOM` on a real map ~400 of them are on screen at
+      // once, so under the old rule moving the pointer onto any node deleted
+      // 400 labels and moving it off restored them — the largest single strobe
+      // on the map, and exactly what FR-29 is about. Out-of-chain labels now
+      // ride their node's resting opacity instead.
+    } else if (scene.showFileLabels && (!dim || scene.chainMode === "hover")) {
       ctx.font = "10px ui-monospace, Menlo, monospace";
       ctx.textAlign = "center";
       ctx.fillStyle = "rgba(133,146,171,0.75)";

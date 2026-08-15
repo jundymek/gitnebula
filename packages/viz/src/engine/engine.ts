@@ -21,6 +21,7 @@ import {
   FLY_ZOOM_FILE,
   FLY_ZOOM_MODULE,
   HOT_THRESHOLD,
+  HOVER_CARRY_MS,
   PULSE_DURATION_MS,
   ZOOM_IN_STEP,
   ZOOM_OUT_STEP,
@@ -123,6 +124,14 @@ export class CanvasGraphEngine implements GraphEngine {
   private hoveredId: string | null = null;
   private selectedId: string | null = null;
   private isolatedId: string | null = null;
+  /**
+   * The chain held while the pointer crosses the background between two nodes
+   * (story 5.2, AC-3), and the frame clock at which the hold started. Resolved
+   * on the first frame that sees it, like the arrival pulse, so the hold is
+   * measured on the frame clock rather than on a second clock of its own.
+   */
+  private carriedHoverId: string | null = null;
+  private carryStartMs: number | null = null;
 
   /**
    * One local wake per unfolded module (story 3.3, ADR-0006). Insertion order
@@ -581,11 +590,35 @@ export class CanvasGraphEngine implements GraphEngine {
     return this.hoveredId === null ? null : this.getNode(this.hoveredId);
   }
 
+  /**
+   * Set the hovered node.
+   *
+   * An explicit call is an explicit answer: it cancels any held chain, so
+   * `setHovered(null)` restores full opacity on the very next frame (AC-2).
+   * `pointerleave` and chrome both come through here. The pointer-move path
+   * takes `applyHover` instead, which leaves the hold alone.
+   */
   setHovered(id: string | null, screen: ScreenPoint | null = null): void {
+    this.clearHoverCarry();
+    this.applyHover(id, screen);
+  }
+
+  private applyHover(id: string | null, screen: ScreenPoint | null): void {
     if (this.hoveredId === id) return;
     this.hoveredId = id;
     this.emitter.emit("hover", { node: this.getHovered(), screen });
     this.emitHighlight();
+  }
+
+  /** Hold `id`'s chain for `HOVER_CARRY_MS` of frame clock (story 5.2). */
+  private beginHoverCarry(id: string): void {
+    this.carriedHoverId = id;
+    this.carryStartMs = null;
+  }
+
+  private clearHoverCarry(): void {
+    this.carriedHoverId = null;
+    this.carryStartMs = null;
   }
 
   getSelected(): EngineNode | null {
@@ -1030,7 +1063,10 @@ export class CanvasGraphEngine implements GraphEngine {
     // allocates nothing extra per frame.
     const filtered = this.applyLayerFilter(nodes, edges);
 
-    const focusId = this.isolatedId ?? this.hoveredId;
+    // Isolate outranks hover, and hover outranks the chain still being held
+    // from the node the pointer just left (story 5.2, AC-3).
+    const hoverId = this.hoveredId ?? this.carriedHover(timeMs);
+    const focusId = this.isolatedId ?? hoverId;
     const chain = focusId === null ? null : new Set(this.chainOf(focusId));
 
     return {
@@ -1043,10 +1079,32 @@ export class CanvasGraphEngine implements GraphEngine {
       timeMs,
       reducedMotion: this.reducedMotion,
       chain: chain && chain.size > 0 ? chain : null,
+      // Which interaction the chain came from decides how the rest of the map
+      // is encoded: isolate extinguishes it, hover leaves it legible (FR-29).
+      chainMode: this.isolatedId === null ? "hover" : "isolate",
       selectedId: this.selectedId,
       showFileLabels: this.camera.k >= FILE_LABEL_ZOOM,
       pulse: this.pulseProgress(timeMs),
     };
+  }
+
+  /**
+   * The chain held across the gap between two nodes, or null once the hold has
+   * run out (story 5.2, AC-3).
+   *
+   * Nothing here is drawn as a function of `timeMs` — the held chain is the
+   * same chain, at the same alphas, for every frame of the hold and then gone.
+   * That is what keeps this a debounce rather than a transition, and why
+   * reduced motion needs no special case (AC-5).
+   */
+  private carriedHover(timeMs: number): string | null {
+    if (this.carriedHoverId === null) return null;
+    if (this.carryStartMs === null) this.carryStartMs = timeMs;
+    if (timeMs - this.carryStartMs >= HOVER_CARRY_MS) {
+      this.clearHoverCarry();
+      return null;
+    }
+    return this.carriedHoverId;
   }
 
   /** The arrival pulse as `{ id, t }` with `t` running 0 → 1, or null. */
@@ -1078,6 +1136,9 @@ export class CanvasGraphEngine implements GraphEngine {
     // release stops a right-click selecting but still lets it pan the map on
     // the way to the context menu.
     if (event.button !== 0 || event.isPrimary === false) return;
+    // Hover stays suppressed for the whole gesture (AC-2), so a press must
+    // also end a chain that is still being held from before it.
+    this.clearHoverCarry();
     this.dragging = true;
     this.dragMoved = false;
     this.pressPointerId = event.pointerId;
@@ -1120,11 +1181,20 @@ export class CanvasGraphEngine implements GraphEngine {
       return;
     }
 
-    // Hover (FR-17). Deliberately not evaluated while dragging: a pan would
-    // otherwise light up and dim every node it swept past.
+    // Hover (FR-17, FR-29). Deliberately not evaluated while dragging: a pan
+    // would otherwise light up and dim every node it swept past.
     const screen = this.toCanvasPoint(event);
     const node = this.pick(screen);
-    this.setHovered(node?.id ?? null, screen);
+    const previous = this.hoveredId;
+    // A pointer sweeping a dense map spends a frame or two over the background
+    // between two nodes. Dropping the chain there and picking the next one up
+    // a frame later is the flicker AC-3 forbids, so the chain the pointer just
+    // left is held (`carriedHover`) until it either times out or a new node
+    // takes over. `applyHover`, not `setHovered`: the latter is the explicit
+    // "hover is over" answer and cancels the hold.
+    if (node === null && previous !== null) this.beginHoverCarry(previous);
+    if (node !== null) this.clearHoverCarry();
+    this.applyHover(node?.id ?? null, screen);
     // The tooltip follows the cursor, so a move *within* the same node still
     // has to reach chrome — `setHovered` returns early on an unchanged id,
     // which is right for the highlight and wrong for the pointer position.
