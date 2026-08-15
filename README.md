@@ -1,8 +1,15 @@
 # gitnebula
 
-**Turn any git repository into an interactive architecture map — one command, no config, fully offline.**
+**You have just cloned a repository you have never seen. Where do you start
+reading?**
 
-![gitnebula turning its own repository into a map: the layout settles, a module opens into its files, a search flies to a result, and the heatmap colours the map by churn](docs/assets/demo.gif)
+gitnebula answers that question from the repository itself — one command, no
+configuration, fully offline. It reads the file tree, parses the imports and
+replays `git log`, then opens a map that leads with a reading order instead of
+an inventory: what the codebase is built around, where it is entered, and which
+files keep changing together.
+
+![gitnebula turning its own repository into a map: the layout settles, the start-here panel names what to read first, a file's panel opens with its history and the files it changes with, a module is scoped and filtered down, and the same graph is shown in 3D](docs/assets/demo.gif)
 
 ## Quickstart
 
@@ -19,20 +26,29 @@ Run it inside a git repository. gitnebula scans the tree, parses imports, reads
 ▸ config
 ✔ config (0.00s)
 ▸ scan
-✔ scan (0.07s)
+✔ scan (0.10s)
 ▸ deps
 ▸ githist
-✔ githist (0.10s)
-✔ deps (0.15s)
+✔ githist (0.06s)
+✔ deps (0.19s)
 ▸ assemble
 ✔ assemble (0.00s)
 ▸ enrich
 ✔ enrich (0.00s)
 ▸ emit
 ✔ emit (0.00s)
-analysis.json — 295 nodes, 360 edges, 60 co-change pairs in 0.25s
+  ! deps: external-import ×344 (e.g. @eslint/js in eslint.config.js)
+analysis.json — 399 nodes, 480 edges, 175 co-change pairs, history over the last 90 days (--window-days), in 0.36s
 serving http://127.0.0.1:4137/ — press Ctrl+C to stop
 ```
+
+That is a real run of gitnebula over a fresh clone of its own repository, with
+the machine-specific path prefix trimmed off the summary line. Anything the
+analyzers had to skip — a binary file, an import that resolves outside the
+repository — is summarised as a warning line before the last one, so nothing
+fails silently; the run above skipped 344 external imports and said so. If port
+4137 is busy the server takes the next free one and prints the URL it actually
+bound.
 
 There is nothing to sign up for, nothing to configure and no API key. Your code
 never leaves the machine.
@@ -44,7 +60,7 @@ npx gitnebula ../some/other/repo      # analyze a different checkout
 npx gitnebula https://github.com/…    # clone into a temp dir and analyze that
 npx gitnebula --no-serve              # just write analysis.json
 npx gitnebula --no-open               # serve, but do not open a browser
-npx gitnebula --window-days 180       # widen the git history window (default 90)
+npx gitnebula --window-days 365       # widen the git history window (default 90)
 ```
 
 Optional `.gitnebula.yml` in the repository root sets `excludes`, `windowDays`,
@@ -55,16 +71,91 @@ left behind. To keep it around, `npm install -g gitnebula` and run `gitnebula`.
 Node.js ≥ 20.19 is the only requirement; git is read through the `git` already
 on your PATH.
 
-To run it from a clone instead — a change you are trying out, or a look at the
-sources:
+## The first five minutes
 
-```bash
-pnpm install
-pnpm build
-node packages/cli/dist/bin/gitnebula.js .
-```
+**The map opens on an answer.** Once the layout settles, a **start-here** panel
+names a reading order in three categories, computed from the graph alone:
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest of the development setup.
+| category                   | what it holds                                          |
+| -------------------------- | ------------------------------------------------------ |
+| **core**                   | the files everything else imports, most-imported first |
+| **entry points**           | files nobody imports that import plenty — the doors    |
+| **tests as documentation** | the test files that exercise the most of the codebase  |
+
+Pick a row and the camera flies to that file and opens its panel. Dismiss the
+panel to explore on your own; `◎ start here` in the header brings it back
+without reloading anything.
+
+**A node's panel is the history the import graph cannot give you.** Lines of
+code and the file's imports come from static analysis; churn, authors and last
+change come from `git log`, and every one of those rows states the window it
+covers — `history · last 90 days`, or whatever `--window-days` you asked for.
+A file nobody has touched inside that window says **"no change in last 90
+days"** rather than a bare `0`, so a quiet file never reads as a broken tool.
+
+**And what tends to change alongside it.** Below the history rows, a **blast
+radius** section lists the files this one has repeatedly been committed with,
+and how many commits they share. This is the part no import parser can tell
+you: in this repository `chrome/chrome.ts` and `styles.css` keep changing
+together and there is no import between them, because a stylesheet is not an
+import. `show on map` marks that set on the canvas — a mark on those nodes, not
+a line between them, because co-change is not a dependency. Most files have no
+partners at all (342 of 399 here), so the section names its cause rather than
+showing an empty box, and points at `--window-days` as the lever.
+
+**Then narrow the map.** Three levers, each of which _removes_ nodes rather
+than restyling them, so what is left is genuinely all there is to click:
+
+- **Drill down** — double-click a module to scope the map to it: the module,
+  its files, and the modules it actually imports or is imported by. `Escape`
+  leaves the scope, and the scope bar tells you where you are the whole time.
+- **Connected only** — hide files that carry no import edge at all. That is
+  nearly half the files in this repository, and 232 of the 650 on the langgraph
+  checkout this behaviour was measured against.
+- **Layer filter** — five toggles for `backend`, `frontend`, `infra`, `test`
+  and `other`. Switch `test` off and the tests leave the frame; switch it back
+  on and they return exactly where they were, because filtering never re-runs
+  the layout.
+
+Whatever is hidden is stated, with its cause, rather than silently dropped.
+
+**Hover traces a dependency chain without extinguishing the map.** The hovered
+node and its one-hop chain brighten and gain a ring, and everything else settles
+back a little instead of going dark — a dense repository stays readable while
+the pointer moves across it.
+
+## What else it gives you
+
+- **Modules and files as one map.** Directories become modules; zoom past 1.8×
+  and a module unfolds into its files. Node size is ∝ √LOC, colour is the
+  detected layer. Files in the repository root are drawn too, not swallowed.
+- **Real dependency edges.** Imports parsed from JavaScript, TypeScript and
+  Python — not guessed from filenames.
+- **Hot spots you can see.** Files above the churn threshold pulse; the heatmap
+  view mode recolours the whole map by churn instead of by layer, and says so
+  when a repository is quiet enough that the heatmap is nearly uniform.
+- **Search that flies.** ⌘K, type, pick — the camera flies to the node and opens
+  its panel with the metrics and a link to the file on GitHub. A result outside
+  the current scope leaves the scope rather than refusing to go there, and
+  offers you the way back.
+- **A 3D view of the same graph.** `3D` in the header swaps the map for a
+  three-axis layout of the same `analysis.json`, where depth separates clusters
+  that overlap in the plane: drag to rotate, shift-drag to pan, and the same
+  click, drill-down and `Escape` as in 2D. `?view=3d` links straight to it.
+  There is no WebGL and no 3D library behind it — it is a perspective
+  projection onto the same canvas, which is why a whole second renderer costs
+  about 5 KB gzipped. **2D stays the default, and stays the faster of the
+  two**: 3D is smooth on the module-level map and slows down once a large
+  repository is fully unfolded (measured: it holds 55 fps to roughly 840 drawn
+  nodes). Where 3D cannot start, the map stays 2D and tells you why.
+- **PNG export.** A 2× re-render of exactly what is on screen — camera, mode,
+  highlight and filters included — for slides and issues.
+- **Deterministic and offline.** The same repository at the same commit produces
+  a byte-identical `analysis.json`. No telemetry, no network calls in the
+  analysis path, no backend — the viewer is a static page reading one JSON file.
+
+Requirements: Node.js ≥ 20.19 and a git repository. Python and JS/TS are the
+supported languages in this release.
 
 ## A static bundle you can host
 
@@ -90,29 +181,17 @@ fetches its sibling `analysis.json`, which browsers block on `file://`.)
 to GitHub Pages, regenerated by the project's own CI. The URL lands here as soon
 as the Pages workflow is live.
 
-## What it gives you
+## Running it from a clone
 
-- **Modules and files as one map.** The repository's directories become modules;
-  zoom past 1.8× and a module unfolds into its files. Node size is ∝ √LOC, colour
-  is the detected layer — backend, frontend, infra, test.
-- **Real dependency edges.** Imports parsed from JavaScript, TypeScript and
-  Python — not guessed from filenames.
-- **Git history as a signal.** Churn, commit and author counts and last-change
-  time over a 90-day window, plus the files that keep changing together.
-- **Hot spots you can see.** Files above the churn threshold pulse; the heatmap
-  view mode recolours the whole map by churn instead of by layer.
-- **Hover to trace a dependency chain.** Everything outside the hovered node's
-  one-hop chain dims, so a file's imports stand out of two thousand nodes.
-- **Search that flies.** ⌘K, type, pick — the camera flies to the node and opens
-  its panel with the metrics and a link to the file on GitHub.
-- **PNG export.** A 2× re-render of exactly what is on screen, for slides and
-  issues.
-- **Deterministic and offline.** The same repository at the same commit produces
-  a byte-identical `analysis.json`. No telemetry, no network calls in the
-  analysis path, no backend — the viewer is a static page reading one JSON file.
+To try a change, or to read the sources:
 
-Requirements: Node.js ≥ 20.19 and a git repository. Python and JS/TS are the
-supported languages in this release.
+```bash
+pnpm install
+pnpm build
+node packages/cli/dist/bin/gitnebula.js .
+```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the rest of the development setup.
 
 ## Contributing
 
