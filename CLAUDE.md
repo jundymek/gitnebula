@@ -98,6 +98,45 @@ One module = one owner. From section 9 of the brief:
 `viz` depends on the contract and the fixtures — never on the analyzer modules.
 That is the precondition for parallel work; do not introduce such a dependency.
 
+## Verification
+
+From the worktree root, `pnpm lint && pnpm test` must both exit 0 before you
+commit, and `pnpm build` before you open a PR touching `cli` or `viz`.
+
+### Canonical per-package test commands
+
+The directory name and the package name are not the same string. The cli
+package is published as **`gitnebula`, unscoped** — it was `@gitnebula/cli`
+until commit `efeaceb` renamed it for its first npm release, and that is the
+one exception that turned a quoted test result into a decoration. Use this
+table rather than inferring a name from `packages/<dir>/package.json`:
+
+<!-- canonical-test-commands:start -->
+
+| package               | test command                            |
+| --------------------- | --------------------------------------- |
+| `@gitnebula/contract` | `pnpm --filter @gitnebula/contract test` |
+| `@gitnebula/deps`     | `pnpm --filter @gitnebula/deps test`     |
+| `@gitnebula/githist`  | `pnpm --filter @gitnebula/githist test`  |
+| `@gitnebula/scanner`  | `pnpm --filter @gitnebula/scanner test`  |
+| `@gitnebula/viz`      | `pnpm --filter @gitnebula/viz test`      |
+| `gitnebula`           | `pnpm --filter gitnebula test`           |
+
+<!-- canonical-test-commands:end -->
+
+The table is a literal `<package name>` → `<command>` mapping between those two
+markers so it can be checked mechanically: `scripts/verify-test-commands.mjs`
+asserts it agrees with the workspace in both directions, and a story spec that
+names a package test command is checked against it rather than against prose.
+`pnpm test:pkg <package name>` is the same thing from the command line — it
+validates the name before spawning pnpm.
+
+**A filter that matches no project fails.** pnpm's default is to print
+`No projects matched the filters` and exit **0**, so a mistyped or stale filter
+reports green having run nothing. `.npmrc` sets `fail-if-no-match=true` to
+close that; do not remove it. The findings record is
+`docs/dev/epic-5/5.9-repo-test-command-false-green/`.
+
 ## Git workflow
 
 Base branch is `master`. The commit history is part of the portfolio and must

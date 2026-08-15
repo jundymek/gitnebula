@@ -103,7 +103,7 @@ development_status:
   # in six specs matches no project and exits 0. Unassigned — the wave it
   # lands in is the maintainer's call. The row exists so that a merged PR for
   # it cannot stop sprint-status.sh with a key the file does not carry.
-  5.9-repo-test-command-false-green: backlog
+  5.9-repo-test-command-false-green: done
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
