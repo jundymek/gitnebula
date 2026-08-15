@@ -77,6 +77,53 @@ export const EDGE_ALPHA_DIMMED = 0.03;
 /** Node alpha for everything outside the focused chain (mockup `dim`). */
 export const NODE_ALPHA_DIMMED = 0.1;
 
+/**
+ * Hover's resting opacities — what the map keeps while a chain is lit
+ * (FR-29, story 5.2).
+ *
+ * The two constants above stay where they are and keep their values: they are
+ * *isolate's* encoding, and isolate means "show me this and nothing else".
+ * Hover cannot mean that. Measured on a real langgraph checkout, a hovered
+ * node dims 647 of 650 nodes to `NODE_ALPHA_DIMMED`, because the median 1-hop
+ * chain is 3 nodes — and at 6× zoom pointer hit-areas cover 78% of the
+ * viewport, so the cursor is nearly always over something and the map strobes
+ * as it moves. Dimming-as-mechanism does not survive that density; the chain
+ * is carried by emphasis below instead.
+ *
+ * The values are the maintainer's decision, not a re-derivation.
+ */
+export const NODE_ALPHA_HOVER_REST = 0.55;
+export const EDGE_ALPHA_HOVER_REST = 0.12;
+
+/**
+ * Chain emphasis under hover (story 5.2): the chain is found because it is
+ * brighter and ringed, not because everything else went dark.
+ *
+ * The ring sits inside the selection ring's +5 px so the two never read as the
+ * same mark — a hovered neighbour is not a selected node.
+ */
+export const CHAIN_GLOW_BOOST = 1.35;
+export const CHAIN_RING_OFFSET_PX = 3;
+export const CHAIN_RING_ALPHA = 0.5;
+
+/**
+ * How long a hover chain is held after the pointer leaves a node, in ms on the
+ * frame clock (story 5.2, AC-3).
+ *
+ * A pointer sweeping a dense map crosses a few pixels of background between
+ * two nodes. Dropping the chain on that frame and picking up the next one on
+ * the following frame is precisely the flicker this story exists to remove, so
+ * the previous chain is *held* across the gap and replaced the moment a new
+ * node is hovered. This is a debounce, not a transition: nothing interpolates
+ * and no drawn value is a function of elapsed time, which is why it is
+ * unaffected by `prefers-reduced-motion` (AC-5, UX-DR11).
+ *
+ * An explicit `setHovered(null)` — `pointerleave`, or chrome clearing the
+ * highlight — bypasses the hold entirely and restores full opacity at once
+ * (AC-2).
+ */
+export const HOVER_CARRY_MS = 120;
+
 /** Quadratic control-point offset as a fraction of the edge vector (mockup). */
 export const EDGE_CURVE = 0.13;
 
