@@ -68,6 +68,7 @@ import { hashString, mulberry32, seedFor, type Rng } from "./prng.js";
 import {
   BASE_DISTANCE,
   clampPitch,
+  FOCAL_LENGTH,
   orbitDistance,
   type Orientation,
 } from "./project3d.js";
@@ -487,31 +488,59 @@ export class Nebula3DEngine implements GraphEngine {
    * would clip whatever happened to be closest to the camera.
    */
   private fitTarget(paddingPx: number = FIT_PADDING_PX): CameraState {
-    const bounds = this.layout ? bounds3D(this.layout.nodes) : null;
-    if (!bounds) return IDENTITY_CAMERA;
+    const layout = this.layout;
+    const bounds = layout ? bounds3D(layout.nodes) : null;
+    if (!bounds || !layout) return IDENTITY_CAMERA;
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
-    const radius =
-      Math.max(
-        bounds.maxX - bounds.minX,
-        bounds.maxY - bounds.minY,
-        bounds.maxZ - bounds.minZ,
-      ) / 2;
+    const cz = (bounds.minZ + bounds.maxZ) / 2;
+    // The **actual** bounding sphere of the node set: the farthest any node
+    // reaches from the centre, its own radius included.
+    //
+    // A sphere rather than a box because the camera orbits — a frame that fits
+    // the current silhouette would clip the moment it rotated, and this view
+    // auto-rotates by default. Measured from the nodes rather than derived
+    // from the box for the opposite reason: half the longest axis *under*-fits
+    // (a corner sits `hypot(hx, hy, hz)` away, 1.73x further for an isotropic
+    // cloud), while the box's enclosing sphere *over*-fits, because the
+    // layout's scatter is spherical and no node ever sits at a corner. On the
+    // 2,000-node fixture the box sphere left the cloud filling 284 px of the
+    // 620 px available; the real one is both correct at every orientation and
+    // tight.
+    let radius = 0;
+    for (const node of layout.nodes) {
+      const reach =
+        Math.hypot(node.x - cx, node.y - cy, node.z - cz) + node.radius;
+      if (reach > radius) radius = reach;
+    }
+    radius = Math.max(1, radius);
     const available = Math.max(
       1,
       Math.min(this.viewport.width, this.viewport.height) - paddingPx * 2,
     );
     // The distance at which a sphere of `radius` subtends `available` px, then
     // inverted through `orbitDistance` back into the `k` the seam speaks in.
+    //
+    // The scale factor is `FOCAL_LENGTH`, because that is what `project()`
+    // divides by depth: a sphere of radius R at distance D has a projected
+    // radius of `FOCAL_LENGTH * R / D`, so filling `available` px across means
+    // `D = 2 * FOCAL_LENGTH * R / available`. This used `BASE_DISTANCE`, which
+    // is the *resting* distance and not a focal length at all — 900 against
+    // 780, so the camera sat 15% too far, and that error compounded with the
+    // under-estimated radius above. Measured on the 2,000-node fixture before
+    // the fix: the cloud spanned 243 px of a 1,200 px viewport.
+    //
+    // `FIT_SPHERE_MARGIN` is breathing room on top of an already-correct
+    // radius, not a fudge factor compensating for an approximate one.
     const wanted = Math.max(
       1,
       ((radius * FIT_SPHERE_MARGIN) / Math.max(1, available)) *
         2 *
-        BASE_DISTANCE,
+        FOCAL_LENGTH,
     );
     // Framing the cloud means looking at its centre in all three axes, not at
     // the z = 0 slice of it.
-    this.targetZ = (bounds.minZ + bounds.maxZ) / 2;
+    this.targetZ = cz;
     return { x: cx, y: cy, k: clampZoom(BASE_DISTANCE / wanted) };
   }
 

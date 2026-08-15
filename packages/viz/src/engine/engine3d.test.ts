@@ -252,6 +252,75 @@ describe("AC-2 — determinism (AD-6)", () => {
   });
 });
 
+describe("fit frames the whole cloud", () => {
+  it("keeps every node inside the viewport, at any orientation", () => {
+    // `fit` solves on the sphere that ENCLOSES the layout's bounding box. Half
+    // the longest axis is not that sphere: a corner sits hypot(hx, hy, hz)
+    // from the centre, 1.73x further for an isotropic cloud — and the scatter
+    // is spherical, so isotropic is the ordinary case. Under-fitting drew
+    // whichever corner swung widest outside the padded viewport, and since the
+    // camera can be at any yaw and pitch, which corner that is varies.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+
+    for (const orientation of [
+      { yaw: 0, pitch: 0 },
+      { yaw: 0.9, pitch: -0.3 },
+      { yaw: Math.PI / 4, pitch: Math.PI / 5 },
+      { yaw: 2.4, pitch: 0.7 },
+    ]) {
+      engine.setOrientation(orientation);
+      void engine.fit({ durationMs: 0 });
+      const scene = engine.buildScene(0)!;
+      const placed = placeNodes(scene);
+      // Nothing culled: every node survived projection and the cull margin.
+      expect(placed.length).toBe(scene.nodes.length);
+      for (const p of placed) {
+        expect(p.sx).toBeGreaterThanOrEqual(0);
+        expect(p.sx).toBeLessThanOrEqual(scene.viewport.width);
+        expect(p.sy).toBeGreaterThanOrEqual(0);
+        expect(p.sy).toBeLessThanOrEqual(scene.viewport.height);
+      }
+
+      // ...and it FILLS the frame rather than sitting in the middle of it.
+      // Containment alone is satisfied by a camera parked far away, which is
+      // exactly the defect the scale constant caused: `fit` used the resting
+      // distance where the focal length belongs and the map came out at 243 px
+      // across a 1,200 px viewport. A fit that frames nothing is not a fit.
+      const shortest = Math.min(scene.viewport.width, scene.viewport.height);
+      const span = Math.max(
+        Math.max(...placed.map((p) => p.sx)) -
+          Math.min(...placed.map((p) => p.sx)),
+        Math.max(...placed.map((p) => p.sy)) -
+          Math.min(...placed.map((p) => p.sy)),
+      );
+      // 0.48 is measured, not guessed: on this fixture the correct fit spans
+      // 0.491-0.545 of the shorter viewport axis across these four
+      // orientations, and scaling by the resting distance instead of the focal
+      // length drops it to 0.425-0.472. The bound sits in that gap, so this
+      // assertion fails against the defect and passes against the fix.
+      expect(span).toBeGreaterThan(shortest * 0.48);
+    }
+  });
+
+  it("frames the cloud's depth centre, not the z = 0 slice of it", () => {
+    engine = create(true);
+    engine.load(loadContractFixture("cyclic-imports"));
+    run(engine, 5);
+    void engine.fit({ durationMs: 0 });
+    const scene = engine.buildScene(0)!;
+    // Radii included, because `bounds3D` includes them: the frame has to hold
+    // the nodes as drawn, not their centre points.
+    const minZ = Math.min(...scene.nodes.map((n) => n.z - n.node.radius));
+    const maxZ = Math.max(...scene.nodes.map((n) => n.z + n.node.radius));
+    expect(scene.targetZ).toBeCloseTo((minZ + maxZ) / 2, 5);
+    // And it is a real depth, not the z = 0 plane the target used to be
+    // pinned to.
+    expect(Math.abs(maxZ - minZ)).toBeGreaterThan(1);
+  });
+});
+
 describe("flyTo centres its target", () => {
   it("puts a flown-to node at the middle of the viewport", () => {
     // `flyTo` is how search arrives at a node (FR-18). Landing with the target
