@@ -70,6 +70,7 @@ import {
   clampPitch,
   FOCAL_LENGTH,
   orbitDistance,
+  project,
   type Orientation,
 } from "./project3d.js";
 import {
@@ -80,6 +81,7 @@ import {
   type Scene3D,
 } from "./render3d.js";
 import { inScopeIds, visibleNodeIds } from "./scope.js";
+import { UNFOLD_VIEWPORT_MARGIN } from "./unfold.js";
 import type {
   CameraState,
   EngineNode,
@@ -675,12 +677,50 @@ export class Nebula3DEngine implements GraphEngine {
     const graph = this.graph;
     const layout = this.layout;
     if (!graph || !layout) return;
+    // Nothing unfolds while the global layout is still moving: members spawn
+    // at their module's position and their wake is settled once, so a module
+    // still travelling would leave its files stranded behind it. The 2D engine
+    // returns here for the same reason.
+    if (!layout.settled) return;
+
     const wanted = new Set<string>(this.pinnedUnfolds);
     if (this.scopePin !== null) wanted.add(this.scopePin);
     if (this.camera.k >= UNFOLD_ZOOM) {
+      // **Viewport-scoped**, which is the whole of ADR-0006 — the ADR is named
+      // for it. Unfolding every module in the repository at once is not
+      // semantic zoom, it is "draw everything above 1.8x", and on a large
+      // repository it puts every file of every module through projection and
+      // render on every frame.
+      //
+      // The 2D rule is a world-space rectangle, which does not transfer: in
+      // perspective a module's screen position depends on depth and
+      // orientation, not on x/y alone. So the test is done in screen space —
+      // project the module and ask whether its disc lands on (or near) the
+      // viewport. `UNFOLD_VIEWPORT_MARGIN` is imported rather than restated,
+      // so the two views cannot drift on how much slack "near" means.
+      const marginX = this.viewport.width * UNFOLD_VIEWPORT_MARGIN;
+      const marginY = this.viewport.height * UNFOLD_VIEWPORT_MARGIN;
       for (const item of layout.nodes) {
         const node = graph.nodes[item.graphIndex]!;
         if (node.kind !== "module") continue;
+        const projected = project(
+          item,
+          this.camera,
+          this.orientation,
+          this.viewport,
+          this.targetZ,
+        );
+        // Behind the near plane: not on screen, whatever its x/y.
+        if (!projected) continue;
+        const screenRadius = node.radius * projected.scale;
+        if (
+          projected.x + screenRadius < -marginX ||
+          projected.x - screenRadius > this.viewport.width + marginX ||
+          projected.y + screenRadius < -marginY ||
+          projected.y - screenRadius > this.viewport.height + marginY
+        ) {
+          continue;
+        }
         wanted.add(node.id);
       }
     }

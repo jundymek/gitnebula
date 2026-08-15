@@ -79,7 +79,11 @@ their instruction. No existing 2D code path changed.
 
 **The layout** simulates **top-level nodes only** — modules and repository root
 files — with member files waking in local per-module simulations on unfold,
-exactly as the 2D view does (ADR-0006). 3D showing every file at once would be
+exactly as the 2D view does (ADR-0006). Unfolding is **viewport-scoped** and
+waits for the global layout to settle, also as in 2D: the 2D rule is a
+world-space rectangle, which does not transfer to perspective, so the 3D test
+projects each module and asks whether its disc lands on the viewport —
+sharing `UNFOLD_VIEWPORT_MARGIN` so the two cannot drift on what "near" means. 3D showing every file at once would be
 a *different map* rather than the same map from another angle, and
 `unfoldedModules()` is on the interface and has to mean something. It is also
 what keeps the O(n²) repulsion at ~100 nodes instead of 2,000.

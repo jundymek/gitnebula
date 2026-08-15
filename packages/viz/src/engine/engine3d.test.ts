@@ -252,6 +252,73 @@ describe("AC-2 — determinism (AD-6)", () => {
   });
 });
 
+describe("semantic zoom is viewport-scoped (ADR-0006)", () => {
+  it("unfolds only the modules on screen, not every module in the repository", () => {
+    // ADR-0006 is named for this. Unfolding everything above 1.8x is not
+    // semantic zoom, it is "draw the whole repository", and it puts every file
+    // of every module through projection and render on every frame.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+
+    const moduleCount = engine.nodes.filter((n) => n.kind === "module").length;
+    expect(moduleCount).toBeGreaterThan(20);
+
+    // Zoomed in far enough that only part of the cloud is on screen.
+    engine.setCamera({ k: 4 });
+    const unfolded = engine.unfoldedModules().length;
+    expect(unfolded).toBeGreaterThan(0);
+    expect(unfolded).toBeLessThan(moduleCount);
+  });
+
+  it("collapses a module once the camera leaves it behind", () => {
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 4 });
+
+    const first = [...engine.unfoldedModules()];
+    expect(first.length).toBeGreaterThan(0);
+
+    // Pan a long way; a different part of the cloud is in frame now.
+    engine.setCamera({ x: 100000, y: 100000 });
+    for (const moduleId of first) {
+      expect(engine.isUnfolded(moduleId)).toBe(false);
+    }
+  });
+
+  it("keeps a scoped module open even when the camera is elsewhere", () => {
+    // Story 5.4's hold outranks the viewport rule, exactly as in 2D.
+    engine = create(true);
+    engine.load(loadContractFixture("root-files"));
+    run(engine, 5);
+    const moduleId = engine.nodes.find((n) => n.kind === "module")!.id;
+    engine.setScope(moduleId);
+    engine.setCamera({ x: 100000, y: 100000, k: 4 });
+    expect(engine.isUnfolded(moduleId)).toBe(true);
+  });
+});
+
+describe("nothing unfolds while the layout is still moving", () => {
+  it("holds off until the global layout has settled", () => {
+    // Members spawn at their module's position and their wake settles once, so
+    // unfolding around a module that is still travelling strands its files
+    // behind it. The 2D engine returns early for the same reason.
+    engine = create(false); // not reduced motion: the layout really settles over frames
+    engine.load(loadSyntheticFixture());
+
+    // One frame in, the layout is still moving.
+    engine.frame(0);
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules()).toEqual([]);
+
+    // Run it out; now the viewport rule may apply.
+    for (let i = 1; i < 900; i++) engine.frame(i * FRAME_MS);
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules().length).toBeGreaterThan(0);
+  });
+});
+
 describe("fit frames the whole cloud", () => {
   it("keeps every node inside the viewport, at any orientation", () => {
     // `fit` solves on the sphere that ENCLOSES the layout's bounding box. Half

@@ -75,6 +75,12 @@ different density.
 > **3D holds the 55 fps floor up to roughly 840 drawn nodes, and degrades
 > between 840 and 1,260.**
 
+These numbers were re-measured after semantic zoom was made viewport-scoped
+(review round eight) and are unchanged: at `k = 2.2` the fixture's whole cloud
+is still in frame, so all 100 modules unfold either way. The viewport rule
+bounds work on larger repositories and at higher zoom; it does not soften this
+measurement, which remains the honest worst case.
+
 Frame cost is close to linear in drawn nodes (p95 interval rises ~8 ms per 420
 nodes), which points at **per-node render work** rather than at the simulation.
 That matches the design: the layout freezes on settle and is not ticked at all
