@@ -14,7 +14,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` with all of Epic 5 merged, gitnebula analysing a **fresh clone** of its own repository (399 nodes, 480 edges, 175 co-change pairs) |
+| Recorded from | `story/5.8-repo-docs-refresh` with all of Epic 5 merged, gitnebula analysing a **fresh clone** of its own repository (399 nodes, 480 edges, 175 co-change pairs — the same run the README quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 40 s of WebM |
@@ -28,7 +28,7 @@ carries build output, generated fixtures and whatever scratch files the current
 branch happens to have, and every one of them becomes a node on the map. The
 first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
 recipe below clones the repository into a temp directory for exactly this
-reason, which is also why the README's sample run reports 397 nodes where the
+reason, which is also why the README's sample run reports 399 nodes where the
 same command in a live worktree reports more.
 
 ## The scripted sequence

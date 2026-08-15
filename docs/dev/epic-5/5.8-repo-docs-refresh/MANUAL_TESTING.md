@@ -20,8 +20,8 @@ all of Epic 5 merged.
       is what the next release ships.
 - [x] `npx gitnebula ../some/other/repo` — verified in the equivalent form
       `node packages/cli/dist/bin/gitnebula.js <clean> --no-serve`:
-      `397 nodes, 480 edges, 173 co-change pairs … in 0.29s`, which is the
-      transcript in the README.
+      `399 nodes, 480 edges, 175 co-change pairs … in 0.36s`, which is the
+      transcript in the README — the same run every figure on the page comes from.
 - [x] `npx gitnebula https://github.com/…` — clone-and-analyze against
       `https://github.com/jundymek/gitnebula`: `324 nodes, 338 edges, 115
       co-change pairs … in 0.27s`. (Fewer nodes than the local run because the
@@ -54,9 +54,9 @@ all of Epic 5 merged.
 - [x] **`?view=3d` opens the 3D view.** Driven against the served viewer: the
       view switch reports `[["2d","false"],["3d","true"]]` on that URL, so the
       deep link selects 3D rather than falling back.
-- [x] **"nearly half the files carry no import edge"** — measured on the merged
-      epic: 182 of 391 files, 47%.
-- [x] **"341 of 397 nodes have no co-change partner"** — measured on the same
+- [x] **"nearly half the files carry no import edge"** — measured on that same
+      document: 184 of 393 files, 47%.
+- [x] **"342 of 399 nodes have no co-change partner"** — measured on the same
       document.
 - [x] **`chrome/chrome.ts` and `styles.css` keep changing together with no
       import between them** — the pair is in `cochanges` (9 shared commits at

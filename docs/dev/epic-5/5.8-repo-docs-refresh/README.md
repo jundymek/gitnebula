@@ -29,7 +29,7 @@ The audit was a line-by-line pass over the old README against the merged epic.
 | "PNG export — a 2× re-render of exactly what is on screen." | Still true, and now explicitly includes the active filters. | **5.3** (AC-5) |
 | Search described as fly-to-and-open only. | A result outside the active scope leaves the scope, flies there, says so, and offers the way back. | **5.4** (AC-5) |
 | "Files … over a 90-day window" with no account of a quiet repository. | The heatmap legend states the near-uniform case, so a flat heatmap reads as data rather than as a broken renderer. | **5.5** (AC-4) |
-| The sample run's numbers (295 nodes, 360 edges, 60 co-change pairs, 0.25 s) and its summary line. | Replaced by a real run over a fresh clone of the merged epic: 397 nodes, 480 edges, 173 co-change pairs, and the summary line now names the analysis window. | **5.5** (AC-5), plus history since 4.3 |
+| The sample run's numbers (295 nodes, 360 edges, 60 co-change pairs, 0.25 s) and its summary line. | Replaced by a real run over a fresh clone of the merged epic: 399 nodes, 480 edges, 175 co-change pairs, and the summary line now names the analysis window. | **5.5** (AC-5), plus history since 4.3 |
 | Root files were absent from the map and from the README's account of it. | Files in the repository root are drawn; the README says so. | **4.7** (pre-epic, never documented) |
 | "plus the files that keep changing together" — one clause, describing story 3.4's top-three metric row. | Co-change is a first-class **blast radius** section with shared-commit counts, a `show on map` toggle, and an empty state naming the ≥ 3 threshold; 3.4's metric row is folded into it and no longer exists. | **5.6** |
 | The map is two-dimensional, stated nowhere because there was no alternative. | A `3D` view sits behind the same `GraphEngine` interface, linkable with `?view=3d`, with 2D still the default and still faster. | **5.7** |
@@ -53,15 +53,21 @@ export" is served by one.
 `scripts/record-demo.mjs` recorded the pre-Epic-5 tour, and its **first step**
 was "hover a module — the dependency chain lights up and everything else dims":
 the deleted behaviour, as the opening beat. The re-cut follows the onboarding
-path — settle → start-here → take a file → drill down → hover a chain in scope
-→ connected-only → `Escape` → layer filter → heatmap → PNG export — and
+path — settle → start-here → take a file → its blast radius → search → drill
+down → hover a chain in scope → connected-only → `Escape` → layer filter → 3D →
+heatmap → PNG export — and
 `docs/recording-demo.md` is rewritten to the recipe actually used.
 
 One recipe change worth its own line: **record against a clean clone.** The
 first take of this cut had `plan.md` and an `.intent-acks/` module on the map,
 because the recorder was pointed at a live worktree. The recipe now clones into
-a temp directory first, which is also why the README's sample run reports 368
-nodes where the same command in a worktree reports over 400.
+a temp directory first, which is also why the README's sample run reports 399
+nodes where the same command in a worktree reports more.
+
+A second take was discarded rather than shipped: it came from a stale server
+whose map carried this worktree's own scratch files, and whose blast-radius
+section was therefore in its empty state. The frames looked plausible until
+they were read, which is the argument for reading them.
 
 ## AC-5 — every README command, run
 
@@ -79,16 +85,17 @@ Recorded step by step in [MANUAL_TESTING.md](MANUAL_TESTING.md), including the
 | `docs/dev/epic-5/5.8-repo-docs-refresh/README.md` | NEW — this file |
 | `docs/dev/epic-5/5.8-repo-docs-refresh/MANUAL_TESTING.md` | NEW — the command verification and the owner's read-through |
 | `docs/implementation-artifacts/epic-5-onboarding/5.8-repo-docs-refresh.md` | UPDATE — tasks + Dev Agent Record (append) |
-| `docs/implementation-artifacts/sprint-status.yaml` | UPDATE — this story's row only |
+| `docs/implementation-artifacts/sprint-status.yaml` | **untouched** — the supervisor writes it at closure from measurement |
 
 ## AC-4 — the frozen-artifact audit
 
 The diff over `docs/planning-artifacts/` is **empty**. The diff over
-`docs/implementation-artifacts/` touches exactly two files: this story's own
-spec (ticking its own boxes and filling its own Dev Agent Record, both of which
-are appends into sections left empty for them) and this story's single row in
-`sprint-status.yaml`. No content describing completed work is rewritten or
-deleted anywhere in the diff.
+`docs/implementation-artifacts/` touches exactly one file: this story's own spec,
+ticking its own boxes and filling its own Dev Agent Record — both appends into
+sections left empty for them. `sprint-status.yaml` is byte-identical to the epic
+head: this story's row was flipped early and reverted when the supervisor said he
+writes that file at closure from measurement. No content describing completed
+work is rewritten or deleted anywhere in the diff.
 
 ## A defect found while measuring, reported and not fixed
 
