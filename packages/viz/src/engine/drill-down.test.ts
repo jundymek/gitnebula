@@ -292,6 +292,50 @@ describe("AC-3 — connected-only holds when the layer filter is on too", () => 
   });
 });
 
+describe("AC-3 — connectivity is judged on the frame, not the document", () => {
+  // Tenth Codex pass: a file whose only dependency lives in a COLLAPSED module
+  // has a graph edge but no drawn one — `buildScene` drops any edge with an
+  // unplaced end — so counting graph edges kept it and then drew it bare.
+  it("leaves nothing on screen that is on screen alone", () => {
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+    engine.setConnectedOnly(true);
+
+    const built = scene();
+    const touched = new Set<string>();
+    for (const edge of built.edges) {
+      touched.add(edge.sourceId);
+      touched.add(edge.targetId);
+    }
+    for (const item of built.nodes) {
+      expect(touched.has(item.node.id)).toBe(true);
+    }
+    expect(built.nodes.length).toBeGreaterThan(0);
+  });
+
+  it("still reports the DOCUMENT's edgeless count, not the frame's", () => {
+    // The two questions AC-3 asks get two different answers, deliberately.
+    // Reporting the frame's number would print 0 at overview zoom — where no
+    // files are drawn at all — and the figure that makes this filter worth
+    // switching on would never be seen. AC-3 states its own baseline as a
+    // document measurement ("232 of 650 files").
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    engine.setConnectedOnly(true);
+    expect(engine.hiddenCount().byDegree).toBeGreaterThan(500);
+  });
+});
+
 describe("AC-6 — interaction state never outlives the node it points at", () => {
   // Third Codex finding: the panel kept describing a node the filters had just
   // removed, and its hover chain kept lighting nodes that were still drawn.
@@ -494,10 +538,18 @@ describe("AC-3 — connected-only", () => {
 
     engine.setConnectedOnly(true);
     const after = new Set(scene().nodes.map((item) => item.node.id));
+
+    // Every node that was edgeless in the graph is gone...
     for (const item of edgelessDrawn) {
       expect(after.has(item.node.id)).toBe(false);
     }
-    expect(after.size).toBe(before.length - edgelessDrawn.length);
+    // ...and so is anything left drawn with no edge in the FRAME. There are
+    // more of the latter than of the former, which is the point: a file whose
+    // only dependency lives in a collapsed module has a graph edge and no
+    // drawn one. An exact arithmetic identity here would just re-assert the
+    // graph-only reading this filter had to stop using.
+    expect(after.size).toBeLessThan(before.length - edgelessDrawn.length + 1);
+    expect(after.size).toBeGreaterThan(0);
   });
 
   it("keeps the two hidden counts apart by cause, never as one total", () => {

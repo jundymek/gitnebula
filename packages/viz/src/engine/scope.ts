@@ -35,6 +35,17 @@ export interface SceneFilter {
    * they belong to the other filter's cause, and each filter names its own.
    */
   readonly restrictTo?: ReadonlySet<string>;
+  /**
+   * Ids that actually have a position in the current scene, or undefined for
+   * "assume everything is materialised".
+   *
+   * Semantic zoom (ADR-0006) means a file exists in the frame only while its
+   * module is unfolded. An edge to a collapsed module's file is dropped by
+   * `buildScene` because one end has no position — so counting it here would
+   * call a node connected and then draw it with nothing attached, which is
+   * the one thing this filter promises cannot happen.
+   */
+  readonly materialised?: ReadonlySet<string>;
 }
 
 /** What survived, and what each cause removed — never one merged total. */
@@ -153,24 +164,54 @@ export function visibleNodeIds(
     }
   }
 
-  let hiddenByDegree = 0;
-  if (filter.connectedOnly) {
-    // Run to a fixpoint rather than in one pass. Removing an edgeless node can
-    // strand its neighbour — a file whose only import was to something just
-    // dropped now has nothing drawn either — and a single pass would leave
-    // exactly the edgeless nodes on screen that this filter promises to
-    // remove. Each round removes at least one node, so it terminates in at
-    // most `surviving.size` rounds and normally in one or two.
-    for (;;) {
-      const stranded: string[] = [];
-      for (const id of surviving) {
-        if (degreeOf(graph, id, surviving) === 0) stranded.push(id);
-      }
-      if (stranded.length === 0) break;
-      for (const id of stranded) surviving.delete(id);
-      hiddenByDegree += stranded.length;
+  // AC-3 asks two different questions and they need two different answers.
+  //
+  // The FRAME question — "is this node drawn with no edges?" — has to be asked
+  // about what the scene can actually place. Semantic zoom (ADR-0006) means a
+  // file exists only while its module is unfolded, and `buildScene` drops any
+  // edge with an unplaced end; counting those would keep a node and then draw
+  // it with nothing attached.
+  //
+  // The COUNT question — "how much of this repository carries no dependency?"
+  // — is a property of the document, which is how AC-3 states its own baseline
+  // ("232 of 650 files"). Answering it about the frame would print 0 at
+  // overview zoom, where no files are drawn at all, and the number that makes
+  // the filter worth switching on would never be seen.
+  //
+  // So: the count is computed over the candidates, the frame narrows further.
+  const hiddenByDegree = filter.connectedOnly
+    ? countEdgeless(graph, new Set(surviving))
+    : 0;
+
+  if (filter.materialised) {
+    for (const id of [...surviving]) {
+      if (!filter.materialised.has(id)) surviving.delete(id);
     }
   }
+  if (filter.connectedOnly) countEdgeless(graph, surviving);
 
   return { visible: surviving, hiddenByScope, hiddenByDegree };
+}
+
+/**
+ * Strip every node that carries no edge within `candidates`, mutating it, and
+ * return how many went.
+ *
+ * Run to a fixpoint rather than in one pass: removing an edgeless node can
+ * strand its only neighbour, and that neighbour is exactly what this filter
+ * promises to remove too. Each round removes at least one node, so it
+ * terminates in at most `candidates.size` rounds and normally in one or two.
+ */
+function countEdgeless(graph: Graph, candidates: Set<string>): number {
+  let removed = 0;
+  for (;;) {
+    const stranded: string[] = [];
+    for (const id of candidates) {
+      if (degreeOf(graph, id, candidates) === 0) stranded.push(id);
+    }
+    if (stranded.length === 0) break;
+    for (const id of stranded) candidates.delete(id);
+    removed += stranded.length;
+  }
+  return removed;
 }

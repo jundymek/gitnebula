@@ -987,11 +987,26 @@ export class CanvasGraphEngine implements GraphEngine {
               .filter((node) => this.isLayerVisible(node))
               .map((node) => node.id),
           );
-    const key = `${this.scopeId ?? ""}|${this.connectedOnly}|${layers.join(",")}`;
+    // What the scene can actually draw right now: the top-level nodes, plus
+    // the members of whichever modules are unfolded (ADR-0006). A file inside
+    // a collapsed module has no position, so `buildScene` drops every edge
+    // touching it — counting those edges would mark a node connected and then
+    // draw it with nothing attached.
+    //
+    // Only computed while connected-only is on, because it is the only filter
+    // that asks about edges; scoping alone does not care.
+    const materialised = this.connectedOnly
+      ? this.materialisedIds(graph)
+      : undefined;
+    const unfoldKey = this.connectedOnly
+      ? [...this.memberLayouts.keys()].sort().join(",")
+      : "";
+    const key = `${this.scopeId ?? ""}|${this.connectedOnly}|${layers.join(",")}|${unfoldKey}`;
     if (this.visibleCache && this.visibleCacheKey === key) {
       return this.visibleCache;
     }
     const result = visibleNodeIds(graph, {
+      materialised,
       scopeId: this.scopeId,
       connectedOnly: this.connectedOnly,
       restrictTo,
@@ -1005,6 +1020,27 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private invalidateVisible(): void {
     this.visibleCache = null;
+  }
+
+  /**
+   * Every id the scene can give a position to right now: the top-level nodes
+   * the module layout carries, plus the members of the unfolded modules.
+   *
+   * This is the same set `buildScene` can place, which is the point — the
+   * connectivity question has to be asked about the frame the user is looking
+   * at, not about the document.
+   */
+  private materialisedIds(graph: Graph): ReadonlySet<string> {
+    const ids = new Set<string>();
+    for (const index of graph.topLevelIndices) {
+      ids.add(graph.nodes[index]!.id);
+    }
+    for (const moduleId of this.memberLayouts.keys()) {
+      for (const index of graph.membersByModule.get(moduleId) ?? []) {
+        ids.add(graph.nodes[index]!.id);
+      }
+    }
+    return ids;
   }
 
   /** Publish the frame's filter state. `leftForId` is set only for AC-5. */
