@@ -372,6 +372,27 @@ describe("AC-2 — entering and leaving the scope", () => {
     expect(engine.getScope()).toBeNull();
   });
 
+  it("does NOT leave the scope when a member file is double-clicked", () => {
+    // Sixth Codex pass. Scoping is what puts member files on screen, so
+    // double-clicking one is a likely accident — and it threw the user out of
+    // the scope, contradicting the gesture the method itself documents.
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setScope(focus);
+
+    const graph = buildGraph(langgraphShapedDocument());
+    const member = (graph.membersByModule.get(focus) ?? []).map(
+      (index) => graph.nodes[index]!.id,
+    )[0]!;
+    // Put the file under the viewport centre, then double-click it.
+    void engine.flyTo(member, { durationMs: 0 });
+    canvas.dispatchEvent(
+      new MouseEvent("dblclick", { clientX: 600, clientY: 400, bubbles: true }),
+    );
+
+    expect(engine.getScope()).toBe(focus);
+  });
+
   it("leaves the scope on Escape", () => {
     settledEngine();
     engine.setScope(firstModuleId());

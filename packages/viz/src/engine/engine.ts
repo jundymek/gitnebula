@@ -1013,7 +1013,13 @@ export class CanvasGraphEngine implements GraphEngine {
       x: event.clientX - rect.left,
       y: event.clientY - rect.top,
     });
-    if (!hit || hit.kind !== "module" || hit.id === this.scopeId) {
+    // A file is not an exit. Scoping is what puts member files on screen in
+    // the first place, so double-clicking one is a likely thing to do by
+    // accident — and throwing the user out of the scope for it contradicts
+    // the gesture this method documents: empty space, or the focus module
+    // again. A file simply has no drill-down meaning, so nothing happens.
+    if (hit && hit.kind !== "module") return;
+    if (!hit || hit.id === this.scopeId) {
       this.setScope(null);
       return;
     }
