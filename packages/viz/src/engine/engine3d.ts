@@ -369,6 +369,10 @@ export class Nebula3DEngine implements GraphEngine {
       yaw: orientation.yaw ?? this.orientation.yaw,
       pitch: clampPitch(orientation.pitch ?? this.orientation.pitch),
     };
+    // Rotating changes which modules are on screen exactly as panning does,
+    // and the viewport rule reads `this.orientation`. `setCamera` recomputes
+    // for the same reason; this is that reason on the other axis.
+    this.updateUnfolds();
   }
 
   /** Whether idle auto-rotation is running (AC-6 asserts this is false). */
@@ -1177,6 +1181,13 @@ export class Nebula3DEngine implements GraphEngine {
       if (layout.settled) {
         this.announceSettled(layout.frames, timeMs - this.settleStartMs);
         if (!this.cameraTakenByUser) void this.fit();
+        // Unconditionally, and NOT only via the fit above: unfolding is gated
+        // on the layout being settled, so a reader who zoomed past the
+        // threshold while it was still moving had their request refused. This
+        // is the transition that makes it grantable, and if the camera was
+        // taken by hand there is no fit coming to trigger it — the map would
+        // stay fully collapsed at 4x until some unrelated pan nudged it.
+        this.updateUnfolds();
       }
     }
 
@@ -1192,6 +1203,15 @@ export class Nebula3DEngine implements GraphEngine {
         ...this.orientation,
         yaw: this.orientation.yaw + elapsed * AUTO_ROTATE_RAD_PER_MS,
       };
+      // Which modules are on screen is a function of orientation as well as
+      // camera, so the drift has to re-ask. Auto-rotation is ON BY DEFAULT, so
+      // without this the viewport rule is defeated in the ordinary case:
+      // modules rotating into view stay collapsed and modules rotating out
+      // stay materialised until some unrelated pan or zoom happens.
+      // `updateUnfolds` diffs against the current set and returns without
+      // allocating when nothing crossed the edge, so the per-frame cost is a
+      // projection of the ~100 top-level nodes.
+      this.updateUnfolds();
     }
 
     this.advanceFlight(timeMs);

@@ -319,6 +319,117 @@ describe("nothing unfolds while the layout is still moving", () => {
   });
 });
 
+describe("the unfold set is re-evaluated when its inputs change", () => {
+  it("grants a zoom that was refused while the layout was still settling", () => {
+    // The settle gate refuses unfolding while the layout moves. Something has
+    // to re-ask once it stops, and if the reader took the camera by hand there
+    // is no automatic fit coming to do it — the map would sit fully collapsed
+    // at 4x until an unrelated pan nudged it.
+    engine = create(false);
+    engine.load(loadContractFixture("root-files"));
+    engine.frame(0);
+
+    // Rotate by hand first: that ends idle auto-rotation for the session, so
+    // the per-frame drift cannot be what re-evaluates the unfold set. This
+    // test then isolates the settle transition as the only thing that can.
+    const canvas = document.querySelector("canvas")!;
+    canvas.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 0,
+        clientY: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointermove", {
+        pointerId: 1,
+        clientX: 40,
+        clientY: 0,
+      }),
+    );
+    canvas.dispatchEvent(
+      new PointerEvent("pointerup", {
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        clientX: 40,
+        clientY: 0,
+      }),
+    );
+    expect(engine.isAutoRotating()).toBe(false);
+
+    // Zoom by hand while it is still moving: refused, and `cameraTakenByUser`
+    // is now set, so no post-settle fit will run either.
+    engine.setCamera({ k: 4 });
+    expect(engine.unfoldedModules()).toEqual([]);
+
+    // Nothing below touches the camera or the orientation. The only thing that
+    // happens is the layout reaching Settled.
+    for (let i = 1; i < 400; i++) engine.frame(i * FRAME_MS);
+    expect(engine.unfoldedModules().length).toBeGreaterThan(0);
+  });
+
+  it("re-evaluates when the camera is rotated by hand", () => {
+    // The viewport test reads `orientation`, so rotating changes its answer
+    // exactly as panning does. Asserted through the engine's own bookkeeping
+    // rather than a screenshot: a module far off-axis is in frame at one yaw
+    // and not at another.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 4 });
+
+    const seen = new Set<string>();
+    for (let turn = 0; turn < 8; turn++) {
+      engine.setOrientation({ yaw: (turn * Math.PI) / 4 });
+      for (const id of engine.unfoldedModules()) seen.add(id);
+    }
+    // Rotating a full circle brings strictly more modules through the frame
+    // than any single orientation shows, which is only true if rotation
+    // re-evaluates at all.
+    engine.setOrientation({ yaw: 0 });
+    expect(seen.size).toBeGreaterThan(engine.unfoldedModules().length);
+  });
+
+  it("re-evaluates as idle auto-rotation drifts the camera", () => {
+    // Auto-rotation is ON BY DEFAULT, so without this the viewport rule is
+    // defeated in the ordinary case: modules rotating into view stay collapsed
+    // and modules rotating out stay materialised until an unrelated pan.
+    //
+    // Asserted as *freshness* rather than as "the set changed": after drifting
+    // on the frame clock alone, a no-op camera nudge — which does nothing but
+    // force a re-evaluation — must not change the answer. If the drift had
+    // left the set stale, the nudge would repair it and the two would differ.
+    engine = create(false);
+    engine.load(loadSyntheticFixture());
+    // Not reduced motion, so the layout settles over frames — run it out first,
+    // because nothing unfolds before Settled.
+    let t = 0;
+    for (let i = 0; i < 260; i++) engine.frame((t = i * FRAME_MS));
+    // k = 6: the viewport edge cuts through the cloud there, so rotation
+    // genuinely moves modules across it. At the fit zoom the whole cloud is in
+    // frame and no amount of rotation changes the answer.
+    engine.setCamera({ k: 6 });
+    expect(engine.isAutoRotating()).toBe(true);
+
+    const yawBefore = engine.getOrientation().yaw;
+    for (let i = 1; i <= 340; i++) engine.frame(t + i * FRAME_MS);
+    const afterDrift = [...engine.unfoldedModules()].sort();
+
+    // The drift is large enough to matter: ~0.5 rad, where the set is measured
+    // to change every ~30 degrees at this zoom.
+    expect(engine.getOrientation().yaw - yawBefore).toBeGreaterThan(0.5);
+
+    // A camera call that changes nothing, purely to force a recomputation. If
+    // the drift had left the set stale, this would repair it and the two would
+    // differ.
+    engine.setCamera({});
+    expect([...engine.unfoldedModules()].sort()).toEqual(afterDrift);
+  });
+});
+
 describe("fit frames the whole cloud", () => {
   it("keeps every node inside the viewport, at any orientation", () => {
     // `fit` solves on the sphere that ENCLOSES the layout's bounding box. Half
