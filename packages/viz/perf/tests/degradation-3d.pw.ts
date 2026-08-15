@@ -103,7 +103,9 @@ test("3D: where the frame rate degrades, by drawn node count (AC-3, NFR-13)", as
             {
               engine: {
                 setLayerFilter(layers: readonly string[]): void;
-                buildScene(timeMs: number): { nodes: readonly unknown[] } | null;
+                buildScene(
+                  timeMs: number,
+                ): { nodes: readonly unknown[] } | null;
               };
             }
           >

@@ -61,6 +61,24 @@ export interface ConnectOptions {
   readonly analysis: AnalysisDocument;
   /** Reference instant for the panel's relative last-change row (3.4). */
   readonly now?: number;
+  /**
+   * Whether disconnecting should also destroy the shared overlay controls —
+   * currently the search box, which holds a document-level `keydown` listener
+   * for its shortcut.
+   *
+   * Defaults to `true`, which is the behaviour every existing caller has and
+   * the right one when a page connects exactly once: the teardown is the page
+   * teardown, so it takes everything with it.
+   *
+   * Story 5.7 introduced a **second** reason to disconnect — swapping the 2D
+   * engine for the 3D one and back — and the search box outlives that: it is
+   * created once by `app.ts`, handed to `mountChrome` as an overlay, and
+   * reused by every engine. Destroying it on the first swap removed its
+   * shortcut listener and search stopped responding, while still looking
+   * present. Passing `false` says "unsubscribe this engine, leave the shared
+   * controls alone".
+   */
+  readonly destroyControls?: boolean;
 }
 
 /**
@@ -482,6 +500,9 @@ export function connectEngine(
   return () => {
     handle.attachEngine(null);
     for (const unsubscribe of off) unsubscribe();
-    options.search?.destroy();
+    // Default true, so a page that connects once behaves exactly as before.
+    // A view swap (5.7) passes false: the search box is shared across engines
+    // and outlives any one of them.
+    if (options.destroyControls !== false) options.search?.destroy();
   };
 }

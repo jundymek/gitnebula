@@ -74,15 +74,61 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   };
 
   /**
-   * Stand up the engine for the current view, tearing down whatever was there.
+   * What a view change must **not** silently discard.
    *
-   * The document is re-loaded into the new engine rather than transplanted:
-   * positions in a 3D layout have a third axis a 2D layout has no place for,
-   * so there is nothing meaningful to carry across. Both layouts are seeded
-   * from the same document (AD-6), so switching back and forth returns to the
-   * *same* map every time rather than to a slightly different one.
+   * A view switch changes how the graph is drawn, not what the reader is
+   * looking at. Without this, flipping to 3D would quietly reset the view
+   * mode, the layer filter, the scope, and any selection or isolate — the
+   * reader would lose the frame they had built up and be told nothing. Every
+   * field here is read and re-applied **through the `GraphEngine` interface**,
+   * which is also the neatest demonstration that the seam is real: the state
+   * is portable precisely because neither engine owns its definition.
+   *
+   * Positions are deliberately *not* carried across: a 3D layout has a third
+   * axis a 2D layout has no place for. Both are seeded from the same document
+   * (AD-6), so switching back and forth returns to the same map every time.
+   */
+  interface CarriedState {
+    readonly mode: ReturnType<GraphEngine["getMode"]>;
+    readonly layers: readonly Parameters<
+      GraphEngine["setLayerFilter"]
+    >[0][number][];
+    readonly scopeId: string | null;
+    readonly connectedOnly: boolean;
+    readonly selectedId: string | null;
+    readonly isolatedId: string | null;
+  }
+
+  const captureState = (from: GraphEngine): CarriedState => ({
+    mode: from.getMode(),
+    layers: [...from.getLayerFilter()],
+    scopeId: from.getScope(),
+    connectedOnly: from.getConnectedOnly(),
+    selectedId: from.getSelected()?.id ?? null,
+    isolatedId: from.getIsolated()?.id ?? null,
+  });
+
+  const restoreState = (to: GraphEngine, state: CarriedState): void => {
+    // Order matters. Mode and the two filters first, because they decide what
+    // is in the frame; selection and isolate last, because an engine drops
+    // interaction state whose node the filters have removed — restoring them
+    // first would just have them reconciled away again.
+    to.setMode(state.mode);
+    to.setLayerFilter(state.layers);
+    to.setScope(state.scopeId);
+    to.setConnectedOnly(state.connectedOnly);
+    // A node hidden by the restored filters is not selectable; the engine
+    // reconciles that itself, so this is safe to ask for unconditionally.
+    if (state.selectedId !== null) to.setSelected(state.selectedId);
+    if (state.isolatedId !== null) to.setIsolated(state.isolatedId);
+  };
+
+  /**
+   * Stand up the engine for the current view, tearing down whatever was there
+   * and carrying the reader's state across.
    */
   function swapEngine(): void {
+    const carried = engine ? captureState(engine) : null;
     teardown();
 
     const built = createViewEngine({ canvas: stage, view });
@@ -97,10 +143,16 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     // synchronously inside it, and the harness has to be listening by then.
     publishHarnessHandle(engine);
     engine.load(analysis);
+    // After `load()`, which resets interaction state by design, and before
+    // `connectEngine`, so the chrome reads the restored state on connect
+    // rather than the defaults followed by a flurry of change events.
+    if (carried) restoreState(engine, carried);
     disconnect = connectEngine(chrome, engine, {
       search,
       tooltip,
       analysis,
+      // The search box is shared across engines and outlives any one of them.
+      destroyControls: false,
     });
   }
 
