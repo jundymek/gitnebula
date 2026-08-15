@@ -104,6 +104,14 @@ development_status:
   # lands in is the maintainer's call. The row exists so that a merged PR for
   # it cannot stop sprint-status.sh with a key the file does not carry.
   5.9-repo-test-command-false-green: done
+  # 5.10 was written by the epic-5 supervisor during wave B, with the
+  # maintainer's agreement, from a defect no story owned: a literal NUL byte
+  # in packages/viz/src/engine/layout.ts makes our own scanner read the file
+  # as binary, so gitnebula's map of gitnebula shows its layout engine at
+  # loc 0. Unassigned — the wave it lands in is the maintainer's call. The row
+  # exists so that a merged PR for it cannot stop sprint-status.sh with a key
+  # the file does not carry.
+  5.10-viz-nul-separator: backlog
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
