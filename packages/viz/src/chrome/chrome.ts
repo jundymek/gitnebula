@@ -434,6 +434,12 @@ export function connectEngine(
     // `nodes.length - byScope` would overstate what is on screen and the empty
     // state would stay shut over an empty map.
     scopeVisibleCount: scopeCounts.visible,
+    // The pending way back belongs here too. If a search left a scope before
+    // chrome connected, the engine still holds the offer and only the chrome
+    // has forgotten it — the button would stay missing until some unrelated
+    // scope event happened to fire, and the user's way back would be gone
+    // without anything having said so.
+    leftScopeId: engine.getReturnScope(),
   });
   handle.layerFilter.setLayers(layers);
   handle.layerFilter.setHidden(hidden);

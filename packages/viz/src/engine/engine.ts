@@ -958,7 +958,7 @@ export class CanvasGraphEngine implements GraphEngine {
   }
 
   /** The scope a search last flew out of, for the chrome's way back (AC-5). */
-  getLastScope(): string | null {
+  getReturnScope(): string | null {
     return this.lastScopeId;
   }
 
