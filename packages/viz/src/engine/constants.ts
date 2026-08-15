@@ -124,6 +124,29 @@ export const CHAIN_RING_ALPHA = 0.5;
  */
 export const HOVER_CARRY_MS = 120;
 
+/**
+ * The blast-radius mark (story 5.6, AC-4): how a co-change partner is drawn.
+ *
+ * Co-change is **not** a dependency, and the story's binding context says
+ * drawing it like one would tell the reader something false. So the encoding
+ * is deliberately not an edge and not the chain's vocabulary either:
+ *
+ * - a **dashed** ring, where every other ring on the map is solid. The dash
+ *   carries the distinction on its own, independently of hue — the same
+ *   argument story 5.5 used for pairing an absent value with italics rather
+ *   than trusting colour alone;
+ * - **outside** the selection ring's +5 px, so a partner and the selected node
+ *   never produce the same mark at the same radius;
+ * - in a magenta the layer palette does not contain and the hot orange is not
+ *   adjacent to, so the mark cannot be mistaken for a layer or a hot spot.
+ */
+export const COCHANGE_RING_COLOR = "#ff5fa2";
+export const COCHANGE_RING_OFFSET_PX = 9;
+export const COCHANGE_RING_ALPHA = 0.85;
+export const COCHANGE_RING_WIDTH = 1.5;
+/** Dash pattern in screen px — the mark's primary distinction. */
+export const COCHANGE_RING_DASH: readonly number[] = [3, 4];
+
 /** Quadratic control-point offset as a fraction of the edge vector (mockup). */
 export const EDGE_CURVE = 0.13;
 

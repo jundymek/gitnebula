@@ -316,6 +316,26 @@ export interface GraphEngine {
     readonly visible: number;
   };
 
+  // ---- blast radius (story 5.6, FR-27) ---------------------------------
+
+  /**
+   * Mark a node's co-change partner set on the map, or clear it with `null`.
+   *
+   * A **frame** concern, like the layer filter and the scope before it:
+   * nothing moves, nothing is added to the graph, and no edge is drawn between
+   * the node and its partners. Co-change is not a dependency, and an edge
+   * would say it is. The partners are marked where they already sit.
+   *
+   * The Viewer computes no partner set of its own (AD-1) — the ids come from
+   * the contract's `cochanges`, which chrome reads. `[]` and `null` both mean
+   * "nothing marked"; an id that is not in the document is ignored rather than
+   * rejected, so a stale set degrades to marking less, never to throwing.
+   */
+  setBlastRadius(ids: readonly string[] | null): void;
+
+  /** The partner set currently marked; empty when nothing is. */
+  getBlastRadius(): readonly string[];
+
   // ---- export (story 3.5) ----------------------------------------------
 
   /**

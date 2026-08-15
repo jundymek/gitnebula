@@ -92,6 +92,30 @@ export function zeroHistoryState(days: number): EmptyState {
 }
 
 /**
+ * The blast radius with no partners — story 5.6's majority case.
+ *
+ * Measured on a real langgraph checkout: 128 co-change pairs exist, but only
+ * 52 of 662 nodes appear in any of them. So this copy is what most readers see
+ * most of the time, and it has to read as a measurement rather than as a
+ * failure.
+ *
+ * **Why one sentence covers two causes.** UX-DR14 wants the cause named, and
+ * `githist` drops a pair for either of two reasons: it never shared a commit
+ * inside the window, or it shared fewer than `minCount`. The contract carries
+ * surviving pairs only, so a pair that scored 2 and a pair that scored 0 are
+ * both simply absent — the Viewer cannot tell them apart, and inventing one of
+ * the two would be a guess printed as a fact. The threshold and the window are
+ * both stated instead, which is true of either case and points at the same
+ * lever.
+ */
+export function noCochangeState(days: number, minCount: number): EmptyState {
+  return {
+    cause: `nothing changed with it in ${minCount} or more commits of the last ${days} days`,
+    exit: widenWindowHint(days),
+  };
+}
+
+/**
  * The heatmap's near-uniform case (AC-4).
  *
  * A heatmap where almost everything is the cold end reads as a broken renderer

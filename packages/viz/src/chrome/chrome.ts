@@ -165,6 +165,18 @@ export function mountChrome(
       store.setState({ selected: null, isolated: false });
       panel.close();
     },
+    onSelectPartner(id) {
+      // Story 5.6, AC-2: the existing flight, not a second one. `flyTo`
+      // unfolds a collapsed parent, waits for the wake, and selects on
+      // arrival — which repaints this panel on the partner. Exactly what a
+      // start-here row does, and chrome moves no camera by hand (AD-5).
+      void engine?.flyTo(id);
+    },
+    onShowBlastRadius(ids) {
+      // The panel asks; the engine owns the marked set and is the only thing
+      // that can draw it (chrome may not touch a canvas at all).
+      engine?.setBlastRadius(ids.length > 0 ? ids : null);
+    },
   });
 
   const modeToggle = renderModeToggle({

@@ -60,6 +60,11 @@ export function createFakeContext(): FakeContext {
     arc: record("arc"),
     fill: record("fill"),
     stroke: record("stroke"),
+    // Story 5.6's co-change ring is dashed, and the dash is the encoding —
+    // so the recorder has to see it. A context that silently lacks a call the
+    // renderer makes is a hole in the recorder, not a reason to draw dashes
+    // by hand.
+    setLineDash: record("setLineDash"),
     fillText: record("fillText"),
     setTransform: record("setTransform"),
     createRadialGradient(...args: unknown[]) {

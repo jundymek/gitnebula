@@ -91,7 +91,7 @@ development_status:
   5.4-viz-drill-down: done
   5.5-viz-history-window: done
   # Wave B — launched after wave A lands on the epic branch:
-  5.6-viz-blast-radius: backlog
+  5.6-viz-blast-radius: review
   5.7-viz-3d-view: backlog
   # 5.8 documents what 5.1-5.7 build, so it is worked and merged last. Its
   # Depends_on is [] because the harness stores exactly one blocking

@@ -11,6 +11,11 @@ import {
   CHAIN_GLOW_BOOST,
   CHAIN_RING_ALPHA,
   CHAIN_RING_OFFSET_PX,
+  COCHANGE_RING_ALPHA,
+  COCHANGE_RING_COLOR,
+  COCHANGE_RING_DASH,
+  COCHANGE_RING_OFFSET_PX,
+  COCHANGE_RING_WIDTH,
   EDGE_ALPHA_BASE,
   EDGE_ALPHA_CHAIN,
   EDGE_ALPHA_DIMMED,
@@ -79,6 +84,17 @@ export interface RenderScene {
    * Optional so the field is additive — 3.5's export builds the same scene.
    */
   readonly pulse?: { readonly id: string; readonly t: number } | null;
+  /**
+   * The co-change partner set being marked, or null (story 5.6, AC-4).
+   *
+   * Optional, so a scene built before this story keeps its exact meaning —
+   * the same shape `chainMode` took for the same reason.
+   *
+   * It is a set of node ids and nothing else: there is deliberately no
+   * `blastRadiusEdges`. Co-change is not a dependency, and the moment this
+   * carried a pair of endpoints somebody would draw a line between them.
+   */
+  readonly blastRadius?: ReadonlySet<string> | null;
 }
 
 /**
@@ -153,6 +169,22 @@ export function emphasised(scene: RenderScene, nodeId: string): boolean {
     scene.chain !== null &&
     scene.chain.has(nodeId)
   );
+}
+
+/**
+ * Is this node in the marked co-change set (story 5.6, AC-4)?
+ *
+ * A pure function over the render state, like `emphasised` above it, so the
+ * encoding is asserted directly instead of being inferred from the order of
+ * canvas calls.
+ *
+ * Note what it does not do: it does not consult `chain`, and nothing else
+ * consults it. The blast radius neither dims the map nor brightens it — it
+ * adds one mark and changes no other encoding, so a reader can hold a hover
+ * chain and a blast radius on screen at once and tell which is which.
+ */
+export function inBlastRadius(scene: RenderScene, nodeId: string): boolean {
+  return scene.blastRadius != null && scene.blastRadius.has(nodeId);
 }
 
 /** The hot-spot pulse factor: ~380 ms sine, flat under reduced motion. */
@@ -260,6 +292,24 @@ export function renderFrame(
       ctx.beginPath();
       ctx.arc(s.x, s.y, screenRadius + CHAIN_RING_OFFSET_PX, 0, TAU);
       ctx.stroke();
+    }
+
+    // The co-change mark: a dashed ring outside the selection ring (story
+    // 5.6). Dashed because every other ring on this map is solid, and the
+    // dash survives a greyscale render where a hue alone would not.
+    if (inBlastRadius(scene, node.id)) {
+      ctx.setLineDash([...COCHANGE_RING_DASH]);
+      ctx.strokeStyle = COCHANGE_RING_COLOR;
+      ctx.globalAlpha = alpha * COCHANGE_RING_ALPHA;
+      ctx.lineWidth = COCHANGE_RING_WIDTH;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, screenRadius + COCHANGE_RING_OFFSET_PX, 0, TAU);
+      ctx.stroke();
+      // Restored immediately: a dash pattern left set would leak into the
+      // selection ring below and into the next node's marks.
+      ctx.setLineDash([]);
+      ctx.globalAlpha = alpha;
+      ctx.lineWidth = 1;
     }
 
     if (node.id === scene.selectedId) {

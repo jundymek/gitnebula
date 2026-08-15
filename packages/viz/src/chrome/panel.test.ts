@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AnalysisDocument } from "@gitnebula/contract";
 
-import { renderPanel, type PanelHandle } from "./panel.js";
+import { renderPanel, type PanelActions, type PanelHandle } from "./panel.js";
 import { engineNodeFrom } from "../test-support/engine-nodes.js";
 import {
   loadContractFixture,
@@ -12,12 +12,12 @@ import {
 
 const NOW = Date.parse("2026-08-13T12:00:00.000Z");
 
-function mountPanel(
-  overrides: Partial<{ onIsolate(): void; onClose(): void }> = {},
-) {
+function mountPanel(overrides: Partial<PanelActions> = {}) {
   const handle = renderPanel({
     onIsolate: overrides.onIsolate ?? (() => {}),
     onClose: overrides.onClose ?? (() => {}),
+    onSelectPartner: overrides.onSelectPartner ?? (() => {}),
+    onShowBlastRadius: overrides.onShowBlastRadius ?? (() => {}),
   });
   document.body.replaceChildren(handle.element);
   return handle;
@@ -67,7 +67,7 @@ describe("panel — opening on a node (AC-1)", () => {
       `churn ${document_.repo.analysisWindowDays}d`,
       "authors",
       "last change",
-      "co-changes with",
+      // Story 5.6 folded `co-changes with` into the blast-radius section.
     ]);
   });
 
@@ -80,7 +80,6 @@ describe("panel — opening on a node (AC-1)", () => {
     expect(values[`churn ${document_.repo.analysisWindowDays}d`]).toBe("99%");
     expect(values["authors"]).toBe("2");
     expect(values["last change"]).toMatch(/ ago$/);
-    expect(values["co-changes with"]).toMatch(/^mod-\d+\/ \d+/);
   });
 
   it("groups the history rows under a caption naming the window (AC-1)", () => {
@@ -103,7 +102,6 @@ describe("panel — opening on a node (AC-1)", () => {
       `churn ${document_.repo.analysisWindowDays}d`,
       "authors",
       "last change",
-      "co-changes with",
     ]);
   });
 
@@ -138,7 +136,7 @@ describe("panel — opening on a node (AC-1)", () => {
     const handle = mountPanel();
     open(handle, document_, "mod-000/");
     open(handle, document_, "mod-001/");
-    expect(rows(handle)).toHaveLength(6);
+    expect(rows(handle)).toHaveLength(5);
     expect(text(handle, ".p-name")).toBe("mod-001/");
   });
 });
