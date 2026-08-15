@@ -47,8 +47,14 @@ spec and this file disagree, the spec wins — and flag the divergence.
 - `docs/implementation-artifacts/` — story specs and sprint status. This is the
   `TASK_SOURCE_DIR` terminal-agents reads; a story file must be committed and
   pushed to `origin/master` before its agent can be launched.
-- Both artifact directories are **append-only once frozen**: a frozen artifact is
-  never edited in place; changes land as a new versioned file.
+- Both artifact directories are **append-only once frozen**: content describing
+  completed work is never rewritten or deleted. *Appending* — a new epic, a new
+  story, a new section — is how these documents grow, and lands in the existing
+  file; that is what keeps one requirements inventory and one coverage map
+  instead of a set that drifts apart. A change that would *contradict* frozen
+  content — redefining a requirement, superseding a decision, rewriting an
+  acceptance criterion of shipped work — is not an append: it lands as a new
+  versioned file naming what it supersedes.
 - `docs/adr/` — architectural decision records, format: context → decision →
   consequences. Every resolved open question gets one.
 - `_bmad/` and `.claude/skills/` — the BMAD v6 installation used for the planning
