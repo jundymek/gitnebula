@@ -148,11 +148,33 @@ async function main() {
   await page.locator("#panel .p-close").click();
   await wait(400);
 
-  // 3. Drill down into a module (5.4). Double-click is the gesture — the
+  // 3. Search for the module the tour drills into, and let the camera take us
+  //    there. This is a beat in its own right (⌘K, type, pick), and it is also
+  //    what makes the next step reliable: after step 2 the camera sits zoomed
+  //    in on a ranked file, and a module that happens to be off-screen there
+  //    cannot be found by a viewport scan. Arriving through search centres it.
+  const search = page.getByRole("combobox", {
+    name: "search files and modules",
+  });
+  await search.click();
+  await search.pressSequentially(TOUR_MODULE, { delay: 100 });
+  await wait(700);
+  await page.locator("li.search-result").first().click();
+  await wait(2_000);
+  const arrivalPanel = page.locator("#panel .p-close");
+  if (await arrivalPanel.isVisible()) {
+    await arrivalPanel.click();
+    await wait(300);
+  }
+
+  // 4. Drill down into that module (5.4). Double-click is the gesture — the
   //    single click already means "select". The scope pins the module open,
   //    so its files appear without touching the wheel.
   const modulePoint = await screenPointOf(page, TOUR_MODULE);
-  if (!modulePoint) throw new Error(`module not on screen: ${TOUR_MODULE}`);
+  if (!modulePoint)
+    throw new Error(
+      `module not on screen after search: ${TOUR_MODULE} — check DEMO_MODULE names a module the search can reach`,
+    );
   await page.mouse.move(modulePoint.x, modulePoint.y, { steps: 20 });
   await page.mouse.dblclick(modulePoint.x, modulePoint.y);
   await page
@@ -167,7 +189,7 @@ async function main() {
   }
   await wait(1_600);
 
-  // 4. Hover a file inside the scope. The chain brightens and gains a ring;
+  // 5. Hover a file inside the scope. The chain brightens and gains a ring;
   //    the rest of the map settles back rather than going dark (5.2).
   const filePoint = await widestChainFileOnScreen(page, TOUR_MODULE);
   if (filePoint) {
@@ -175,7 +197,7 @@ async function main() {
     await wait(2_200);
   }
 
-  // 5. Connected-only: the files carrying no import edge at all leave the
+  // 6. Connected-only: the files carrying no import edge at all leave the
   //    frame, and the chrome states how many went (5.4, UX-DR14).
   const connected = page.locator("#scope-bar .scope-bar-connected");
   await connected.click();
@@ -183,12 +205,12 @@ async function main() {
   await connected.click();
   await wait(600);
 
-  // 6. Escape leaves the scope — the whole map is back where it was, because
+  // 7. Escape leaves the scope — the whole map is back where it was, because
   //    scoping never re-ran the layout.
   await page.keyboard.press("Escape");
   await wait(1_400);
 
-  // 7. Layer filter: a layer switched off is not drawn at all, not dimmed
+  // 8. Layer filter: a layer switched off is not drawn at all, not dimmed
   //    (5.3). Switching it back on restores it in place.
   const layerToggle = page.locator(`#layer-${TOUR_LAYER}`);
   await layerToggle.click();
@@ -196,11 +218,11 @@ async function main() {
   await layerToggle.click();
   await wait(900);
 
-  // 8. Heatmap mode — the same map coloured by churn instead of by layer.
+  // 9. Heatmap mode — the same map coloured by churn instead of by layer.
   await page.locator("#mode-heat").click();
   await wait(2_400);
 
-  // 9. PNG export — the button reports its own progress.
+  // 10. PNG export — the button reports its own progress.
   const download = page.waitForEvent("download", { timeout: 30_000 });
   await page.locator("#export").click();
   await download;

@@ -45,26 +45,30 @@ tour of the feature list.
    opens on arrival, through story 3.3's existing `flyTo` + `select` path. The
    panel is held long enough to read the history rows and the window they
    carry (5.5).
-4. **Drill down** — `dblclick` on `packages/` scopes the map to that module,
+4. **Search for the module the tour drills into** — a beat in its own right,
+   and the thing that makes the next step reliable: step 3 leaves the camera
+   zoomed in on a ranked file, and a module that happens to be off-screen there
+   cannot be found by a viewport scan. Arriving through search centres it.
+5. **Drill down** — `dblclick` on `packages/` scopes the map to that module,
    its files and its direct neighbours (5.4). The module's own panel is closed
    straight away: this beat is about what the canvas carries.
-5. **Hover a file in the scope** — the file with the widest one-hop chain, so
+6. **Hover a file in the scope** — the file with the widest one-hop chain, so
    the chain emphasis is actually visible. The rest of the map settles back
    rather than going dark (5.2).
-6. **Connected only** — the files carrying no import edge leave the frame, and
+7. **Connected only** — the files carrying no import edge leave the frame, and
    the chrome states how many went (UX-DR14). Toggled back off.
-7. **`Escape`** — leaves the scope. The map returns exactly as it was, because
+8. **`Escape`** — leaves the scope. The map returns exactly as it was, because
    scoping never re-ran the layout.
-8. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
+9. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
    then switched back on and restored in place.
-9. **Heatmap** — the same map coloured by churn.
-10. **PNG export** — click `↓ png` and wait for the download the viewer starts.
-11. **Back to structure** — end on the map the visitor first saw.
+10. **Heatmap** — the same map coloured by churn.
+11. **PNG export** — click `↓ png` and wait for the download the viewer starts.
+12. **Back to structure** — end on the map the visitor first saw.
 
 Node positions are resolved at runtime through the engine's public `pick()`,
 never hardcoded: the layout is seeded per repository, so fixed coordinates would
 point at empty space the moment the demo is re-recorded on another checkout.
-The file hovered in step 5 is chosen the same way — by asking the engine which
+The file hovered in step 6 is chosen the same way — by asking the engine which
 on-screen file has the widest chain — because a file with two imports
 demonstrates nothing.
 
@@ -74,11 +78,22 @@ demonstrates nothing.
 pnpm install
 pnpm build
 
-# a clean checkout to record, so no build output or scratch file is on the map
-git clone https://github.com/jundymek/gitnebula /tmp/gitnebula-clean
+# A clean checkout to record, so no build output or scratch file is on the map.
+# Clone THIS checkout, not the remote: the branch you are recording is the one
+# whose viewer you just built, and cloning the remote's default branch fetches
+# a tree that may not contain the UI the recorder drives — it would sit waiting
+# for a #start-here panel that release does not have.
+CLEAN=$(mktemp -d)/gitnebula
+git clone --single-branch --branch "$(git rev-parse --abbrev-ref HEAD)" . "$CLEAN"
+
+# Point the clone's origin back at the canonical remote. `repo.name` is the last
+# segment of the remote URL, so a clone made from `.` would title the map after
+# your worktree path — and the panel's "open on github" link is built from the
+# same URL. The content recorded is still your local branch.
+git -C "$CLEAN" remote set-url origin https://github.com/jundymek/gitnebula
 
 # terminal 1 — serve the map of that clean checkout
-node packages/cli/dist/bin/gitnebula.js /tmp/gitnebula-clean --no-open
+node packages/cli/dist/bin/gitnebula.js "$CLEAN" --no-open
 
 # terminal 2 — record it (DEMO_URL must match the port printed above; the
 # server takes the next free port when 4137 is busy).
