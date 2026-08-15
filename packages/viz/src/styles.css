@@ -834,6 +834,8 @@ canvas {
 .legend-notice-exit {
   display: block;
   color: var(--ink-dim);
+}
+
 /* ---- story 5.4: the scope bar (FR-30) ---------------------------------- */
 
 /* Top-centre: the one region left free by the legend (bottom-left), the hint
