@@ -312,6 +312,15 @@ export class Nebula3DEngine implements GraphEngine {
     this.canvas.width = Math.max(1, Math.round(width * dpr));
     this.canvas.height = Math.max(1, Math.round(height * dpr));
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // The viewport is the fourth input to the viewport-scoped unfold test,
+    // alongside camera, orientation and the settled layout — so changing it
+    // has to re-ask, exactly as the other three do. Under reduced motion there
+    // is no auto-rotation to paper over a stale set, so a widened window would
+    // leave the modules it revealed collapsed until an unrelated pan.
+    //
+    // Safe during construction: `updateUnfolds` returns early until a document
+    // is loaded, and `resize()` runs from the constructor before there is one.
+    this.updateUnfolds();
   }
 
   destroy(): void {

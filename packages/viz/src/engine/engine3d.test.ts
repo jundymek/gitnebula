@@ -393,6 +393,24 @@ describe("the unfold set is re-evaluated when its inputs change", () => {
     expect(seen.size).toBeGreaterThan(engine.unfoldedModules().length);
   });
 
+  it("re-evaluates when the viewport is resized", () => {
+    // The viewport is the fourth input to the same test. Under reduced motion
+    // there is no auto-rotation to paper over a stale set, so a resize that
+    // reveals modules would leave them collapsed until an unrelated pan.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+    engine.setCamera({ k: 6 });
+    const narrow = [...engine.unfoldedModules()].sort();
+    expect(narrow.length).toBeGreaterThan(0);
+
+    // Grow the canvas: strictly more of the cloud is on screen now.
+    installFakeCanvas(2400, 1600);
+    engine.resize();
+    const wide = [...engine.unfoldedModules()].sort();
+    expect(wide.length).toBeGreaterThan(narrow.length);
+  });
+
   it("re-evaluates as idle auto-rotation drifts the camera", () => {
     // Auto-rotation is ON BY DEFAULT, so without this the viewport rule is
     // defeated in the ordinary case: modules rotating into view stay collapsed
