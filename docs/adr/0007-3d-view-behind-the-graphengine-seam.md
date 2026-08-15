@@ -74,6 +74,32 @@ messages between two agents before either wrote code.
 **Guidance that follows:** an addition to `GraphEngine` is now a cross-story
 change and should be announced as one.
 
+**A second, less obvious consequence: a swap seam turns read-only state into a
+liability.**
+
+`GraphEngine` carried `getReturnScope()` — story 5.4's pending "return to
+scope" offer — as a getter with no counterpart. That reads as deliberate, and
+it was: the offer is *raised* by one specific transition, a search flying out
+of an active scope, and an offer created any other way would tell the user a
+search happened that did not. Refusing to expose a setter protected that
+invariant.
+
+It held for exactly as long as there was one implementation. The moment a view
+switch had to hand the live state to a *replacement* engine, the asymmetry
+stopped being a safeguard and became a wall: the offer could not be carried at
+all, so switching views silently removed the reader's way back while they were
+still looking at the search result that produced it. The fix was an additive
+`setReturnScope` doing nothing but assigning the field — the invariant now
+lives in the fact that only `flyTo` *creates* an offer, rather than in the
+absence of a setter.
+
+The general rule, which is invisible before and obvious after: **state that an
+engine raises internally still needs a way to be restored, because a swap seam
+guarantees that something will eventually have to reconstruct that engine.**
+Encoding an invariant as "there is no way to set this" is safe in a
+single-implementation world and a defect in a two-implementation one. Encode it
+in who is allowed to *create* the state instead.
+
 ### For AD-6 — determinism extends to the camera
 
 The 3D layout and the **initial camera orientation** are both seeded from the
