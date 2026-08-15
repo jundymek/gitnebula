@@ -61,4 +61,13 @@ export interface ChromeState {
   readonly isolated: boolean;
   /** Story 3.4 — the engine's view mode, mirrored for the toggle (FR-21). */
   readonly mode: ViewMode;
+  // ---- story 5.1 (start-here) — appended, nothing above is reshaped -------
+  /** Whether the start-here panel is on screen (FR-26, UX-DR12). */
+  readonly startHereOpen: boolean;
+  /**
+   * True once the panel has had its first-load moment — whether it opened or
+   * the reader dismissed it before settling ended. It is what keeps the panel
+   * from reappearing on every later settle (a replay is not a first load).
+   */
+  readonly startHereShown: boolean;
 }

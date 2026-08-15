@@ -85,7 +85,7 @@ development_status:
   # a single merge commit after the maintainer's manual verification.
   #
   # Wave A — disjoint territories, all Depends_on []:
-  5.1-viz-start-here: backlog
+  5.1-viz-start-here: review
   5.2-viz-hover-fix: backlog
   5.3-viz-layer-filter: backlog
   5.4-viz-drill-down: backlog

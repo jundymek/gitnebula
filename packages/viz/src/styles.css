@@ -501,3 +501,162 @@ canvas {
   color: var(--hot);
   border-color: var(--hot);
 }
+
+/* ---- story 5.1 — start-here panel (FR-26, UX-DR6, UX-DR12) --------------
+   Left side, below the search box: the detail panel owns the top right and the
+   two must be able to be up at once — choosing a row opens the detail panel
+   and shuts this one, but the reader can bring it back while a node is open.
+   Same panel surface, border and radius as #panel, so the two read as one
+   product rather than two components that happen to share a canvas. */
+#start-here {
+  position: absolute;
+  top: 116px;
+  left: 18px;
+  width: 320px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100% - 190px);
+  overflow-y: auto;
+  z-index: 2;
+  padding: 16px 18px;
+  background: rgba(16, 24, 39, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+}
+
+#start-here[hidden] {
+  display: none;
+}
+
+.sh-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--ink-mute);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sh-close:hover {
+  color: var(--ink);
+}
+
+.sh-title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.sh-sub {
+  margin: 3px 0 14px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.sh-cat + .sh-cat {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.sh-cat h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sh-blurb {
+  margin: 2px 0 8px;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.sh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sh-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sh-entry:hover,
+.sh-entry:focus-visible {
+  background: rgba(46, 62, 88, 0.4);
+  border-color: var(--line-hi);
+  outline: none;
+}
+
+.sh-name {
+  grid-column: 1;
+}
+
+/* The path clips from the front, so the directories stay on screen even when
+   they do not fit; the element carries a title with the whole of it. */
+.sh-path {
+  grid-column: 1;
+  direction: rtl;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.sh-metric {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.sh-more {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+/* UX-DR14: a cause and an exit, on two lines, in that order. */
+.sh-empty {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.sh-empty .sh-cause,
+.sh-empty .sh-exit {
+  display: block;
+}
+
+.sh-empty .sh-exit {
+  margin-top: 3px;
+  color: var(--ink-mute);
+}

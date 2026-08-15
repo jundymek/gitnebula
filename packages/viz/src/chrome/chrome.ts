@@ -25,6 +25,8 @@ import { renderPanel, type PanelHandle } from "./panel.js";
 // Types only: the bootstrap constructs these and hands them in, so chrome
 // wires them without owning their lifetime.
 import type { SearchBox } from "./search.js";
+import { renderStartHere, type StartHereHandle } from "./start-here.js";
+import { buildStartHereModel } from "./start-here-model.js";
 import type { Tooltip } from "./tooltip.js";
 import { createStore, type ChromeState, type Store } from "./store.js";
 
@@ -58,6 +60,8 @@ export interface ConnectOptions {
 export interface ChromeHandle extends Store<ChromeState> {
   readonly panel: PanelHandle;
   readonly modeToggle: ModeToggleHandle;
+  /** Story 5.1's start-here panel (FR-26). */
+  readonly startHere: StartHereHandle;
   /**
    * Give the chrome the engine its controls act on. Called by
    * `connectEngine`, because the engine cannot exist before the stage it
@@ -87,6 +91,9 @@ export function mountChrome(
     selected: null,
     isolated: false,
     mode: "structure",
+    // Story 5.1: shut until the layout settles, then opened once (AC-3).
+    startHereOpen: false,
+    startHereShown: false,
   });
 
   // Set by `connectEngine`. The panel's controls are live from the moment
@@ -121,11 +128,53 @@ export function mountChrome(
     },
   });
 
+  // Story 5.1. The ranking is computed once, from the document the chrome was
+  // mounted with — the panel is a view over it and recomputes nothing when it
+  // is reopened (AC-3).
+  const startHere = renderStartHere(buildStartHereModel(analysis), {
+    onSelect(id) {
+      // The existing flight, not a second one: `flyTo` unfolds a collapsed
+      // parent, waits for the wake, and selects on arrival — which is what
+      // opens the detail panel (AD-5, AC-4). Chrome moves no camera by hand.
+      void engine?.flyTo(id);
+      store.setState({ startHereOpen: false });
+    },
+    onClose() {
+      store.setState({ startHereOpen: false });
+    },
+  });
+
+  // The panel follows the store rather than being toggled at each call site,
+  // so the header control, the first-load open and a row's dismissal are all
+  // one path.
+  store.subscribe((state) => {
+    if (state.startHereOpen) startHere.open();
+    else startHere.close();
+  });
+
+  // AC-3: the default first state, once — and only when the reader has not
+  // already gone somewhere themselves. Driven by the store's `settling` field
+  // rather than a second `settled` subscription, because `connectEngine` is
+  // shared ground this wave and a listener there is not this story's to add.
+  store.subscribe((state) => {
+    if (state.startHereShown || state.settling) return;
+    store.setState({
+      startHereShown: true,
+      startHereOpen: state.selectedId === null,
+    });
+  });
+
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
 
   const main = document.createElement("main");
-  main.append(options.stage, renderLegend(), renderHint(), panel.element);
+  main.append(
+    options.stage,
+    renderLegend(),
+    renderHint(),
+    panel.element,
+    startHere.element,
+  );
   if (options.overlays) main.append(...options.overlays);
 
   root.replaceChildren(header, main);
@@ -134,6 +183,7 @@ export function mountChrome(
     ...store,
     panel,
     modeToggle,
+    startHere,
     attachEngine(next) {
       engine = next;
     },
