@@ -93,14 +93,23 @@ deleted anywhere in the diff.
 `packages/viz/src/engine/layout.ts` line 238 joins a map key with a **literal
 NUL byte** (`` `${source}\0${target}` ``). The scanner's binary-file heuristic
 therefore classifies the file as binary, so gitnebula's map **of its own
-repository** carries it with `loc: 0` and none of its imports:
+repository** draws its force-layout engine as a node of size zero:
 
 ```
 ! scan: binary-file ×1 (e.g. packages/viz/src/engine/layout.ts)
 ```
 
 Reproduced on a clean clone of `epic/5-onboarding` at `4ffbee0`, outside any
-worktree; NUL at byte 8879. It is the same defect story 5.1's agent found and
+worktree; NUL at byte 8879.
+
+**Correction to an earlier version of this note.** It said the file also loses
+its imports. It does not: measured on that same document, `layout.ts` keeps 3
+out-edges (`graph.ts`, `prng.ts`, `settle.ts`) and 4 in-edges. `deps` does not
+read the scanner's `binary` flag, so only `loc` is lost — the node is drawn at
+minimum size with its dependencies intact. The claim was asserted from the
+warning line rather than measured; the numbers above are from the emitted
+`analysis.json`. Story 5.10's AC-5 asks this same question, and this is the
+answer. It is the same defect story 5.1's agent found and
 fixed in their own fixture, still present in shipped engine source. `engine/` is
 not this story's territory and both wave-B peers are editing it, so it is
 reported rather than patched — the reasoning is `DECISIONS.md` D8. Story 5.7's
