@@ -70,6 +70,30 @@ export interface ChromeHandle extends Store<ChromeState> {
   attachEngine(engine: GraphEngine | null): void;
 }
 
+/**
+ * Whether the reader asked for less animation — the same query the engine
+ * resolves, deliberately duplicated here for one value.
+ *
+ * **Why this exists.** Under reduced motion `engine.load()` runs the layout to
+ * Settled and emits `settled` *synchronously inside the call* (UX-DR11), and
+ * `app.ts` connects the chrome to the engine only afterwards. The event is
+ * therefore emitted before anything is listening: `settling` would stay true
+ * forever, the 2.5 replay control would never enable, and story 5.1's panel —
+ * which waits for the settle to end — would never appear for exactly the
+ * readers who asked for less motion.
+ *
+ * The defect is in the boot order, not here, and its proper fix is either a
+ * settle-state accessor on the `GraphEngine` interface or connecting before
+ * loading — both of which reach outside this story's territory during a
+ * five-agent wave on this package. This resolves the initial value only;
+ * `settle-start` and `settled` keep owning every later transition.
+ */
+function prefersReducedMotion(): boolean {
+  return (
+    globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+  );
+}
+
 export function mountChrome(
   root: Element,
   analysis: AnalysisDocument,
@@ -84,7 +108,10 @@ export function mountChrome(
     // a second count would be a second truth.
     modules: analysis.nodes.filter((node) => node.kind === "module").length,
     languages: analysis.repo.stats.languages,
-    settling: true,
+    // Normally true until the engine says otherwise — except under reduced
+    // motion, where the engine has already finished settling before anything
+    // here is listening. See `prefersReducedMotion` below.
+    settling: !prefersReducedMotion(),
     hoveredId: null,
     selectedId: null,
     unfolded: 0,

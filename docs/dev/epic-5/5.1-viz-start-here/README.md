@@ -45,6 +45,27 @@ rather than by a second `engine.on("settled", …)` subscription. Two reasons:
 engine in `chrome.test.ts` keeps one listener per event, so a second `settled`
 subscription would silently displace the existing one in every peer's run.
 
+## A pre-existing bug this story had to work around
+
+Under `prefers-reduced-motion`, `engine.load()` runs the layout to Settled and
+emits `settled` **synchronously inside the call** (UX-DR11, `engine.ts`), while
+`app.ts` connects the chrome to the engine only afterwards. The event is
+emitted before anything is listening, so `settling` stayed `true` for the rest
+of the session. Two consequences, one of them older than this story:
+
+- the 2.5 replay control was permanently disabled for reduced-motion readers;
+- a start-here panel waiting for the settle to end would never appear for them.
+
+The proper fix is a settle-state accessor on the `GraphEngine` interface, or
+connecting before loading (which cannot be a straight reorder — `connectEngine`
+seeds the search corpus from `engine.nodes`, which is empty before `load`).
+Both reach outside this story's territory while four other agents hold
+`engine/` and `chrome/` in the same wave, so this branch resolves only the
+**initial** value of `settling`, by reading the same media query the engine
+does. Every later transition still belongs to `settle-start` / `settled`.
+`start-here-wiring.test.ts` covers all three states, and the reduced-motion
+assertions were seen red before the fix.
+
 ## Decisions worth knowing
 
 - **`core` requires in-degree > 0.** AC-1 asks for core as "non-test files

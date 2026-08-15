@@ -97,6 +97,59 @@ describe("start-here wiring — AC-3, the default first state", () => {
   });
 });
 
+describe("start-here wiring — AC-3 under reduced motion", () => {
+  /**
+   * Under `prefers-reduced-motion`, `engine.load()` runs the layout to Settled
+   * and emits `settled` **synchronously inside the call** (`engine.ts`, and
+   * `app.ts` says so in as many words). The Viewer connects the chrome to the
+   * engine *after* `load`, so that event is emitted before anything is
+   * listening: nothing ever clears `settling`, and a panel waiting for it
+   * would never appear for a reader who asked for less animation.
+   *
+   * The chrome therefore resolves the same media query the engine does for its
+   * initial value. See the README for why this is a workaround and where the
+   * defect it works around actually lives.
+   */
+  function withReducedMotion<T>(body: () => T): T {
+    const original = globalThis.matchMedia;
+    Object.defineProperty(globalThis, "matchMedia", {
+      configurable: true,
+      writable: true,
+      value: (query: string) => ({ matches: query.includes("reduce") }),
+    });
+    try {
+      return body();
+    } finally {
+      Object.defineProperty(globalThis, "matchMedia", {
+        configurable: true,
+        writable: true,
+        value: original,
+      });
+    }
+  }
+
+  it("is the first state without waiting for an event it has already missed", () => {
+    const { panel, chrome } = withReducedMotion(mount);
+    expect(chrome.getState().settling).toBe(false);
+    expect(panel.hidden).toBe(false);
+  });
+
+  it("leaves the replay control live rather than disabled forever", () => {
+    // Same root cause, and the reason the fix is not scoped to this panel: the
+    // 2.5 replay button reads `settling` too.
+    const { root } = withReducedMotion(mount);
+    expect(root.querySelector<HTMLButtonElement>("#replay")!.disabled).toBe(
+      false,
+    );
+  });
+
+  it("keeps the animated path unchanged when motion is not reduced", () => {
+    const { chrome, panel } = mount();
+    expect(chrome.getState().settling).toBe(true);
+    expect(panel.hidden).toBe(true);
+  });
+});
+
 describe("start-here wiring — AC-3, reopening from the header", () => {
   it("reopens without reloading the document or re-running the settle", () => {
     const { chrome, panel, button, loads } = mount();
