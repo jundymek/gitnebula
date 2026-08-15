@@ -85,16 +85,11 @@ development_status:
   # a single merge commit after the maintainer's manual verification.
   #
   # Wave A — disjoint territories, all Depends_on []:
-  5.1-viz-start-here: review
-  5.2-viz-hover-fix: review
-  5.3-viz-layer-filter: review
-<<<<<<< HEAD
-  5.4-viz-drill-down: backlog
-  5.5-viz-history-window: review
-=======
-  5.4-viz-drill-down: review
-  5.5-viz-history-window: backlog
->>>>>>> b0b6deb (feat(viz): module drill-down and connected-only filter)
+  5.1-viz-start-here: done
+  5.2-viz-hover-fix: done
+  5.3-viz-layer-filter: done
+  5.4-viz-drill-down: done
+  5.5-viz-history-window: done
   # Wave B — launched after wave A lands on the epic branch:
   5.6-viz-blast-radius: backlog
   5.7-viz-3d-view: backlog
