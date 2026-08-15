@@ -448,6 +448,74 @@ describe("the unfold set is re-evaluated when its inputs change", () => {
   });
 });
 
+describe("the unfold set is never left stale (the whole family)", () => {
+  it("is already fresh after every operation that moves the projection", () => {
+    // The individual triggers each have their own test above. This one closes
+    // the *family*: whatever moves the projection — camera, orientation,
+    // viewport, target depth, the layout settling — the unfold set must be
+    // current the moment the operation returns.
+    //
+    // Freshness is asserted by asking for a recomputation and requiring the
+    // answer not to change: `setCamera({})` alters nothing but forces
+    // `updateUnfolds`. If an operation had left the set stale, this would
+    // repair it and the two would differ.
+    //
+    // Written as an invariant rather than one case per trigger so that a
+    // future input to the viewport test is caught by an existing test instead
+    // of needing someone to remember to add one.
+    engine = create(true);
+    engine.load(loadSyntheticFixture());
+    run(engine, 5);
+
+    const target = engine.nodes.find((node) => node.kind === "module")!;
+    const operations: [string, () => void][] = [
+      ["zoom past the unfold threshold", () => engine!.setCamera({ k: 6 })],
+      ["pan", () => engine!.panBy(120, -80)],
+      ["zoom out", () => engine!.zoomAt({ x: 10, y: 10 }, 0.5)],
+      ["rotate", () => engine!.setOrientation({ yaw: 1.2, pitch: 0.3 })],
+      ["rotate again", () => engine!.setOrientation({ yaw: -2.0 })],
+      [
+        "resize",
+        () => {
+          installFakeCanvas(900, 700);
+          engine!.resize();
+        },
+      ],
+      [
+        "resize back",
+        () => {
+          installFakeCanvas(1200, 800);
+          engine!.resize();
+        },
+      ],
+      ["fit", () => void engine!.fit({ durationMs: 0 })],
+      [
+        "fly to a module",
+        () => void engine!.flyTo(target.id, { durationMs: 0 }),
+      ],
+      ["scope", () => engine!.setScope(target.id)],
+      ["leave the scope", () => engine!.setScope(null)],
+      [
+        "replay, then settle",
+        () => {
+          engine!.replay();
+          run(engine!, 5);
+        },
+      ],
+    ];
+
+    for (const [name, run_] of operations) {
+      run_();
+      const after = [...engine.unfoldedModules()].sort();
+      engine.setCamera({});
+      expect(
+        [...engine.unfoldedModules()].sort(),
+        `the unfold set was stale after: ${name}`,
+      ).toEqual(after);
+    }
+  });
+});
+
 describe("fit frames the whole cloud", () => {
   it("keeps every node inside the viewport, at any orientation", () => {
     // `fit` solves on the sphere that ENCLOSES the layout's bounding box. Half
