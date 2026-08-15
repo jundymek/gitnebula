@@ -12,7 +12,9 @@
     "format": "prettier --write .",
     "typecheck": "pnpm -r typecheck",
     "pretest": "sh ./test-fixtures/build-fixture-repo.sh >/dev/null",
-    "test": "pnpm -r test",
+    "test": "pnpm -r test && pnpm test:tooling",
+    "test:pkg": "node scripts/pkg-test.mjs",
+    "test:tooling": "node scripts/verify-test-commands.mjs",
     "build": "pnpm --filter @gitnebula/viz build && pnpm --filter gitnebula build"
   },
   "devDependencies": {
