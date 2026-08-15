@@ -451,7 +451,7 @@ describe("AC-5 — search out of the scope leaves it and flies", () => {
 
     const left = seen.at(-1);
     expect(left?.leftForId).not.toBeNull();
-    expect(left?.previousScopeId).toBe(focus);
+    expect(left?.returnToScopeId).toBe(focus);
     expect(engine.getLastScope()).toBe(focus);
   });
 

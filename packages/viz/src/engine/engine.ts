@@ -173,8 +173,14 @@ export class CanvasGraphEngine implements GraphEngine {
   private scopeId: string | null = null;
   private connectedOnly = false;
   /**
-   * The scope a search flew out of, kept so the chrome can offer a one-click
-   * way back (AC-5). Survives the scope being cleared — that is its whole job.
+   * The scope currently offered as a way back, or null for "offer nothing"
+   * (AC-5).
+   *
+   * This is the **state of the offer**, not a breadcrumb of the last scope
+   * visited: it is set only when a search left a scope, and cleared when a
+   * scope becomes active again or a new document is loaded. Keeping it as a
+   * breadcrumb is what made the chrome claim a search had happened after the
+   * user simply pressed Escape.
    */
   private lastScopeId: string | null = null;
   /**
@@ -260,14 +266,21 @@ export class CanvasGraphEngine implements GraphEngine {
     this.setSelected(null);
     this.setHovered(null, null);
     this.setIsolated(null);
-    // Story 5.4: a scope names a module of the *previous* document, so it
-    // cannot survive a load. Through `setScope` rather than by assignment, for
-    // the reason the three lines above give — the chrome mirrors this state
-    // and would otherwise keep showing a scope indicator for a module the new
-    // document need not contain. `lastScopeId` goes too: a "return to scope"
-    // offer pointing into a document that is gone is worse than no offer.
-    this.setScope(null);
+    // Story 5.4: a scope names a module of the *previous* document, so neither
+    // it nor a pending "return to scope" offer can survive a load — an offer
+    // pointing into a document that is gone is worse than no offer, and
+    // clicking it would no-op against the new graph forever.
+    //
+    // Assigned directly and published once, deliberately unlike the three
+    // setters above. Routing through `setScope(null)` cannot do this job: it
+    // returns early when no scope is active, so an offer left over from a
+    // search would be cleared in the field but never announced, and chrome
+    // would keep a stale button on screen. It also *repopulates* `lastScopeId`
+    // from the scope it just left, which is the opposite of what a load needs.
+    this.scopeId = null;
     this.lastScopeId = null;
+    this.invalidateVisible();
+    this.emitScope(null);
     this.startSettle("load");
     this.startLoop();
   }
@@ -771,7 +784,11 @@ export class CanvasGraphEngine implements GraphEngine {
         : null;
     if (this.scopeId === next) return;
     const previous = this.scopeId;
-    if (previous !== null) this.lastScopeId = previous;
+    // Entering a scope answers the offer, so it goes. Leaving one by hand does
+    // NOT create an offer: only AC-5's search transition does, and it sets the
+    // field itself. An ordinary exit that left a breadcrumb behind is what had
+    // the chrome announce a search the user never ran.
+    if (next !== null) this.lastScopeId = null;
     this.scopeId = next;
     this.invalidateVisible();
     // A scope promises the focus module's **member files**, not merely
@@ -876,7 +893,7 @@ export class CanvasGraphEngine implements GraphEngine {
       hiddenByDegree: counts.byDegree,
       visibleCount: visible ? visible.size : (this.graph?.nodes.length ?? 0),
       leftForId,
-      previousScopeId: this.lastScopeId,
+      returnToScopeId: this.lastScopeId,
     });
   }
 

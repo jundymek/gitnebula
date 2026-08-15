@@ -119,8 +119,17 @@ export interface GraphEngineEventMap {
      * to be able to say *why* the scope went away.
      */
     readonly leftForId: string | null;
-    /** The scope a `leftForId` transition abandoned, for the return button. */
-    readonly previousScopeId: string | null;
+    /**
+     * The scope the chrome should currently offer as a way back, or null for
+     * "offer nothing" (AC-5).
+     *
+     * Deliberately the **state of the offer**, not a breadcrumb of the last
+     * scope visited. Chrome mirrors this field and infers nothing: a offer
+     * derived in the chrome from "was there a previous scope" would greet a
+     * user who pressed Escape with "left the scope to reach your search
+     * result", and would survive a document being replaced.
+     */
+    readonly returnToScopeId: string | null;
   };
 }
 

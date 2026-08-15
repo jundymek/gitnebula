@@ -185,6 +185,57 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     expect(engine.getScope()).toBe(focus);
   });
 
+  it("does NOT claim a search happened when the user pressed Escape", async () => {
+    // Found by the Codex re-review. `previousScopeId` is populated by *any*
+    // exit, so keying the offer on it greeted a user who pressed Escape with
+    // "left the scope to reach your search result" — a sentence about
+    // something that did not happen. Only AC-5's transition may say it.
+    const { bar } = mount();
+    engine.setScope(firstModuleId());
+    globalThis.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+
+    expect(engine.getScope()).toBeNull();
+    expect(visibleText(bar, ".scope-bar-left")).toBe("");
+    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+  });
+
+  it("does NOT claim a search happened when the leave button was pressed", async () => {
+    const { bar } = mount();
+    engine.setScope(firstModuleId());
+    bar.querySelector<HTMLButtonElement>(".scope-bar-leave")!.click();
+
+    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+  });
+
+  it("keeps the offer alive across an unrelated filter change", async () => {
+    // The offer is the user's way back; toggling something else must not
+    // withdraw it before they have had a chance to use it.
+    const { bar } = mount();
+    const focus = firstModuleId();
+    engine.setScope(focus);
+    await flyOutOfScope(focus);
+    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+
+    engine.setConnectedOnly(true);
+    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+  });
+
+  it("drops a return offer that points into a document that is gone", async () => {
+    // Also from the re-review: loading a new document while an offer was on
+    // screen left the button there, pointing at the previous repository's
+    // module, and clicking it no-opped against the new graph forever.
+    const { bar } = mount();
+    const focus = firstModuleId();
+    engine.setScope(focus);
+    await flyOutOfScope(focus);
+    expect(visibleText(bar, ".scope-bar-back")).not.toBe("");
+
+    engine.load(langgraphShapedDocument());
+
+    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+    expect(engine.getLastScope()).toBeNull();
+  });
+
   it("withdraws the offer once a scope is active again", async () => {
     const { bar } = mount();
     const focus = firstModuleId();

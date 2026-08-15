@@ -356,9 +356,12 @@ export function connectEngine(
         connectedOnly: payload.connectedOnly,
         hiddenByDegree: payload.hiddenByDegree,
         scopeVisibleCount: payload.visibleCount,
-        // Offered only once the scope is actually gone: while one is active
-        // there is nothing to go back to, and a stale offer is worse than none.
-        leftScopeId: payload.scopeId === null ? payload.previousScopeId : null,
+        // Mirrored, never inferred. The engine owns whether there is a way
+        // back to offer; chrome deriving it from "was there a previous scope"
+        // is what made the bar claim a search had happened after the user
+        // pressed Escape, and made an offer outlive the document it pointed
+        // into.
+        leftScopeId: payload.returnToScopeId,
       });
     }),
     // Isolate state is the engine's, not the panel's. Reading it back from

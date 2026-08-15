@@ -145,6 +145,14 @@ still present*, because the langgraph-shaped fixture contains no node in the
 failing shape. Reverting the fix and watching the test stay green is what
 caught it.
 
+A second review pass then found two more, which turned out to be one design
+mistake: chrome was **inferring** whether to offer a way back out of a scope,
+rather than being told. Leaving a scope with `Escape` announced *"left the
+scope to reach your search result"* — a sentence about something that never
+happened — and loading a new document left the offer on screen pointing into
+the previous repository. The `scope` event now carries `returnToScopeId`, the
+state of the offer itself, and chrome mirrors it without inferring anything.
+
 ## Notes for the reviewer
 
 - The visible-id set is **cached and invalidated on filter or document
