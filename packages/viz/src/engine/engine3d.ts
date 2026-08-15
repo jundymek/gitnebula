@@ -237,6 +237,11 @@ export class Nebula3DEngine implements GraphEngine {
     this.setSelected(null);
     this.setHovered(null, null);
     this.setIsolated(null);
+    // Story 5.6's mark names nodes of the *previous* document, so it cannot
+    // survive a load — a stale set would mark whichever nodes of the new
+    // document happened to share an id. The 2D engine does the same; raised by
+    // 5.6's owner, who noted her ACs do not require it.
+    this.blastRadiusIds = [];
     this.scopeId = null;
     this.lastScopeId = null;
     this.invalidateVisible();
@@ -325,6 +330,23 @@ export class Nebula3DEngine implements GraphEngine {
    */
   getOrientation(): Orientation {
     return this.orientation;
+  }
+
+  /**
+   * The orientation this document was seeded with — the pose the view starts
+   * from, before auto-rotation or a drag has moved it.
+   *
+   * Separate from `getOrientation()` on purpose. AC-2 is about the **initial**
+   * camera orientation, and the live one is a function of time whenever idle
+   * auto-rotation is running: reading `getOrientation()` a few frames after
+   * load and comparing two runs compares two different instants rather than
+   * two seeds. Observed exactly that way while executing this story's manual
+   * walkthrough — two loads differed in yaw by 0.0016 rad, which is one frame
+   * of drift and not a determinism defect. This is the accessor that can
+   * honestly be compared.
+   */
+  getInitialOrientation(): Orientation {
+    return this.initialOrientation;
   }
 
   setOrientation(orientation: Partial<Orientation>): void {

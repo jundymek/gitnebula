@@ -187,7 +187,22 @@ describe("AC-2 — determinism (AD-6)", () => {
     const b = create(true);
     a.load(document_);
     b.load(document_);
+    expect(a.getInitialOrientation()).toEqual(b.getInitialOrientation());
     expect(a.getOrientation()).toEqual(b.getOrientation());
+  });
+
+  it("keeps the seeded initial orientation available once the camera has moved", () => {
+    // With auto-rotation running, `getOrientation()` is a function of elapsed
+    // frames — two runs read at different instants differ by a fraction of a
+    // radian, which is drift and not a broken seed. AC-2 is about the pose the
+    // view *starts* from, so that pose stays separately readable.
+    const engineA = create(false);
+    spares.push(engineA);
+    engineA.load(document_);
+    const initial = engineA.getInitialOrientation();
+    run(engineA, 120);
+    expect(engineA.getOrientation()).not.toEqual(initial);
+    expect(engineA.getInitialOrientation()).toEqual(initial);
   });
 
   it("seeds the orientation from the document, not from a constant", () => {

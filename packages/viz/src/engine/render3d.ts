@@ -113,6 +113,21 @@ const LABEL_BUDGET = 34;
 /** Label occupancy grid cell, in px. */
 const LABEL_CELL_PX = 16;
 
+/**
+ * Story 5.6's co-change ring encoding, transcribed from its owner's message
+ * because her `constants.ts` exports are not on this branch yet.
+ *
+ * See the TODO(rebase) at the draw site: these become imports of
+ * `COCHANGE_RING_*` from `constants.ts` once 5.6 merges into the epic.
+ */
+const COCHANGE_RING_COLOR = "#ff5fa2";
+/** Outside the selection ring (+5) and 5.2's chain ring (+3). */
+const COCHANGE_RING_OFFSET_PX = 9;
+const COCHANGE_RING_ALPHA = 0.85;
+const COCHANGE_RING_WIDTH = 1.5;
+/** The dash is the primary distinction — it survives a greyscale render. */
+const COCHANGE_RING_DASH: readonly number[] = [3, 4];
+
 interface FocusState {
   readonly chain: ReadonlySet<string> | null;
   readonly chainMode?: "hover" | "isolate";
@@ -310,13 +325,26 @@ function drawNodes(
     // Story 5.6's co-change mark. Deliberately a ring and never a line: a
     // co-change partner is not a dependency, and drawing it as an edge would
     // say something false about the graph.
+    //
+    // The values below are 5.6's, transcribed: `#ff5fa2`, +9 px (outside the
+    // selection ring's +5 and 5.2's chain ring's +3), alpha 0.85, width 1.5,
+    // dash [3, 4] — the dash being the primary distinction rather than the
+    // hue, because it is what survives a greyscale render.
+    //
+    // TODO(rebase): 5.6 exports these as COCHANGE_RING_{COLOR,OFFSET_PX,
+    // ALPHA,WIDTH,DASH} from `constants.ts`. They do not exist on this branch
+    // yet (her PR #63 is open, not merged). Import them and delete these
+    // locals on the `epic-updated` rebase — the whole argument for drawing
+    // this ring in 3D was that the two views must not drift.
     if (blast && blast.has(node.id)) {
-      ctx.globalAlpha = Math.max(0, Math.min(1, fog));
-      ctx.strokeStyle = "rgba(255,209,102,0.9)";
-      ctx.lineWidth = 1.5;
+      ctx.globalAlpha = Math.max(0, Math.min(1, COCHANGE_RING_ALPHA * fog));
+      ctx.strokeStyle = COCHANGE_RING_COLOR;
+      ctx.lineWidth = COCHANGE_RING_WIDTH;
+      ctx.setLineDash?.(COCHANGE_RING_DASH);
       ctx.beginPath();
-      ctx.arc(p.sx, p.sy, p.screenR + CHAIN_RING_OFFSET_PX + 3, 0, TAU);
+      ctx.arc(p.sx, p.sy, p.screenR + COCHANGE_RING_OFFSET_PX, 0, TAU);
       ctx.stroke();
+      ctx.setLineDash?.([]);
     }
 
     if (node.id === scene.selectedId) {
