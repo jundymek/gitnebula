@@ -45,6 +45,47 @@ export function unavailabilityAfterSwap(
   return built.view === "2d" ? probe() : null;
 }
 
+/**
+ * The outcome of a reader-initiated view change.
+ *
+ * `"switched"` — the requested view is running.
+ * `"kept"` — it failed and the previous view was restored, with a reason.
+ * `"broken"` — neither could be built; the caller shows the error screen.
+ */
+export type ViewChangeOutcome = "switched" | "kept" | "broken";
+
+/**
+ * Try to switch views, falling back to the view that was working.
+ *
+ * Extracted from `boot()` and pure over its two callbacks, because the defect
+ * it encodes is a *sequencing* one: the engine is destroyed before the
+ * replacement exists, so a throw after that point leaves nothing drawing.
+ * Testing it inside `boot()` would need a document fetch and a canvas; here
+ * the policy is asserted directly.
+ *
+ * `attempt` is called with the view to build and may throw. It is called at
+ * most twice — once for `next`, once for `previous`.
+ */
+export function swapWithFallback(
+  next: ViewKind,
+  previous: ViewKind,
+  attempt: (view: ViewKind) => void,
+): { outcome: ViewChangeOutcome; view: ViewKind; cause: unknown } {
+  try {
+    attempt(next);
+    return { outcome: "switched", view: next, cause: null };
+  } catch (cause) {
+    try {
+      attempt(previous);
+      return { outcome: "kept", view: previous, cause };
+    } catch {
+      // The original cause is reported, not the second: it describes the
+      // actual problem, where the second is a consequence of it.
+      return { outcome: "broken", view: previous, cause };
+    }
+  }
+}
+
 export async function boot(root: Element): Promise<GraphEngine | null> {
   const result = await loadAnalysis();
   if (!result.ok) {
@@ -72,11 +113,7 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
 
   const viewSwitch = renderViewSwitch({
     current: view,
-    onChange: (next) => {
-      if (next === view) return;
-      view = next;
-      swapEngine();
-    },
+    onChange: (next) => requestView(next),
   });
 
   const chrome = mountChrome(root, analysis, {
@@ -160,8 +197,11 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
    * Stand up the engine for the current view, tearing down whatever was there
    * and carrying the reader's state across.
    */
-  function swapEngine(): void {
-    const carried = engine ? captureState(engine) : null;
+  function swapEngine(carriedIn?: CarriedState | null): void {
+    // `carriedIn` lets a caller capture the state *before* a first attempt, so
+    // a retry after a failed swap can still restore the reader's frame — by
+    // then the engine it would have been read from is already destroyed.
+    const carried = carriedIn ?? (engine ? captureState(engine) : null);
     teardown();
 
     const built = createViewEngine({ canvas: stage, view });
@@ -192,6 +232,58 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
       analysis,
       // The search box is shared across engines and outlives any one of them.
       destroyControls: false,
+    });
+  }
+
+  /**
+   * A reader-initiated view change, which — unlike the boot-time swap — must
+   * not be able to leave the viewer without a working map.
+   *
+   * `swapEngine` destroys the old engine before building the new one, so a
+   * throw anywhere after that point (construction, `load()`, restoring state)
+   * would otherwise leave a canvas with nothing drawing on it, and a toggle
+   * that had already recorded the new view and so treated the next click as a
+   * no-op. The reader would be left with a dead map and no way back.
+   *
+   * So a failed swap **falls back to the view that was working**, carrying the
+   * state captured before the attempt and saying why the other view is now
+   * unavailable. Only if that also fails — nothing can be drawn at all — does
+   * this reach the FR-6 error screen.
+   */
+  function requestView(next: ViewKind): void {
+    if (next === view) return;
+    const previous = view;
+    // Captured before the first attempt: `swapEngine` tears the old engine
+    // down, so after a failure there is nothing left to read it from.
+    const carried = engine ? captureState(engine) : null;
+
+    const result = swapWithFallback(next, previous, (target) => {
+      view = target;
+      swapEngine(carried);
+    });
+
+    if (result.outcome === "switched") return;
+
+    const because =
+      result.cause instanceof Error
+        ? result.cause.message
+        : String(result.cause);
+
+    if (result.outcome === "kept") {
+      viewSwitch.setUnavailable(
+        `The ${next.toUpperCase()} view could not be started (${because}). ` +
+          `Staying in ${previous.toUpperCase()}.`,
+      );
+      return;
+    }
+
+    teardown();
+    renderErrorScreen(root, {
+      kind: "malformed",
+      title: "The map could not be redrawn",
+      detail:
+        `Switching to the ${next.toUpperCase()} view failed and the previous ` +
+        `view could not be restored: ${because}. Reload the page to start again.`,
     });
   }
 

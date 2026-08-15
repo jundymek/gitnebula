@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { unavailabilityAfterSwap } from "./app.js";
+import { swapWithFallback, unavailabilityAfterSwap } from "./app.js";
 import { connectEngine, mountChrome } from "./chrome/chrome.js";
 import { createSearchBox } from "./chrome/search.js";
 import { createGraphEngine, type GraphEngine } from "./engine/index.js";
@@ -270,5 +270,62 @@ describe("unavailabilityAfterSwap — the 3D button's reason (AC-5)", () => {
     expect(
       unavailabilityAfterSwap({ view: "3d", reason: null }, () => "stale"),
     ).toBeNull();
+  });
+});
+
+describe("swapWithFallback — a failed switch must not kill the viewer", () => {
+  it("reports the requested view when the swap succeeds", () => {
+    const tried: string[] = [];
+    const result = swapWithFallback("3d", "2d", (v) => {
+      tried.push(v);
+    });
+    expect(result.outcome).toBe("switched");
+    expect(result.view).toBe("3d");
+    expect(tried).toEqual(["3d"]);
+  });
+
+  it("falls back to the working view when the new one throws", () => {
+    // The defect this encodes: `swapEngine` destroys the old engine before
+    // building the new one, so a throw after that point left a canvas with
+    // nothing drawing on it — and a toggle that had already recorded the new
+    // view, making the next click a no-op. The reader had a dead map and no
+    // way back.
+    const tried: string[] = [];
+    const result = swapWithFallback("3d", "2d", (v) => {
+      tried.push(v);
+      if (v === "3d") throw new Error("WebGL context lost");
+    });
+    expect(result.outcome).toBe("kept");
+    expect(result.view).toBe("2d");
+    expect(tried).toEqual(["3d", "2d"]);
+    expect((result.cause as Error).message).toBe("WebGL context lost");
+  });
+
+  it("reports broken only when neither view can be built", () => {
+    const result = swapWithFallback("3d", "2d", () => {
+      throw new Error("no canvas at all");
+    });
+    expect(result.outcome).toBe("broken");
+    expect((result.cause as Error).message).toBe("no canvas at all");
+  });
+
+  it("keeps the original cause rather than the failed recovery's", () => {
+    // The first failure describes the actual problem; the second is a
+    // consequence of it, and reporting it would send the reader after the
+    // wrong thing.
+    const result = swapWithFallback("3d", "2d", (v) => {
+      throw new Error(v === "3d" ? "the real cause" : "consequence");
+    });
+    expect((result.cause as Error).message).toBe("the real cause");
+  });
+
+  it("attempts each view at most once", () => {
+    // A retry loop here would rebuild the engine repeatedly on a broken page.
+    let calls = 0;
+    swapWithFallback("3d", "2d", () => {
+      calls += 1;
+      throw new Error("nope");
+    });
+    expect(calls).toBe(2);
   });
 });

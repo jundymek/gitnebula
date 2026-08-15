@@ -59,7 +59,7 @@ out of this story unchanged" is demonstrated rather than claimed.
 
 | file | change |
 | --- | --- |
-| `packages/viz/src/app.ts` | owns the engine swap, carries the reader's state across it (incl. 5.6's mark), reads `?view=`, wires the switch, exports `unavailabilityAfterSwap`. |
+| `packages/viz/src/app.ts` | owns the engine swap, carries the reader's state across it (incl. 5.6's mark), reads `?view=`, wires the switch, exports `unavailabilityAfterSwap` and `swapWithFallback`. |
 | `packages/viz/src/chrome/chrome.ts` | places the switch in the header slot; adds the `destroyControls` option (code review). |
 | `packages/viz/src/chrome/header.ts` | one new slot, `VIEW_SLOT_ID`, on its own line. |
 | `packages/viz/src/engine/index.ts` | exports the 3D factory and the view helpers (append only). |
