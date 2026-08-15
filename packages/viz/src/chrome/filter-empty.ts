@@ -28,8 +28,13 @@ export interface FilterEmptyHandle {
    * `backend` switched off, is the same dead map and deserves the same
    * sentence. The count that names the cause in the non-empty case belongs to
    * the filter control, not here.
+   *
+   * `hidden` is what makes this block honest about **its own** cause: a
+   * document that is empty on its own account (no nodes at all) is a different
+   * cause with a different sentence, and claiming the filter did it would be a
+   * lie. So the block appears only when the filter is the reason.
    */
-  update(state: { readonly visible: number }): void;
+  update(state: { readonly visible: number; readonly hidden: number }): void;
 }
 
 export const FILTER_EMPTY_ID = "filter-empty";
@@ -66,8 +71,8 @@ export function renderFilterEmpty(
 
   return {
     element: block,
-    update({ visible }) {
-      block.hidden = visible > 0;
+    update({ visible, hidden }) {
+      block.hidden = visible > 0 || hidden === 0;
     },
   };
 }

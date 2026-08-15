@@ -322,7 +322,7 @@ export function connectEngine(
       // is deliberately the *unfiltered* set (search and the 5.1 ranking read
       // it) — subtracting against it here would make chrome re-derive a number
       // the engine already knows.
-      handle.filterEmpty.update({ visible });
+      handle.filterEmpty.update({ visible, hidden });
     }),
   ];
   options.search?.setNodes(engine.nodes);
@@ -333,10 +333,26 @@ export function connectEngine(
   handle.modeToggle.setMode(mode);
   // Story 5.3, the same mirror: a subscriber reading `state.visibleLayers`
   // before the first `filter` event must see the engine's answer, not a
-  // hopeful default. Nothing is hidden yet, so the empty state stays shut.
+  // hopeful default.
+  //
+  // The counts are derived here rather than assumed to be zero, because an
+  // engine may already carry a filter by the time it is connected — the
+  // `filter` event that announced it fired before anything was listening, and
+  // assuming "nothing hidden" would leave the count blank and the empty state
+  // shut over a map with nothing on it. Every *later* change takes its counts
+  // from the event; this is the one place chrome counts, once, at connect
+  // time, over the unfiltered node set the engine exposes anyway.
   const layers = engine.getLayerFilter();
-  handle.setState({ visibleLayers: layers, filteredOutCount: 0 });
+  const hidden = engine.nodes.filter(
+    (node) => !layers.includes(node.layer),
+  ).length;
+  handle.setState({ visibleLayers: layers, filteredOutCount: hidden });
   handle.layerFilter.setLayers(layers);
+  handle.layerFilter.setHidden(hidden);
+  handle.filterEmpty.update({
+    visible: engine.nodes.length - hidden,
+    hidden,
+  });
   // The PNG button (3.5) is mounted here rather than in `mountChrome` because
   // this is where the engine handle exists — the header only reserves the slot.
   document

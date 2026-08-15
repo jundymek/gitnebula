@@ -14,6 +14,7 @@ import {
   UNFOLD_ZOOM,
 } from "../engine/index.js";
 import type {
+  EngineNode,
   GraphEngine,
   GraphEngineEvent,
   ViewMode,
@@ -132,7 +133,7 @@ describe("chrome — UX-DR2/9 legend and hint", () => {
  * reach the map through this surface, so a stub of it is a faithful test of
  * the wiring (AD-5).
  */
-function fakeEngine() {
+function fakeEngine(nodes: readonly EngineNode[] = []) {
   const listeners = new Map<GraphEngineEvent, (payload: never) => void>();
   let offCalls = 0;
   let mode: ViewMode = "structure";
@@ -161,7 +162,7 @@ function fakeEngine() {
     setSelected: (id: string | null) => selected.push(id),
     // Story 3.3's unfold/collapse handlers read these back.
     unfoldedModules: () => [],
-    nodes: [],
+    nodes,
     // Story 5.3's slice of the seam. Same shape as `getMode`/`setMode`: the
     // engine owns the filter and echoes every real change back on an event,
     // which is what moves the control.
@@ -436,5 +437,55 @@ describe("chrome — layer filter wiring (5.3, FR-28)", () => {
     expect(
       root.querySelector("#layer-infra")!.getAttribute("aria-pressed"),
     ).toBe("true");
+  });
+
+  it("takes the starting COUNTS from the engine too, not from zero", () => {
+    // An engine filtered before it was connected emitted its `filter` event
+    // with nothing listening. Assuming "nothing hidden" would leave the count
+    // blank and the empty state shut over a map with nothing on it.
+    const nodes = analysis.nodes.map((node) =>
+      engineNodeFrom(analysis, node.id),
+    );
+    const fake = fakeEngine(nodes);
+    fake.engine.setLayerFilter(["infra"]);
+    const { root, store } = mount();
+
+    connectEngine(store, fake.engine, { analysis });
+
+    const infra = nodes.filter((node) => node.layer === "infra").length;
+    const hidden = nodes.length - infra;
+    expect(store.getState().filteredOutCount).toBe(hidden);
+    expect(root.querySelector("#layer-filter-hidden")!.textContent).toBe(
+      `${hidden} nodes hidden: layer filter`,
+    );
+  });
+
+  it("opens the empty state at connect time when the filter already hides everything", () => {
+    const nodes = analysis.nodes.map((node) =>
+      engineNodeFrom(analysis, node.id),
+    );
+    const fake = fakeEngine(nodes);
+    // Every layer off before anything was listening — the AC-4 state, reached
+    // by an engine that was already filtered when it was handed over.
+    fake.engine.setLayerFilter([]);
+    const { root, store } = mount();
+
+    connectEngine(store, fake.engine, { analysis });
+
+    expect(store.getState().filteredOutCount).toBe(nodes.length);
+    expect(root.querySelector<HTMLElement>("#filter-empty")!.hidden).toBe(
+      false,
+    );
+  });
+
+  it("keeps the empty state shut for a document with no nodes at all", () => {
+    // Nothing drawn and nothing hidden: the filter is not the cause, and this
+    // block may only ever claim its own.
+    const fake = fakeEngine();
+    const { root, store } = mount();
+
+    connectEngine(store, fake.engine, { analysis });
+
+    expect(root.querySelector<HTMLElement>("#filter-empty")!.hidden).toBe(true);
   });
 });

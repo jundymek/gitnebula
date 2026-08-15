@@ -14,19 +14,27 @@ import {
 describe("AC-4 — the named empty state", () => {
   it("is hidden while anything is drawn", () => {
     const handle = renderFilterEmpty({ onReset: () => {} });
-    handle.update({ visible: 12 });
+    handle.update({ visible: 12, hidden: 3 });
     expect(handle.element.hidden).toBe(true);
   });
 
   it("appears when the filter leaves nothing", () => {
     const handle = renderFilterEmpty({ onReset: () => {} });
-    handle.update({ visible: 0 });
+    handle.update({ visible: 0, hidden: 12 });
     expect(handle.element.hidden).toBe(false);
+  });
+
+  it("stays shut for a document that is empty on its own account", () => {
+    // Nothing drawn and nothing hidden: the filter is not the cause, so
+    // claiming it is would be a lie. That empty state belongs to another story.
+    const handle = renderFilterEmpty({ onReset: () => {} });
+    handle.update({ visible: 0, hidden: 0 });
+    expect(handle.element.hidden).toBe(true);
   });
 
   it("names its cause in the words the AC asks for", () => {
     const handle = renderFilterEmpty({ onReset: () => {} });
-    handle.update({ visible: 0 });
+    handle.update({ visible: 0, hidden: 5 });
     expect(handle.element.textContent).toContain(
       "no nodes match the active filters",
     );
@@ -56,7 +64,7 @@ describe("AC-4 — the named empty state", () => {
     // off, is the same dead map — the trigger is "nothing survives", not
     // "every toggle is off" (see DECISIONS.md, D4).
     const handle = renderFilterEmpty({ onReset: () => {} });
-    handle.update({ visible: 0 });
+    handle.update({ visible: 0, hidden: 5 });
     expect(handle.element.hidden).toBe(false);
   });
 });
