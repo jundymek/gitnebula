@@ -390,6 +390,45 @@ describe("blast radius — the panel section (AC-1, AC-2)", () => {
       ),
     );
   });
+
+  it("renders every partner, however many there are", () => {
+    // No cap in the DOM: the list is complete and the scroll below is what
+    // makes a long one usable. A silent top-N would be a truncation the reader
+    // has no way to detect.
+    const many = 40;
+    const crowded: AnalysisDocument = {
+      ...document_,
+      cochanges: Array.from({ length: many }, (_, index) => ({
+        a: "mod-000/",
+        b: `mod-${String(index + 1).padStart(3, "0")}/`,
+        count: many - index,
+      })),
+    };
+    const handle = mountPanel();
+    open(handle, crowded, "mod-000/");
+    expect(partnerRows(handle)).toHaveLength(many);
+  });
+
+  it("bounds the list so a long one cannot push the controls off-screen", () => {
+    // The regression this guards was found in review and is invisible to a DOM
+    // assertion: `body` is `overflow: hidden` and the panel had no height
+    // bound, so one real file's 44 partners (measured on this repository, at
+    // ~23 px a row) pushed `show on map` and the panel's own actions below the
+    // fold, where they could not be reached at all. Asserted against the
+    // stylesheet because jsdom computes no layout — a weaker check than a
+    // rendered one, and still enough to catch the cap being deleted.
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "..", "styles.css"),
+      "utf8",
+    );
+    const listRule = /\.p-blast-list \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(listRule).toMatch(/max-height:/);
+    expect(listRule).toMatch(/overflow-y:\s*auto/);
+
+    const panelRule = /#panel \{[^}]*\}/.exec(css)?.[0] ?? "";
+    expect(panelRule).toMatch(/max-height:/);
+    expect(panelRule).toMatch(/overflow-y:\s*auto/);
+  });
 });
 
 // ---------------------------------------------------------------------------

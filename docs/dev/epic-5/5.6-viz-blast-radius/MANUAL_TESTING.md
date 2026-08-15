@@ -16,7 +16,7 @@ this branch (`pnpm build`).
       contract's `descriptionSource`: `vitest` does not typecheck, so lint,
       test and build were all green while `tsc --noEmit` was not. Fixed, and
       the whole workspace now type-checks.
-- [x] `pnpm test` (viz) — **664 passed, 47 files**, up from 620/45 on the base.
+- [x] `pnpm test` (viz) — **666 passed, 47 files**, up from 620/45 on the base.
 - [x] `pnpm build` — tsup + vite succeed; `dist/bin/gitnebula.js` 425.73 KB.
 - [x] Both central assertions watched failing before being relied on:
       removing the `setLineDash` call turned the two dash tests red; making
@@ -78,14 +78,33 @@ this branch (`pnpm build`).
       The section renders nothing; the panel-level notice from story 5.5 speaks
       for it. Asserted in the suite too: exactly one `.p-notice` in the panel.
 
-## 3. Level disambiguation (AC-5)
+## 3. A long partner list stays usable
+
+- [x] Every partner is rendered — no silent top-N. Asserted over a 40-partner
+      document; a cap the reader cannot detect would be a truncation, not a
+      design.
+- [x] The list is bounded and scrolls, and the panel cannot outgrow the window.
+      **This was a real defect, found in review, not by me.** `body` is
+      `overflow: hidden` and the panel had no height bound, so the file
+      measured above with **44 partners** — at ~23 px a row, over 1,000 px of
+      list — pushed `show on map` and the panel's own actions below the fold
+      where they could not be reached at all. Before this story the panel's
+      height was a fixed row count, so this was mine to introduce and mine to
+      fix. Both the list and the panel now carry the bound story 5.1's
+      start-here panel already used, and a test asserts the stylesheet keeps
+      them; that test was watched failing with the cap removed.
+- [ ] **Scrolling felt in a browser.** Not run, same reason as below: no
+      pixels were rendered here. The assertion above is over the stylesheet
+      text, which is strictly weaker than seeing it scroll.
+
+## 4. Level disambiguation (AC-5)
 
 - [x] Over a fixture carrying both levels: a module gets only module partners,
       a file gets only file partners, and a file never shows its module's pair.
       The caption names the level (`blast radius · files · …` /
       `· modules ·`), so the reader is not left inferring it.
 
-## 4. Navigation (AC-2)
+## 5. Navigation (AC-2)
 
 - [x] Clicking a partner row calls `onSelectPartner` with that partner's id and
       does nothing else itself; chrome answers with the existing
@@ -94,7 +113,7 @@ this branch (`pnpm build`).
 - [x] `chrome/boundary.test.ts` passes **unchanged** — no chrome file names a
       canvas, a 2D context or an engine internal.
 
-## 5. The map mark (AC-4)
+## 6. The map mark (AC-4)
 
 - [x] A marked node draws a dashed ring; an unmarked node draws nothing extra.
 - [x] The ring sits at +9 px, outside both the selection ring (+5) and the
@@ -109,7 +128,7 @@ this branch (`pnpm build`).
       stale id marks less rather than throwing, and the engine keeps its own
       copy of the caller's array.
 
-## 6. End-to-end through the shipped bundle
+## 7. End-to-end through the shipped bundle
 
 - [x] `gitnebula . --no-open` serves on `127.0.0.1:4141`; `analysis.json` is
       served with its 159 pairs.

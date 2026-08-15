@@ -380,6 +380,14 @@ canvas {
   top: 18px;
   right: 18px;
   width: 290px;
+  /* The panel can never grow past the window. Until story 5.6 its height was a
+     function of a fixed row count and this could not happen; the blast-radius
+     list made the content variable, and `body` is `overflow: hidden`, so
+     anything past the fold would be unreachable rather than merely off-screen.
+     The list carries its own cap as well — this is the backstop for a very
+     short window, and the same bound #start-here already uses. */
+  max-height: calc(100% - 36px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -862,9 +870,19 @@ canvas {
   margin-bottom: 6px;
 }
 
+/* Bounded and scrollable, because this list is the panel's only unbounded
+   content and the page behind it cannot scroll (`body` is `overflow: hidden`).
+   Measured on this repository, one file has 44 co-change partners — at ~23 px
+   a row that is over 1,000 px of list, which pushes the `show on map` toggle
+   and the panel's own actions below the viewport where they cannot be reached
+   at all. The cap is expressed against the viewport rather than in rows so a
+   short window is bounded too, and it follows the pattern story 5.1's
+   start-here panel already established for the same reason. */
 .p-blast-list {
   display: flex;
   flex-direction: column;
+  max-height: min(38vh, 320px);
+  overflow-y: auto;
 }
 
 /* A partner row: id on the left, its shared-commit count on the right — the
