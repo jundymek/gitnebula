@@ -101,6 +101,38 @@ describe("AC-2 — a scope is never invisible and never inescapable", () => {
     expect(visibleText(bar, ".scope-bar-scope")).toContain(focus);
   });
 
+  it("mirrors a scope the engine already had when chrome connected", () => {
+    // Auto-review finding: `connectEngine` only handled FUTURE scope events,
+    // so an engine configured before wiring left the bar at its defaults —
+    // no scope shown over a scoped map, and a toggle asking for the value
+    // already in force, which the setter no-ops. Permanently one click out of
+    // step. The mode toggle and the layer filter already mirror on connect;
+    // this now does too.
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    const stage = document.createElement("canvas");
+    const analysis = langgraphShapedDocument();
+
+    const chrome = mountChrome(root, analysis, {
+      stage,
+      actions: { onReplay: () => {} },
+    });
+    engine = new CanvasGraphEngine({ canvas: stage, reducedMotion: true });
+    engine.load(analysis);
+    // Configured BEFORE chrome is listening.
+    const focus = engine.nodes.find((node) => node.kind === "module")!.id;
+    engine.setScope(focus);
+    engine.setConnectedOnly(true);
+
+    teardown = connectEngine(chrome, engine, { analysis });
+
+    const bar = root.querySelector<HTMLElement>(`#${SCOPE_BAR_ID}`)!;
+    expect(visibleText(bar, ".scope-bar-scope")).toContain(focus);
+    expect(
+      bar.querySelector(".scope-bar-connected")?.getAttribute("aria-pressed"),
+    ).toBe("true");
+  });
+
   it("leaves the scope when the bar's exit is pressed", () => {
     const { bar } = mount();
     engine.setScope(firstModuleId());

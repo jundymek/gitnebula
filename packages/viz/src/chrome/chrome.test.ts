@@ -171,6 +171,12 @@ function fakeEngine(nodes: readonly EngineNode[] = []) {
       layers = ALL_LAYERS.filter((layer) => next.includes(layer));
       emit("filter", { layers, hidden: 0, visible: 1 });
     },
+    // Story 5.4's slice, added for the same reason as 5.3's above: chrome
+    // mirrors this state at connect time, so a double without it makes
+    // `connectEngine` throw for every suite in this file.
+    getScope: () => null,
+    getConnectedOnly: () => false,
+    hiddenCount: () => ({ byScope: 0, byDegree: 0 }),
   } as unknown as GraphEngine;
 
   function emit(event: GraphEngineEvent, payload: unknown): void {

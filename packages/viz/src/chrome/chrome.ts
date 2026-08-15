@@ -417,6 +417,20 @@ export function connectEngine(
     (node) => !layers.includes(node.layer),
   ).length;
   handle.setState({ visibleLayers: layers, filteredOutCount: hidden });
+  // Story 5.4, the same mirror for the same reason. An engine can already
+  // carry a scope or connected-only by the time chrome connects — a caller
+  // that configures it before wiring, or a reconnection — and the `scope`
+  // event that announced it fired before anyone was listening. Left at their
+  // defaults the bar would show no scope over a scoped map, and its toggle
+  // would then ask for the value already in force, which the setter no-ops:
+  // the control would sit permanently one click out of step.
+  const scopeCounts = engine.hiddenCount();
+  handle.setState({
+    scopeId: engine.getScope(),
+    connectedOnly: engine.getConnectedOnly(),
+    hiddenByDegree: scopeCounts.byDegree,
+    scopeVisibleCount: engine.nodes.length - scopeCounts.byScope,
+  });
   handle.layerFilter.setLayers(layers);
   handle.layerFilter.setHidden(hidden);
   handle.filterEmpty.update({

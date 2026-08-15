@@ -6,7 +6,8 @@ and say why — an unchecked box with a reason is honest; a checked box nobody
 ran is a lie the reviewer builds on.
 
 **Environment.** macOS, Node 22, `pnpm 10.34.5`, branch
-`story/5.4-viz-drill-down` rebased onto `epic/5-onboarding` at `9c28344`.
+`story/5.4-viz-drill-down` rebased onto `epic/5-onboarding` at `fe43968`
+(all of wave A: stories 5.1, 5.2 and 5.3 merged).
 The Chrome extension this session could drive was **not connected**, so every
 step needing a live browser is unticked below.
 
@@ -18,7 +19,7 @@ step needing a live browser is unticked below.
       purpose: it is in neither `lint` nor `test`, and it is the only thing
       that catches a new required `ChromeState` field breaking
       `export-button.test.ts` (reported by story 5.1's owner mid-wave).
-- [x] `pnpm test` → **exit 0** across the workspace: viz 583, cli 145,
+- [x] `pnpm test` → **exit 0** across the workspace: viz 588, cli 145,
       scanner 145, githist 74, deps 66 (+2 skipped), contract 105.
       `chrome/boundary.test.ts` passes **byte-unchanged** (AC-6, AD-5).
       *On the command:* the cli figure comes from this **workspace-wide** run,
