@@ -115,12 +115,15 @@ async function widestChainFileOnScreen(page, moduleId) {
  * padding: moving the pointer onto a node wakes the layout (story 3.3), so the
  * module can drift several pixels between the scan that found it and the
  * gesture that wants it — landing the double-click on empty space or on a
- * neighbour, and leaving the recorder waiting for a scope bar that never
- * appears. The pre-Epic-5 script carried the same retry in its `clickNode`
+ * neighbour. The pre-Epic-5 script carried the same retry in its `clickNode`
  * helper for the same reason; dropping it made the tour a race.
+ *
+ * Success is read from `engine.getScope()`, never from the chrome. Measured on
+ * a served map with nothing scoped: `#scope-bar` is visible and `getScope()`
+ * is `null` — so a wait on the bar's visibility passes before the gesture even
+ * happens, and a retry hung on it can never fire.
  */
 async function drillInto(page, moduleId, attempts = 4) {
-  const scopeBar = page.locator("#scope-bar");
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     const point = await screenPointOf(page, moduleId);
     if (!point)
@@ -132,8 +135,17 @@ async function drillInto(page, moduleId, attempts = 4) {
     // what can have shifted the target.
     const settledPoint = (await screenPointOf(page, moduleId)) ?? point;
     await page.mouse.dblclick(settledPoint.x, settledPoint.y);
+    // Ask the engine what the scope actually is. Waiting for `#scope-bar` to be
+    // visible would be no test at all: the bar also hosts the global
+    // connected-only control, so it is on screen with no scope active, and the
+    // wait would pass instantly after a missed double-click — leaving the rest
+    // of the tour recording an unscoped map that looks almost right.
     try {
-      await scopeBar.waitFor({ state: "visible", timeout: 2_500 });
+      await page.waitForFunction(
+        ([handle, target]) => globalThis[handle]?.engine?.getScope() === target,
+        [HANDLE, moduleId],
+        { timeout: 2_500 },
+      );
       return;
     } catch {
       /* the module moved under the cursor, or the click missed — scan again */

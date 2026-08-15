@@ -66,6 +66,16 @@ all of Epic 5 merged.
 - [x] **3D holds 55 fps to roughly 840 drawn nodes** — quoted from story 5.7's
       `PERFORMANCE.md`, not re-measured here. The README deliberately does not
       claim the 2D floor for 3D.
+- [x] **The 3D claims were re-checked against PR #68's head (`c95abc1`), not
+      only against the epic.** Story 5.7's owner found that #67's squash dropped
+      a reviewed commit, so `engine/engine3d.ts` on the epic unfolds every module
+      above 1.8× instead of only those in view (ADR-0006). Every 3D sentence in
+      the README was compared against both trees: the label (`2D`/`3D`), the 2D
+      default, `?view=3d`, the fallback and the perf statement are **identical
+      in both**, and nothing the README says depends on the dropped commit —
+      it makes no claim about 3D's unfold rule. The demo's 3D beat is recorded
+      at the default camera, below `UNFOLD_ZOOM`, so no module unfolds in either
+      version.
 - [x] **The 2D unfold threshold (1.8×) and ⌘K search** — re-checked against
       `engine/constants.ts` and `chrome/search.ts`; both unchanged by Epic 5 and
       both still stated correctly.
@@ -79,17 +89,26 @@ all of Epic 5 merged.
 
 ## The demo
 
-- [x] The recorder runs end to end against a served map: 40 s of WebM, encoded
-      by the documented ffmpeg command to a **3.4 MiB** GIF — inside the ~5 MB
-      ceiling `docs/recording-demo.md` sets, and smaller than the 3.7 MiB asset
-      it replaces despite covering more of the product.
-- [x] **The retry in the drill-down step was exercised deliberately.** Codex
-      found that resolving the module's screen point once is a race — hovering
-      wakes the layout, so the module can drift between the scan and the
-      double-click. With `DEMO_MODULE` set to a name no module matches, the
-      recorder now stops with
-      `search found nothing for DEMO_MODULE="does-not-exist/"` instead of an
-      opaque Playwright timeout, and the default run still completes.
+- [x] The recorder runs end to end against a served map: 41 s of WebM, encoded
+      by the documented ffmpeg command to a **4.1 MiB** GIF — inside the ~5 MB
+      ceiling `docs/recording-demo.md` sets, though **larger** than the 3.7 MiB
+      asset it replaces: the tour is longer and the 3D rotation is expensive
+      frames for a palette-based format. Two earlier takes of the same sequence
+      encoded to 3.4 and 3.7 MiB, so the variance is in the content, not the
+      settings. Left as recorded rather than trimmed: still comfortably under
+      the ceiling, and the beats are what the story is documenting.
+- [x] **The drill-down retry was fixed twice, and the second fix is the one
+      that matters.** Codex first found that resolving the module's screen point
+      once is a race: hovering wakes the layout, so the module drifts between the
+      scan and the double-click. The retry I added then waited on `#scope-bar`
+      being visible — which Codex caught as **vacuous**, because that bar also
+      hosts the global connected-only control. Measured on a served map with
+      nothing scoped: `#scope-bar` is visible and `engine.getScope()` is `null`,
+      so the wait passed before the gesture happened and the retry could never
+      fire. Success is now read from `engine.getScope() === moduleId`.
+- [x] With `DEMO_MODULE` set to a name no module matches, the recorder stops
+      with `search found nothing for DEMO_MODULE="does-not-exist/"` rather than
+      an opaque Playwright timeout; the default run still completes.
 - [x] Frames extracted and inspected: the start-here panel is the opening state,
       the detail panel shows the history rows with their window **and the blast
       radius section with `show on map` active**, the scope bar appears on
