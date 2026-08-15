@@ -335,6 +335,33 @@ describe("AC-6 — interaction state never outlives the node it points at", () =
     expect(engine.getHovered()).toBeNull();
   });
 
+  it("clears isolate even when there is no selection to clear with it", () => {
+    // Ninth Codex pass: isolate was only dropped as a side effect of removing
+    // the selection, but `setIsolated` is a public operation independent of
+    // `setSelected`. With no selection at all, a highlight could outlive the
+    // node it focused and keep dimming everything around nothing.
+    settledEngine();
+    const focus = firstModuleId();
+    const graph = buildGraph(langgraphShapedDocument());
+    const scope = inScopeIds(graph, focus);
+    const outside = engine.nodes.find((node) => !scope.has(node.id))!;
+
+    engine.setIsolated(outside.id);
+    expect(engine.getSelected()).toBeNull();
+    expect(engine.getIsolated()?.id).toBe(outside.id);
+
+    engine.setScope(focus);
+    expect(engine.getIsolated()).toBeNull();
+  });
+
+  it("keeps isolate when its node survives the filter", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setIsolated(focus);
+    engine.setScope(focus);
+    expect(engine.getIsolated()?.id).toBe(focus);
+  });
+
   it("clears isolate along with the selection it belonged to", () => {
     settledEngine();
     const focus = firstModuleId();

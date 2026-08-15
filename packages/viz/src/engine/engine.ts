@@ -929,6 +929,14 @@ export class CanvasGraphEngine implements GraphEngine {
       this.setIsolated(null);
       this.setSelected(null);
     }
+    // Isolate is checked on its own, not merely as a side effect of dropping
+    // the selection. `setIsolated` is a public operation independent of
+    // `setSelected`, so isolate can outlive a selection that is null or that
+    // points at a node still on screen — and a highlight focused on a node the
+    // filter just removed keeps dimming everything around nothing.
+    if (this.isolatedId !== null && !visible.has(this.isolatedId)) {
+      this.setIsolated(null);
+    }
   }
 
   hiddenCount(): { readonly byScope: number; readonly byDegree: number } {
