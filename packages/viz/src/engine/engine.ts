@@ -543,7 +543,20 @@ export class CanvasGraphEngine implements GraphEngine {
     // here: it belongs to another story, and switching off somebody else's
     // control from inside this code path is exactly the kind of surprise this
     // comment exists to prevent. Reported rather than silently handled.
-    if (this.connectedOnly && !this.visibleIds()?.has(id)) {
+    // Asked of THIS story's filters alone, deliberately not of `visibleIds()`.
+    // That set also carries story 5.3's layer restriction, so a target hidden
+    // only by a layer would have looked like a connected-only exclusion — and
+    // switching connected-only off could not have revealed it. Turning off a
+    // filter the user chose, to no effect, is a worse outcome than the one
+    // this whole branch exists to avoid.
+    const hiddenByConnectedOnly =
+      this.connectedOnly &&
+      graphForScope !== null &&
+      !visibleNodeIds(graphForScope, {
+        scopeId: this.scopeId,
+        connectedOnly: true,
+      }).visible.has(id);
+    if (hiddenByConnectedOnly) {
       this.connectedOnly = false;
       this.invalidateVisible();
       this.emitScope(id);

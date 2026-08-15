@@ -684,6 +684,40 @@ describe("AC-5 — search out of the scope leaves it and flies", () => {
     expect(engine.getSelected()?.id).toBe(edgeless.id);
   });
 
+  it("leaves connected-only alone when a LAYER is what hides the target", async () => {
+    // Seventh Codex pass, and the third regression this branch caused itself:
+    // the check asked `visibleIds()`, which already carries story 5.3's layer
+    // restriction — so a target hidden only by a layer looked like a
+    // connected-only exclusion, and this story switched off a filter the user
+    // chose without revealing anything at all.
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    const graph = buildGraph(loadContractFixture("synthetic-100x2000"));
+    // A node that survives connected-only on its own merits, but whose layer
+    // is about to be switched off.
+    const target = graph.nodes.find(
+      (node) =>
+        node.kind === "file" &&
+        node.layer === "test" &&
+        degreeOf(graph, node.id) > 0,
+    );
+    if (!target) return; // fixture has none; nothing to assert
+
+    engine.setConnectedOnly(true);
+    engine.setLayerFilter(
+      engine.getLayerFilter().filter((layer) => layer !== "test"),
+    );
+
+    await engine.flyTo(target.id, { durationMs: 0 });
+
+    // Untouched: switching it off could not have brought the target back.
+    expect(engine.getConnectedOnly()).toBe(true);
+  });
+
   it("leaves connected-only alone when the target is already drawn", async () => {
     canvas = document.createElement("canvas");
     document.body.append(canvas);
