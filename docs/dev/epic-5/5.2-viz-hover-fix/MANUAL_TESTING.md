@@ -92,7 +92,11 @@ both builds, and a 680 × 520 crop captured around it.
       by a 12-step drag across a populated region lit **no new node**: the
       hovered id stayed the one from before the press for all 12 positions
       (`libs/langgraph/langgraph/typing.py`), and the same drag on the base
-      build behaves identically.
+      build behaves identically. Note what this means and does not mean: a press
+      that begins *over* a node carries that node's chain through the gesture,
+      because `onPointerDown` does not clear the hover on either build. That is
+      story 3.3's behaviour, which AC-2 asks to still hold rather than to
+      change; it is pinned by a test and offered as a follow-up in the PR body.
 - [x] **The tooltip and the detail panel behave as before.** The tooltip named
       the hovered node (`libs/langgraph/ · churn 100%`), a click opened the
       panel (`#p-isolate` present) and selected that node — byte-for-byte the

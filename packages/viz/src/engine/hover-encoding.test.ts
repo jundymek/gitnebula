@@ -323,6 +323,40 @@ describe("engine — the hover path (AC-1, AC-2, AC-3)", () => {
     expect(currentScene().chain).toBeNull();
   });
 
+  it("AC-2 — a pan started on a node keeps that node's chain and lights no other", () => {
+    // Story 3.3's behaviour, pinned here because it looks like a bug until you
+    // read it twice: `onPointerDown` does not clear the hover, and the drag
+    // branch of `onPointerMove` returns before the hover is re-evaluated. So a
+    // press that begins over a node carries that node's chain through the
+    // gesture. "Suppressed during a pan" means the pan does not *change* the
+    // highlight — a drag that re-picked as it went would light and dim every
+    // node it swept past, which is the behaviour AC-2 is protecting against.
+    //
+    // Unchanged by story 5.2, and verified identical on `9c28344`: this test
+    // exists so the next reader does not have to re-derive that.
+    const { first, second } = probe();
+
+    move(first);
+    const hovered = engine.getHovered();
+    expect(hovered).not.toBeNull();
+    const chainBefore = [...currentScene().chain!];
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerdown", { clientX: first.x, clientY: first.y }),
+    );
+    canvas.dispatchEvent(
+      new MouseEvent("pointermove", { clientX: second.x, clientY: second.y }),
+    );
+    run(1);
+
+    expect(engine.getHovered()?.id).toBe(hovered!.id);
+    expect([...currentScene().chain!]).toEqual(chainBefore);
+
+    canvas.dispatchEvent(
+      new MouseEvent("pointerup", { clientX: second.x, clientY: second.y }),
+    );
+  });
+
   it("AC-2 — hover stays suppressed during a pan, and a press ends a held chain", () => {
     const { first, empty } = probe();
 
