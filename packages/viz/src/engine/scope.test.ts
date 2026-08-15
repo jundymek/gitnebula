@@ -180,6 +180,42 @@ describe("visibleNodeIds — AC-3 and AC-6", () => {
       expect(result.visible.has(node.id)).toBe(false);
   });
 
+  it("counts degree inside the frame, not across the whole graph", () => {
+    // Codex found this: a scoped file whose only import points OUTSIDE the
+    // scope has a positive degree in the whole graph, but `buildScene` drops
+    // that edge because one end is missing — so counting globally leaves a
+    // visibly edgeless node on screen under a filter whose entire promise is
+    // that there are none. Reachable in 1,131 places on this fixture alone.
+    const focus = bigGraph.nodes.find((node) => node.kind === "module")!.id;
+    const scope = inScopeIds(bigGraph, focus);
+    const strandedByScope = [...scope].filter(
+      (id) => degreeOf(bigGraph, id) > 0 && degreeOf(bigGraph, id, scope) === 0,
+    );
+    expect(strandedByScope.length).toBeGreaterThan(0);
+
+    const result = visibleNodeIds(bigGraph, {
+      scopeId: focus,
+      connectedOnly: true,
+    });
+    for (const id of strandedByScope) {
+      expect(result.visible.has(id)).toBe(false);
+    }
+  });
+
+  it("leaves nothing edgeless behind — it runs to a fixpoint", () => {
+    // One pass is not enough: removing an edgeless node can strand its only
+    // neighbour, and that neighbour is exactly what this filter promises to
+    // remove too.
+    const focus = bigGraph.nodes.find((node) => node.kind === "module")!.id;
+    const result = visibleNodeIds(bigGraph, {
+      scopeId: focus,
+      connectedOnly: true,
+    });
+    for (const id of result.visible) {
+      expect(degreeOf(bigGraph, id, result.visible)).toBeGreaterThan(0);
+    }
+  });
+
   it("keeps a module that has members but imports nothing", () => {
     // The judgement call from DECISIONS.md, pinned: a module carries
     // module -> member edges in the frame, so connected-only must not delete

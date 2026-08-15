@@ -770,9 +770,20 @@ export class CanvasGraphEngine implements GraphEngine {
         ? moduleId
         : null;
     if (this.scopeId === next) return;
-    if (this.scopeId !== null) this.lastScopeId = this.scopeId;
+    const previous = this.scopeId;
+    if (previous !== null) this.lastScopeId = previous;
     this.scopeId = next;
     this.invalidateVisible();
+    // A scope promises the focus module's **member files**, not merely
+    // permission for them to be drawn. Members live in `memberLayouts`, which
+    // the viewport rule fills — so without this, drilling in at overview zoom
+    // shows the module and its neighbours and none of its files, which is the
+    // one thing the gesture exists to reveal. Pinned for the life of the
+    // scope through story 3.3's existing mechanism, and released on the way
+    // out so the viewport rule takes the module back.
+    if (next !== null) this.ensureUnfolded(next);
+    if (previous !== null && previous !== next) this.releasePins([previous]);
+    this.reconcileInteraction();
     this.emitScope(null);
   }
 
@@ -784,7 +795,30 @@ export class CanvasGraphEngine implements GraphEngine {
     if (this.connectedOnly === connectedOnly) return;
     this.connectedOnly = connectedOnly;
     this.invalidateVisible();
+    this.reconcileInteraction();
     this.emitScope(null);
+  }
+
+  /**
+   * Drop hover, selection and isolate when their node has just left the frame.
+   *
+   * Without this the panel keeps describing a node that is no longer on the
+   * map and a stale hover chain keeps lighting nodes that are. Routed through
+   * the existing setters, so `hover` / `select` / `highlight` fire exactly as
+   * chrome already expects — this story adds no semantics to those three. The
+   * layer filter (5.3) does the same thing for the same reason; the two are
+   * deliberately consistent.
+   */
+  private reconcileInteraction(): void {
+    const visible = this.visibleIds();
+    if (!visible) return;
+    if (this.hoveredId !== null && !visible.has(this.hoveredId)) {
+      this.setHovered(null);
+    }
+    if (this.selectedId !== null && !visible.has(this.selectedId)) {
+      this.setIsolated(null);
+      this.setSelected(null);
+    }
   }
 
   hiddenCount(): { readonly byScope: number; readonly byDegree: number } {

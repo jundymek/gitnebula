@@ -120,6 +120,147 @@ describe("AC-1 — the scope narrows the frame", () => {
   });
 });
 
+describe("AC-1 — a scope reveals the focus module's files, not just permits them", () => {
+  // Found by the Codex pass: the scope filter granted member files permission
+  // to be drawn, but members are produced by the viewport unfold rule — so at
+  // overview zoom a drill-down showed the module and its neighbours and none
+  // of its files, which is the one thing the gesture exists to reveal.
+  it("puts member files in the frame at overview zoom, without zooming in", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setCamera({ k: 1 });
+    expect(engine.isUnfolded(focus)).toBe(false);
+
+    engine.setScope(focus);
+
+    const graph = buildGraph(langgraphShapedDocument());
+    const members = (graph.membersByModule.get(focus) ?? []).map(
+      (index) => graph.nodes[index]!.id,
+    );
+    expect(members.length).toBeGreaterThan(0);
+    const drawn = new Set(scene().nodes.map((item) => item.node.id));
+    for (const member of members) expect(drawn.has(member)).toBe(true);
+  });
+
+  it("lets the module collapse again once the scope is left", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setCamera({ k: 1 });
+    engine.setScope(focus);
+    expect(engine.isUnfolded(focus)).toBe(true);
+
+    engine.setScope(null);
+
+    // Back under the viewport rule: at overview zoom nothing stays unfolded,
+    // so leaving a scope does not quietly leave the map heavier than it found
+    // it (ADR-0006).
+    expect(engine.isUnfolded(focus)).toBe(false);
+  });
+});
+
+describe("AC-3 — connected-only agrees with what is drawn", () => {
+  // Also from the Codex pass: degree was counted over the whole graph, so a
+  // scoped node whose only import pointed outside the scope counted as
+  // connected while `buildScene` dropped that edge — an edgeless node left on
+  // screen under a filter whose whole promise is that there are none.
+  it("hides a scoped node whose only edges leave the scope", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setScope(focus);
+    engine.setConnectedOnly(true);
+
+    const drawn = new Set(scene().nodes.map((item) => item.node.id));
+    const drawnEdges = scene().edges;
+    for (const id of drawn) {
+      const touching = drawnEdges.some(
+        (edge) => edge.sourceId === id || edge.targetId === id,
+      );
+      expect(touching).toBe(true);
+    }
+  });
+
+  it("leaves no edgeless node in the frame on the DoD-scale fixture either", () => {
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+    engine.setConnectedOnly(true);
+
+    const built = scene();
+    const touched = new Set<string>();
+    for (const edge of built.edges) {
+      touched.add(edge.sourceId);
+      touched.add(edge.targetId);
+    }
+    for (const item of built.nodes) {
+      expect(touched.has(item.node.id)).toBe(true);
+    }
+  });
+});
+
+describe("AC-6 — interaction state never outlives the node it points at", () => {
+  // Third Codex finding: the panel kept describing a node the filters had just
+  // removed, and its hover chain kept lighting nodes that were still drawn.
+  it("drops a selection whose node the scope just removed", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    const graph = buildGraph(langgraphShapedDocument());
+    const scope = inScopeIds(graph, focus);
+    const outside = engine.nodes.find((node) => !scope.has(node.id))!;
+
+    engine.setSelected(outside.id);
+    expect(engine.getSelected()?.id).toBe(outside.id);
+
+    engine.setScope(focus);
+    expect(engine.getSelected()).toBeNull();
+  });
+
+  it("keeps a selection whose node survives the scope", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setSelected(focus);
+    engine.setScope(focus);
+    expect(engine.getSelected()?.id).toBe(focus);
+  });
+
+  it("drops a stale hover when connected-only removes its node", () => {
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    const graph = buildGraph(loadContractFixture("synthetic-100x2000"));
+    const edgeless = graph.nodes.find(
+      (node) => node.kind === "file" && degreeOf(graph, node.id) === 0,
+    )!;
+    engine.setHovered(edgeless.id);
+    expect(engine.getHovered()?.id).toBe(edgeless.id);
+
+    engine.setConnectedOnly(true);
+    expect(engine.getHovered()).toBeNull();
+  });
+
+  it("clears isolate along with the selection it belonged to", () => {
+    settledEngine();
+    const focus = firstModuleId();
+    const graph = buildGraph(langgraphShapedDocument());
+    const scope = inScopeIds(graph, focus);
+    const outside = engine.nodes.find((node) => !scope.has(node.id))!;
+
+    engine.setSelected(outside.id);
+    engine.setIsolated(outside.id);
+    engine.setScope(focus);
+
+    expect(engine.getSelected()).toBeNull();
+    expect(engine.getIsolated()).toBeNull();
+  });
+});
+
 describe("AC-2 — entering and leaving the scope", () => {
   it("scopes on a double click over a module", () => {
     settledEngine();

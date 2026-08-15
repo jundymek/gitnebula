@@ -81,12 +81,33 @@ export function inScopeIds(graph: Graph, focusId: string): ReadonlySet<string> {
  * module case is the one the criterion leaves to judgement — recorded in
  * `DECISIONS.md`.
  */
-export function degreeOf(graph: Graph, id: string): number {
+export function degreeOf(
+  graph: Graph,
+  id: string,
+  /**
+   * When given, only edges whose other end is also in this set are counted.
+   *
+   * This is what makes connected-only agree with what is actually drawn: a
+   * scoped file whose single import points outside the scope has a positive
+   * degree in the whole graph, but `buildScene` drops that edge because one
+   * end is missing — so counting against the full graph would leave a visibly
+   * edgeless node on screen under a filter whose entire promise is that there
+   * are none.
+   */
+  candidates?: ReadonlySet<string>,
+): number {
   const index = graph.indexById.get(id);
   if (index === undefined) return 0;
-  const imports = graph.neighboursById.get(id)?.length ?? 0;
+  const neighbours = graph.neighboursById.get(id) ?? [];
+  const imports = candidates
+    ? neighbours.filter((neighbour) => candidates.has(neighbour)).length
+    : neighbours.length;
   if (graph.nodes[index]!.kind !== "module") return imports;
-  return imports + (graph.membersByModule.get(id) ?? []).length;
+  const members = graph.membersByModule.get(id) ?? [];
+  const memberCount = candidates
+    ? members.filter((member) => candidates.has(graph.nodes[member]!.id)).length
+    : members.length;
+  return imports + memberCount;
 }
 
 /**
@@ -110,11 +131,20 @@ export function visibleNodeIds(
 
   let hiddenByDegree = 0;
   if (filter.connectedOnly) {
-    for (const id of [...surviving]) {
-      if (degreeOf(graph, id) === 0) {
-        surviving.delete(id);
-        hiddenByDegree += 1;
+    // Run to a fixpoint rather than in one pass. Removing an edgeless node can
+    // strand its neighbour — a file whose only import was to something just
+    // dropped now has nothing drawn either — and a single pass would leave
+    // exactly the edgeless nodes on screen that this filter promises to
+    // remove. Each round removes at least one node, so it terminates in at
+    // most `surviving.size` rounds and normally in one or two.
+    for (;;) {
+      const stranded: string[] = [];
+      for (const id of surviving) {
+        if (degreeOf(graph, id, surviving) === 0) stranded.push(id);
       }
+      if (stranded.length === 0) break;
+      for (const id of stranded) surviving.delete(id);
+      hiddenByDegree += stranded.length;
     }
   }
 

@@ -121,6 +121,30 @@ the owner.
   a pure function of the document, so a scope is reproducible.
 - `render.ts` and `constants.ts` untouched — story 5.2's territory this wave.
 
+## What the Codex review changed
+
+Three real defects, all fixed on this branch, each pinned by a test that was
+watched red first:
+
+1. **A scope now unfolds its focus module.** Previously the filter only
+   *permitted* member files; they are produced by the viewport unfold rule, so
+   at overview zoom drilling in showed the module and its neighbours and none
+   of its files. `setScope` pins the module through story 3.3's existing
+   mechanism and releases it on the way out.
+2. **Degree is counted inside the frame.** A scoped node whose only import
+   points outside the scope was counted as connected while its edge was
+   dropped from the scene. A probe found **1,131** such nodes on
+   `synthetic-100x2000`. The filter now runs to a fixpoint over the surviving
+   set, because removing one edgeless node can strand its only neighbour.
+3. **Hover, selection and isolate are reconciled** when their node leaves the
+   frame, so the panel cannot keep describing an off-map node. Story 5.3's
+   layer filter already did this; the two are now consistent.
+
+Worth recording: the first version of the test for (2) went green *with the bug
+still present*, because the langgraph-shaped fixture contains no node in the
+failing shape. Reverting the fix and watching the test stay green is what
+caught it.
+
 ## Notes for the reviewer
 
 - The visible-id set is **cached and invalidated on filter or document
