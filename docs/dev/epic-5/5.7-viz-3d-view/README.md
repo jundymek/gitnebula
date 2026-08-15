@@ -29,8 +29,8 @@ existing `onReplay` action has. Chrome never learns what a view is; it places
 the control exactly as it already places the canvas.
 
 **No WebGL, no Three.js.** Perspective projection onto the same 2D context the
-2D view uses. This is what keeps ADR-0004's bundle budget (+4,975 B gzipped,
-3.33 % of 2 MB) and what makes the unavailable-3D path a small probe instead of
+2D view uses. This is what keeps ADR-0004's bundle budget (+5,058 B gzipped,
+3.37 % of 2 MB) and what makes the unavailable-3D path a small probe instead of
 a second rendering stack.
 
 ## Files
@@ -44,11 +44,11 @@ a second rendering stack.
 | `packages/viz/src/engine/render3d.ts` | 3D frame drawing and its own `Scene3D` type. |
 | `packages/viz/src/engine/engine3d.ts` | `Nebula3DEngine` — the second `GraphEngine`. |
 | `packages/viz/src/engine/view.ts` | view selection, the availability probe, and the AC-5 fallback. |
-| `packages/viz/src/chrome/view-switch.ts` | the 2D/3D control: a radiogroup that reports a click and nothing more. |
+| `packages/viz/src/chrome/view-switch.ts` | the 2D/3D control: a pair of `aria-pressed` buttons that report a click and nothing more. |
 | `packages/viz/perf/tests/fps-3d.pw.ts` | AC-3 — measures and records the 3D frame rate. |
 | `packages/viz/perf/tests/degradation-3d.pw.ts` | AC-3 — the node count at which 3D degrades. |
 | `docs/adr/0007-*.md` | AC-7. |
-| tests | `project3d.test.ts`, `layout3d.test.ts`, `engine3d.test.ts`, `view3d.test.ts`, `chrome/view-switch.test.ts` |
+| tests | `project3d.test.ts`, `layout3d.test.ts`, `engine3d.test.ts`, `view3d.test.ts`, `chrome/view-switch.test.ts`, `app-view-swap.test.ts` |
 
 Every 3D test is in a **new** file. No case was added to an existing 2D test
 file — agreed with 5.6's owner so two parallel stories in one package never
@@ -59,11 +59,12 @@ out of this story unchanged" is demonstrated rather than claimed.
 
 | file | change |
 | --- | --- |
-| `packages/viz/src/app.ts` | owns the engine swap; reads `?view=`; wires the switch. |
-| `packages/viz/src/chrome/chrome.ts` | places the switch in the header slot (one `if`). |
+| `packages/viz/src/app.ts` | owns the engine swap, carries the reader's state across it, reads `?view=`, wires the switch. |
+| `packages/viz/src/chrome/chrome.ts` | places the switch in the header slot; adds the `destroyControls` option (code review). |
 | `packages/viz/src/chrome/header.ts` | one new slot, `VIEW_SLOT_ID`, on its own line. |
 | `packages/viz/src/engine/index.ts` | exports the 3D factory and the view helpers (append only). |
 | `packages/viz/src/test-support/fake-canvas.ts` | records `measureText` — the 3D label grid needs metrics; the 2D renderer never measured text. Test-only, additive. |
+| `packages/viz/src/engine/render3d.ts` | imports 5.6's `COCHANGE_RING_*` constants after the rebase. |
 | `packages/viz/perf/src/page-helpers.ts` | `openViewer(page, { view })`. |
 | `.gitignore` | `perf/report-3d/`, matching how the 2D report is handled. |
 
@@ -110,6 +111,7 @@ orientation was added.
 | click | select — same `select` event as 2D |
 | double-click a module | scope to it; empty space or the focus module leaves |
 | `Escape` | leave the scope |
+| switch view | mode, layers, scope, connected-only, selection and isolate all carry across |
 | hover | dependency chain, same encoding and constants as 2D |
 
 Idle auto-rotation runs until the reader rotates by hand, and never runs under
@@ -167,13 +169,24 @@ patching one bug several ways across several branches is worse than the bug.
 
 ## Deliberate omissions
 
-- **No styling for the switch beyond the existing `.iconbtn` class.**
-  `styles.css` is 5.6's territory this wave and the control is functional and
-  accessible without new rules. Flagged for the owner.
-- **The co-change ring constants are transcribed rather than imported.** 5.6
-  exports `COCHANGE_RING_*` from `constants.ts`, but her PR was still open when
-  this branch was written. There is a `TODO(rebase)` at the draw site in
-  `render3d.ts`; switching to the imports on the epic rebase is a two-line
-  change and is what keeps the two views from drifting.
+- **No new CSS.** `styles.css` is 5.6's territory this wave, so the switch
+  reuses the shared `modes` segmented-control class and `aria-pressed`, which
+  `.modes button[aria-pressed="true"]` already styles. The pressed view is
+  therefore visible without this story editing a file it does not own.
+- **The renderer optimisation that would move the perf knee** — see
+  PERFORMANCE.md §3. Measured, costed, and left to a story that asks for it.
+
+## Resolved during the wave
+
+- **5.6's `setBlastRadius`/`getBlastRadius`** were implemented here before the
+  interface declared them, by agreement with its owner, so neither PR could
+  block the other in either merge order. 5.6 has since merged into the epic;
+  this branch is rebased onto it and `Nebula3DEngine` satisfies the widened
+  interface with no edit.
+- **The co-change ring now imports `COCHANGE_RING_*` from `constants.ts`**
+  rather than carrying transcribed copies. While 5.6's PR was open the five
+  values were duplicated locally behind a marked `TODO(rebase)`; that TODO is
+  resolved and the duplicates are gone, so the two views cannot drift on the
+  encoding — which was the whole argument for drawing the ring in 3D at all.
 - **The renderer optimisation that would move the perf knee** — see
   PERFORMANCE.md §3. Measured, costed, and left to a story that asks for it.

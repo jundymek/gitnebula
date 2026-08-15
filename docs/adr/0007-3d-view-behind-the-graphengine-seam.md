@@ -92,10 +92,10 @@ Measured on this branch:
 
 | build | raw | gzipped | share of 2 MB budget |
 | --- | --- | --- | --- |
-| `epic/5-onboarding` (before) | 216,756 B | 64,892 B | 3.09 % |
-| with the 3D view | 246,211 B | 69,867 B | **3.33 %** |
+| `epic/5-onboarding` (before) | 220,194 B | 65,716 B | 3.13 % |
+| with the 3D view | 249,988 B | 70,774 B | **3.37 %** |
 
-**+4,975 B gzipped, +7.7 %.** The no-WebGL decision is what bought this: a
+**+5,058 B gzipped, +7.7 %.** The no-WebGL decision is what bought this: a
 WebGL renderer plus a scene-graph library would have been one to two orders of
 magnitude more, and would additionally have required a real fallback path for
 machines without working WebGL rather than the general availability probe that

@@ -26,6 +26,11 @@ import {
   CHAIN_GLOW_BOOST,
   CHAIN_RING_ALPHA,
   CHAIN_RING_OFFSET_PX,
+  COCHANGE_RING_ALPHA,
+  COCHANGE_RING_COLOR,
+  COCHANGE_RING_DASH,
+  COCHANGE_RING_OFFSET_PX,
+  COCHANGE_RING_WIDTH,
   EDGE_ALPHA_BASE,
   EDGE_ALPHA_CHAIN,
   EDGE_ALPHA_DIMMED,
@@ -112,21 +117,6 @@ const MIN_SCREEN_RADIUS = 0.7;
 const LABEL_BUDGET = 34;
 /** Label occupancy grid cell, in px. */
 const LABEL_CELL_PX = 16;
-
-/**
- * Story 5.6's co-change ring encoding, transcribed from its owner's message
- * because her `constants.ts` exports are not on this branch yet.
- *
- * See the TODO(rebase) at the draw site: these become imports of
- * `COCHANGE_RING_*` from `constants.ts` once 5.6 merges into the epic.
- */
-const COCHANGE_RING_COLOR = "#ff5fa2";
-/** Outside the selection ring (+5) and 5.2's chain ring (+3). */
-const COCHANGE_RING_OFFSET_PX = 9;
-const COCHANGE_RING_ALPHA = 0.85;
-const COCHANGE_RING_WIDTH = 1.5;
-/** The dash is the primary distinction — it survives a greyscale render. */
-const COCHANGE_RING_DASH: readonly number[] = [3, 4];
 
 interface FocusState {
   readonly chain: ReadonlySet<string> | null;
@@ -326,16 +316,11 @@ function drawNodes(
     // co-change partner is not a dependency, and drawing it as an edge would
     // say something false about the graph.
     //
-    // The values below are 5.6's, transcribed: `#ff5fa2`, +9 px (outside the
-    // selection ring's +5 and 5.2's chain ring's +3), alpha 0.85, width 1.5,
-    // dash [3, 4] — the dash being the primary distinction rather than the
-    // hue, because it is what survives a greyscale render.
-    //
-    // TODO(rebase): 5.6 exports these as COCHANGE_RING_{COLOR,OFFSET_PX,
-    // ALPHA,WIDTH,DASH} from `constants.ts`. They do not exist on this branch
-    // yet (her PR #63 is open, not merged). Import them and delete these
-    // locals on the `epic-updated` rebase — the whole argument for drawing
-    // this ring in 3D was that the two views must not drift.
+    // Encoding constants are 5.6's, imported rather than restated: the whole
+    // argument for drawing this ring in 3D was that the two views must not
+    // drift, and two copies of a colour is exactly how they would. The dash is
+    // the primary distinction rather than the hue, because it survives a
+    // greyscale render.
     if (blast && blast.has(node.id)) {
       ctx.globalAlpha = Math.max(0, Math.min(1, COCHANGE_RING_ALPHA * fog));
       ctx.strokeStyle = COCHANGE_RING_COLOR;

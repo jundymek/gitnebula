@@ -117,13 +117,17 @@ pnpm --filter gitnebula exec vitest run src/bundle.test.ts   # the budget check
 
 | build | raw | gzipped | share of the 2 MB budget |
 | --- | --- | --- | --- |
-| `epic/5-onboarding` (before this story) | 216,756 B | 64,892 B | 3.09 % |
-| with the 3D view | 246,211 B | 69,867 B | **3.33 %** |
-| delta | +29,455 B | **+4,975 B** | +0.24 pp |
+| `epic/5-onboarding` (before this story) | 220,194 B | 65,716 B | 3.13 % |
+| with the 3D view | 249,988 B | 70,774 B | **3.37 %** |
+| delta | +29,794 B | **+5,058 B** | +0.24 pp |
 
 **+7.7 % gzipped for an entire second renderer.** The before-figure was
 produced by building `epic/5-onboarding` from a clean `git archive` extraction,
-so it is a real measurement rather than a remembered one.
+so it is a real measurement rather than a remembered one. Both rows were
+re-measured after this branch rebased onto the epic with story 5.6 merged, so
+the delta is attributable to 5.7 alone rather than to the two stories together
+— an earlier pass measured 64,892 B → 69,867 B against the pre-5.6 base and
+reached the same +7.7 %.
 
 This is the ADR-0004 consequence of the no-WebGL decision. A WebGL renderer
 plus a scene-graph library would have been one to two orders of magnitude more
