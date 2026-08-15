@@ -132,7 +132,7 @@ AC-1's first test red.
 ## Verification
 
 ```bash
-pnpm --filter @gitnebula/viz test   # 36 files, 439 tests
+pnpm --filter @gitnebula/viz test   # 39 files, 488 tests
 pnpm lint && pnpm test && pnpm build
 PERF_PORT=<free port> pnpm --filter @gitnebula/viz perf
 ```
