@@ -15,6 +15,12 @@ import type { AnalysisDocument, CochangePair } from "@gitnebula/contract";
 
 import type { EngineNode } from "../engine/index.js";
 import {
+  type EmptyState,
+  noChangeInWindow,
+  outOfWindowState,
+  zeroHistoryState,
+} from "./empty-state.js";
+import {
   EMPTY_METRIC,
   formatInteger,
   formatPercent,
@@ -29,6 +35,34 @@ export const COCHANGE_LIMIT = 3;
 export interface MetricRow {
   readonly label: string;
   readonly value: string;
+  /**
+   * True for the rows the analysis window applies to (story 5.5, AC-1).
+   *
+   * The panel groups these under a caption naming the window, which is how
+   * each of them states the window it covers without four labels repeating
+   * the same `365d` suffix.
+   */
+  readonly history?: boolean;
+  /**
+   * True when the value is *absent* rather than zero — the distinction AC-2
+   * exists to make visible.
+   */
+  readonly empty?: boolean;
+}
+
+/**
+ * Which empty state the panel is in, so the caller can tell the two apart
+ * without matching on copy.
+ *
+ * `repo-zero-history` deliberately WINS over `node-out-of-window`: when the
+ * whole repository caught nothing in the window, every node is out of window,
+ * and repeating the per-node sentence on all of them is precisely the failure
+ * AC-3 names. The repository states it once and the node stays quiet.
+ */
+export type PanelNoticeKind = "repo-zero-history" | "node-out-of-window";
+
+export interface PanelNotice extends EmptyState {
+  readonly kind: PanelNoticeKind;
 }
 
 export interface PanelModel {
@@ -45,6 +79,19 @@ export interface PanelModel {
   readonly churnPercent: string;
   /** Null when the remote is absent or not GitHub: the button is not drawn. */
   readonly githubUrl: string | null;
+  /** The window every history row covers, from the document (AC-1). */
+  readonly windowDays: number;
+  /**
+   * The caption over the history rows: `history · last 365 days`.
+   *
+   * This is how AC-1 is met. The window is stated once for the group rather
+   * than suffixed onto every label, because `last change 365d` is not a
+   * label anyone can read — and a labelled group states the window for each
+   * metric inside it to a screen reader as well as to the eye.
+   */
+  readonly historyCaption: string;
+  /** The panel-level empty state, or null when there is history to show. */
+  readonly notice: PanelNotice | null;
 }
 
 export interface PanelModelOptions {
@@ -58,6 +105,17 @@ export function buildPanelModel(
   options: PanelModelOptions = {},
 ): PanelModel {
   const churnPercent = formatPercent(node.churn);
+  // The window is read from the document on every build, never from a
+  // constant. `--window-days` makes it configurable, so a hardcoded 90 would
+  // start lying the first time anyone uses that flag (AC-1).
+  const windowDays = document.repo.analysisWindowDays;
+  // No commits at all inside the window — a property of the repository, not
+  // of the selected node.
+  const repoIsQuiet = document.repo.stats.commits === 0;
+  // No commit inside the window touched THIS node. A real contract state, and
+  // on a real repository the common one.
+  const nodeIsQuiet = node.lastChangedAt === null;
+
   return {
     id: node.id,
     name: displayName(node),
@@ -65,6 +123,9 @@ export function buildPanelModel(
     kindLine: `${node.kind} · ${node.layer}`,
     hot: node.hot,
     churnPercent,
+    windowDays,
+    historyCaption: `history · last ${windowDays} days`,
+    notice: buildNotice(windowDays, repoIsQuiet, nodeIsQuiet),
     githubUrl: githubNodeUrl(
       document.repo.remoteUrl,
       document.repo.defaultBranch,
@@ -83,20 +144,45 @@ export function buildPanelModel(
       },
       { label: "loc", value: formatInteger(node.loc) },
       {
-        label: `churn ${document.repo.analysisWindowDays}d`,
+        label: `churn ${windowDays}d`,
         value: churnPercent,
+        history: true,
       },
-      { label: "authors", value: formatInteger(node.authors) },
+      { label: "authors", value: formatInteger(node.authors), history: true },
       {
         label: "last change",
-        value: formatRelativeTime(node.lastChangedAt, options.now),
+        // The row that made this story necessary. `—` says "the tool has
+        // nothing"; this says "the repository was quiet", which is the truth.
+        value: nodeIsQuiet
+          ? noChangeInWindow(windowDays)
+          : formatRelativeTime(node.lastChangedAt, options.now),
+        history: true,
+        empty: nodeIsQuiet,
       },
       {
         label: "co-changes with",
         value: formatCochanges(topCochanges(document, node)),
+        history: true,
       },
     ],
   };
+}
+
+function buildNotice(
+  windowDays: number,
+  repoIsQuiet: boolean,
+  nodeIsQuiet: boolean,
+): PanelNotice | null {
+  // AC-3 before AC-2: a repository with no history at all says so once, and
+  // suppresses the per-node sentence that would otherwise repeat on every
+  // node the reader opens.
+  if (repoIsQuiet) {
+    return { kind: "repo-zero-history", ...zeroHistoryState(windowDays) };
+  }
+  if (nodeIsQuiet) {
+    return { kind: "node-out-of-window", ...outOfWindowState(windowDays) };
+  }
+  return null;
 }
 
 /** A file shows its basename; a module keeps its trailing-slash id (mockup). */

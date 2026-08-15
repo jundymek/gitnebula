@@ -89,7 +89,7 @@ development_status:
   5.2-viz-hover-fix: review
   5.3-viz-layer-filter: review
   5.4-viz-drill-down: backlog
-  5.5-viz-history-window: backlog
+  5.5-viz-history-window: review
   # Wave B — launched after wave A lands on the epic branch:
   5.6-viz-blast-radius: backlog
   5.7-viz-3d-view: backlog

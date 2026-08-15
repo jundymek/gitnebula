@@ -125,8 +125,12 @@ export async function runPipeline(
     );
   }
 
+  // Story 5.5 (AC-5): the summary names the window it measured history over,
+  // so a run whose counts look low is read as a window setting rather than as
+  // a broken analysis. Wording only — the value is the one already in the
+  // document, and `--window-days` is the lever that changes it.
   reporter.finish(
-    `${outputPath} — ${analysis.nodes.length} nodes, ${analysis.edges.length} edges, ${analysis.cochanges.length} co-change pairs in ${formatElapsed(now() - startedAt)}`,
+    `${outputPath} — ${analysis.nodes.length} nodes, ${analysis.edges.length} edges, ${analysis.cochanges.length} co-change pairs, history over the last ${analysis.repo.analysisWindowDays} days (--window-days), in ${formatElapsed(now() - startedAt)}`,
   );
 
   return { analysis, outputPath, repo, config, warnings };

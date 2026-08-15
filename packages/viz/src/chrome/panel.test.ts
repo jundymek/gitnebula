@@ -83,6 +83,30 @@ describe("panel — opening on a node (AC-1)", () => {
     expect(values["co-changes with"]).toMatch(/^mod-\d+\/ \d+/);
   });
 
+  it("groups the history rows under a caption naming the window (AC-1)", () => {
+    const handle = mountPanel();
+    open(handle, document_, "mod-000/");
+
+    const group = handle.element.querySelector(".p-history")!;
+    const caption = `history · last ${document_.repo.analysisWindowDays} days`;
+    expect(text(handle, ".p-window")).toBe(caption);
+    // The caption is the accessible name too, so a screen reader reaching any
+    // metric inside the group is told which window it covers.
+    expect(group.getAttribute("role")).toBe("group");
+    expect(group.getAttribute("aria-label")).toBe(caption);
+
+    // `files` and `loc` describe HEAD, not the window, and stay outside.
+    const grouped = [...group.querySelectorAll(".p-row")].map(
+      (row) => row.querySelector("span")!.textContent,
+    );
+    expect(grouped).toEqual([
+      `churn ${document_.repo.analysisWindowDays}d`,
+      "authors",
+      "last change",
+      "co-changes with",
+    ]);
+  });
+
   it("sets the churn bar's width to the churn percentage", () => {
     const handle = mountPanel();
     open(handle, document_, "mod-000/");
@@ -116,6 +140,107 @@ describe("panel — opening on a node (AC-1)", () => {
     open(handle, document_, "mod-001/");
     expect(rows(handle)).toHaveLength(6);
     expect(text(handle, ".p-name")).toBe("mod-001/");
+  });
+});
+
+describe("panel — the window's empty states (5.5 AC-2, AC-3)", () => {
+  function notice(handle: PanelHandle) {
+    return handle.element.querySelector<HTMLElement>(".p-notice")!;
+  }
+
+  it("marks an absent last-change visibly distinct from a real zero", () => {
+    const base = loadContractFixture("single-module");
+    const quiet = base.nodes.find((node) => node.kind === "file")!;
+    const document_: AnalysisDocument = {
+      ...base,
+      nodes: base.nodes.map((node) =>
+        node.id === quiet.id ? { ...node, lastChangedAt: null } : node,
+      ),
+    };
+
+    const handle = mountPanel();
+    open(handle, document_, quiet.id);
+
+    const emptyRows = [...handle.element.querySelectorAll(".p-row.is-empty")];
+    expect(emptyRows).toHaveLength(1);
+    expect(emptyRows[0]!.querySelector("span")!.textContent).toBe(
+      "last change",
+    );
+    expect(emptyRows[0]!.textContent).toContain("no change in last 365 days");
+
+    // The distinction is a class the stylesheet can act on, not wording alone:
+    // a reader scanning the panel must see it without reading it.
+    const authors = [...handle.element.querySelectorAll(".p-row")].find(
+      (row) => row.querySelector("span")!.textContent === "authors",
+    )!;
+    expect(authors.className).not.toContain("is-empty");
+  });
+
+  it("names --window-days as the exit for an out-of-window node (AC-2)", () => {
+    const base = loadContractFixture("single-module");
+    const quiet = base.nodes.find((node) => node.kind === "file")!;
+    const document_: AnalysisDocument = {
+      ...base,
+      nodes: base.nodes.map((node) =>
+        node.id === quiet.id ? { ...node, lastChangedAt: null } : node,
+      ),
+    };
+
+    const handle = mountPanel();
+    open(handle, document_, quiet.id);
+
+    expect(notice(handle).hidden).toBe(false);
+    expect(notice(handle).dataset["kind"]).toBe("node-out-of-window");
+    expect(notice(handle).textContent).toContain("--window-days");
+  });
+
+  it("says nothing at all when the node has history in the window", () => {
+    const document_ = loadContractFixture("single-module");
+    const handle = mountPanel();
+    open(handle, document_, "app/");
+
+    expect(notice(handle).hidden).toBe(true);
+    expect(notice(handle).textContent).toBe("");
+    expect(handle.element.querySelector(".p-row.is-empty")).toBeNull();
+  });
+
+  it("states a zero-history repository once per panel, not once per row (AC-3)", () => {
+    const document_ = loadContractFixture("zero-history");
+    const handle = mountPanel();
+    open(handle, document_, "core/scoring.py");
+
+    expect(notice(handle).dataset["kind"]).toBe("repo-zero-history");
+    expect(notice(handle).textContent).toContain(
+      "no commits in the last 365 days",
+    );
+
+    // Once. The sentence naming the repository-wide cause must not also be
+    // repeated down the metric rows — that repetition is the failure AC-3
+    // exists to prevent.
+    const occurrences = handle.element.querySelectorAll(".p-notice").length;
+    expect(occurrences).toBe(1);
+    expect(
+      handle.element.textContent!.match(/no commits in the last/g),
+    ).toHaveLength(1);
+  });
+
+  it("clears the notice when moving from a quiet node to a busy one", () => {
+    const base = loadContractFixture("single-module");
+    const quiet = base.nodes.find((node) => node.kind === "file")!;
+    const document_: AnalysisDocument = {
+      ...base,
+      nodes: base.nodes.map((node) =>
+        node.id === quiet.id ? { ...node, lastChangedAt: null } : node,
+      ),
+    };
+
+    const handle = mountPanel();
+    open(handle, document_, quiet.id);
+    expect(notice(handle).hidden).toBe(false);
+
+    open(handle, document_, "app/");
+    expect(notice(handle).hidden).toBe(true);
+    expect(notice(handle).dataset["kind"]).toBeUndefined();
   });
 });
 
