@@ -171,6 +171,13 @@ export class CanvasGraphEngine implements GraphEngine {
    * re-run (AC-4).
    */
   private scopeId: string | null = null;
+  /**
+   * The module the active scope holds unfolded, kept **separate** from
+   * `pinnedUnfolds`. A camera flight owns entries in that set and drops them
+   * when it lands; one shared entry for two owners is how searching inside
+   * your own scope used to collapse it.
+   */
+  private scopePin: string | null = null;
   private connectedOnly = false;
   /**
    * The scope currently offered as a way back, or null for "offer nothing"
@@ -252,6 +259,13 @@ export class CanvasGraphEngine implements GraphEngine {
     // On `globalThis`, not on the canvas: a canvas is not focusable, so a
     // canvas-level keydown never fires and Escape would silently do nothing.
     globalThis.addEventListener?.("keydown", this.onKeyDown);
+    // Story 5.4 listens to story 5.3's `filter` event rather than editing its
+    // setter — the two belong to different stories and different branches.
+    // With connected-only on, a layer change alters which nodes still have an
+    // edge in the frame, so the counts, the interaction state and the chrome
+    // all need to follow. Without this the scope bar kept stale numbers and a
+    // node removed by the resulting cascade stayed selected.
+    this.emitter.on("filter", this.onLayerFilterChanged);
 
     this.resize();
   }
@@ -493,13 +507,14 @@ export class CanvasGraphEngine implements GraphEngine {
       const abandoned = this.scopeId;
       this.lastScopeId = abandoned;
       this.scopeId = null;
-      // The pin `setScope` took out to reveal this module's files goes with
-      // it. Without this the abandoned module stays unfolded for the rest of
-      // the session, outside the semantic-zoom rule and holding a member
-      // layout nobody is looking at — every other way of leaving a scope hands
-      // it back to the viewport rule, and a search-driven exit must not be the
-      // odd one out.
-      this.releasePins([abandoned]);
+      // The hold `setScope` took to reveal this module's files goes with it.
+      // Without this the abandoned module stays unfolded for the rest of the
+      // session, outside the semantic-zoom rule and keeping a member layout
+      // nobody is looking at — every other way of leaving a scope hands the
+      // module back to the viewport rule, and a search-driven exit must not
+      // be the odd one out.
+      this.scopePin = null;
+      this.updateUnfolds();
       this.invalidateVisible();
       this.emitScope(id);
     }
@@ -583,6 +598,20 @@ export class CanvasGraphEngine implements GraphEngine {
    */
   private ensureUnfolded(moduleId: string): void {
     this.pinnedUnfolds.add(moduleId);
+    this.materialiseUnfold(moduleId);
+  }
+
+  /**
+   * Build a module's wake now, without claiming a pin on it.
+   *
+   * Split out for story 5.4: a scope holds a module open too, but through its
+   * **own** ownership rather than `pinnedUnfolds`. Sharing that set was a real
+   * defect — searching for a file inside the module you are already scoped to
+   * puts one entry in the set for two reasons, and the flight's cleanup then
+   * removed the scope's hold as well, collapsing the module and emptying the
+   * scope of the very files it promises to show.
+   */
+  private materialiseUnfold(moduleId: string): void {
     if (this.memberLayouts.has(moduleId)) return;
     const anchor = this.layout?.nodes.find((node) => node.id === moduleId);
     if (!anchor) return;
@@ -810,11 +839,17 @@ export class CanvasGraphEngine implements GraphEngine {
     // permission for them to be drawn. Members live in `memberLayouts`, which
     // the viewport rule fills — so without this, drilling in at overview zoom
     // shows the module and its neighbours and none of its files, which is the
-    // one thing the gesture exists to reveal. Pinned for the life of the
-    // scope through story 3.3's existing mechanism, and released on the way
-    // out so the viewport rule takes the module back.
-    if (next !== null) this.ensureUnfolded(next);
-    if (previous !== null && previous !== next) this.releasePins([previous]);
+    // one thing the gesture exists to reveal.
+    //
+    // Held through `scopePin`, NOT through `pinnedUnfolds`: a camera flight
+    // uses that set and releases it on landing, and one shared entry for two
+    // owners meant searching for a file inside the scope you are already in
+    // collapsed the module the moment the flight finished.
+    this.scopePin = next;
+    if (next !== null) this.materialiseUnfold(next);
+    // Re-apply the viewport rule, so a module this scope was holding open can
+    // collapse now that nothing holds it.
+    if (previous !== null && previous !== next) this.updateUnfolds();
     this.reconcileInteraction();
     this.emitScope(null);
   }
@@ -964,6 +999,22 @@ export class CanvasGraphEngine implements GraphEngine {
    * dismiss itself. Story 5.1's owner ceded the key explicitly, so with the
    * start-here panel open Escape still means exactly one thing.
    */
+  /**
+   * Story 5.3 changed the layer set. If connected-only is on, that changes
+   * which nodes still carry an edge in the frame — so recompute, drop any
+   * interaction state whose node the cascade removed, and publish, exactly as
+   * this story's own setters do.
+   *
+   * A no-op when connected-only is off and nothing is scoped: `visibleIds()`
+   * short-circuits and the layer filter is entirely 5.3's business.
+   */
+  private readonly onLayerFilterChanged = (): void => {
+    if (this.scopeId === null && !this.connectedOnly) return;
+    this.invalidateVisible();
+    this.reconcileInteraction();
+    this.emitScope(null);
+  };
+
   private readonly onKeyDown = (event: KeyboardEvent): void => {
     if (event.key !== "Escape") return;
     if (this.scopeId === null) return;
@@ -1015,6 +1066,10 @@ export class CanvasGraphEngine implements GraphEngine {
     // a flight in progress, and collapsing it would destroy the very node the
     // camera is flying toward.
     for (const moduleId of this.pinnedUnfolds) wanted.add(moduleId);
+    // The active scope holds its focus module open for the same reason and by
+    // its own right (story 5.4) — kept apart from the flight pins above so
+    // neither owner can release the other's hold.
+    if (this.scopePin !== null) wanted.add(this.scopePin);
     const transition = unfoldTransition(
       new Set(this.memberLayouts.keys()),
       wanted,
@@ -1091,6 +1146,7 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private clearUnfolds(): void {
     this.pinnedUnfolds.clear();
+    this.scopePin = null;
     for (const wake of this.memberLayouts.values()) wake.stop();
     this.memberLayouts.clear();
   }

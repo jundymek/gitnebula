@@ -114,6 +114,20 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
     );
   });
 
+  it("does NOT blame connected-only for a scope another filter emptied", () => {
+    // Fourth Codex pass: naming the wrong lever is worse than naming none —
+    // it sends the reader to a control that cannot bring their nodes back.
+    // Story 5.3's layer filter states its own cause in its own line.
+    const handle = bar();
+    handle.update({
+      ...IDLE,
+      scopeId: "libs/langgraph/",
+      connectedOnly: false,
+      scopeIsEmpty: true,
+    });
+    expect(text(handle.element, ".scope-bar-hidden")).toBe("");
+  });
+
   it("carries aria-pressed on the toggle (UX-DR13)", () => {
     const handle = bar();
     const toggle = handle.element.querySelector(".scope-bar-connected")!;

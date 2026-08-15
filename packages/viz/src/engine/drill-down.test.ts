@@ -234,6 +234,41 @@ describe("AC-3 — connected-only holds when the layer filter is on too", () => 
     }
   });
 
+  it("republishes counts and drops stale selection when layers change", () => {
+    // Fourth pass, P2: story 5.3's setter emits only `filter`, so this story's
+    // counts and interaction state did not follow a layer change — the scope
+    // bar kept stale numbers and a node removed by the resulting connectivity
+    // cascade stayed selected.
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+    engine.setConnectedOnly(true);
+
+    const seen: GraphEngineEventMap["scope"][] = [];
+    engine.on("scope", (payload) => seen.push(payload));
+    const before = engine.hiddenCount().byDegree;
+
+    engine.setLayerFilter(
+      engine.getLayerFilter().filter((layer) => layer !== "test"),
+    );
+
+    // The change is announced, not left for the next frame to discover, and
+    // what was announced matches what the engine now holds.
+    expect(seen.length).toBeGreaterThan(0);
+    expect(seen.at(-1)?.hiddenByDegree).toBe(engine.hiddenCount().byDegree);
+    expect(seen.at(-1)?.visibleCount).toBeGreaterThan(0);
+    // The count moves — in either direction. Hiding a layer takes nodes out of
+    // the pool this filter ranges over, so "hidden here" can legitimately go
+    // DOWN: those nodes are the layer filter's cause, not this one's, and each
+    // control counts only its own (the rule agreed with story 5.3's owner).
+    expect(engine.hiddenCount().byDegree).not.toBe(before);
+  });
+
   it("recomputes when the layer filter changes, without being told", () => {
     // The two filters belong to different stories and neither setter knows
     // about the other, so the visible set is keyed on the layer set rather
@@ -537,6 +572,37 @@ describe("AC-5 — search out of the scope leaves it and flies", () => {
     // unreleased pin is the only thing that could hold this open.
     engine.setCamera({ k: 1 });
     expect(engine.isUnfolded(focus)).toBe(false);
+  });
+
+  it("keeps the scope's files when a search lands INSIDE the scope", async () => {
+    // Fourth Codex pass, P1: the scope's hold and a camera flight's pin were
+    // one entry in one set. Searching for a file in the module you are already
+    // scoped to made the flight take that entry, and its landing released the
+    // scope's hold with it — collapsing the module and emptying the scope of
+    // the files it exists to show.
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setCamera({ k: 1 });
+    engine.setScope(focus);
+
+    const graph = buildGraph(langgraphShapedDocument());
+    const member = (graph.membersByModule.get(focus) ?? []).map(
+      (index) => graph.nodes[index]!.id,
+    )[0]!;
+
+    await engine.flyTo(member, { durationMs: 0 });
+    // The flight lands zoomed in, where the viewport rule keeps the module
+    // open on its own merits — so the defect is invisible here. It appears the
+    // moment the user zooms back out while still scoped: the flight's cleanup
+    // has already taken the scope's hold with it, and nothing is left holding
+    // the module open. That is the step that makes this test bite.
+    engine.setCamera({ k: 1 });
+    run(2);
+
+    expect(engine.getScope()).toBe(focus);
+    expect(engine.isUnfolded(focus)).toBe(true);
+    const drawn = new Set(scene().nodes.map((item) => item.node.id));
+    expect(drawn.has(member)).toBe(true);
   });
 
   it("keeps the scope when the target is inside it", async () => {

@@ -124,7 +124,12 @@ export function renderScopeBar(actions: ScopeBarActions): ScopeBarHandle {
           state.hiddenByDegree,
           "node",
         )} hidden: no dependencies`;
-      } else if (state.scopeIsEmpty) {
+      } else if (state.scopeIsEmpty && state.connectedOnly) {
+        // Only claimed when connected-only is actually on. A scope emptied by
+        // story 5.3's layer filter has a different cause, and naming the wrong
+        // lever is worse than naming none — it sends the reader to a control
+        // that will not bring their nodes back. That filter states its own
+        // cause in its own line, which is the whole point of UX-DR14.
         hiddenLine.hidden = false;
         hiddenLine.textContent =
           "every node in this scope is hidden by connected-only";
