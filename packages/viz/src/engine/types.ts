@@ -95,6 +95,42 @@ export interface GraphEngineEventMap {
     readonly hidden: number;
     readonly visible: number;
   };
+  /**
+   * The scope or the connected-only filter changed (story 5.4). Carries what
+   * chrome needs to state the current frame without asking the canvas
+   * anything: the active scope, the two hidden counts kept apart by cause
+   * (UX-DR14), and — when a search flew out of a scope — the scope it left,
+   * so the chrome can offer a one-click way back (AC-5).
+   */
+  scope: {
+    readonly scopeId: string | null;
+    readonly connectedOnly: boolean;
+    readonly hiddenByScope: number;
+    readonly hiddenByDegree: number;
+    /**
+     * How many nodes survive both filters. Zero while a scope is active is the
+     * empty state AC-3 has to name rather than show as a blank map — and it is
+     * knowledge only the engine has, since chrome never sees the scene (AD-5).
+     */
+    readonly visibleCount: number;
+    /**
+     * Set only on the transition where a search left an active scope; null
+     * otherwise. A silent no-op is not acceptable for AC-5, so the event has
+     * to be able to say *why* the scope went away.
+     */
+    readonly leftForId: string | null;
+    /**
+     * The scope the chrome should currently offer as a way back, or null for
+     * "offer nothing" (AC-5).
+     *
+     * Deliberately the **state of the offer**, not a breadcrumb of the last
+     * scope visited. Chrome mirrors this field and infers nothing: a offer
+     * derived in the chrome from "was there a previous scope" would greet a
+     * user who pressed Escape with "left the scope to reach your search
+     * result", and would survive a document being replaced.
+     */
+    readonly returnToScopeId: string | null;
+  };
 }
 
 export type GraphEngineEvent = keyof GraphEngineEventMap;
@@ -231,6 +267,43 @@ export interface GraphEngine {
    * exactly where they were and never re-runs the settle.
    */
   setLayerFilter(layers: readonly Layer[]): void;
+
+  // ---- scope and connected-only (story 5.4, FR-30) ---------------------
+
+  /** The module the map is scoped to, or null for the whole repository. */
+  getScope(): string | null;
+
+  /**
+   * Scope the map to a module, or leave the scope with `null`.
+   *
+   * A frame concern only: the simulation keeps running on the whole graph and
+   * positions do not move, which is what makes leaving instant and keeps the
+   * settle from being re-run (AC-4). Passing an id that is not a module in the
+   * document leaves the scope rather than scoping to nothing.
+   */
+  setScope(moduleId: string | null): void;
+
+  /** Whether degree-0 nodes are being dropped from the frame (AC-3). */
+  getConnectedOnly(): boolean;
+  setConnectedOnly(connectedOnly: boolean): void;
+
+  /**
+   * How many nodes each filter is currently hiding, kept apart by cause.
+   * Never a combined total — UX-DR14 asks a hidden state to name its cause,
+   * and the two counts are not additive.
+   */
+  hiddenCount(): {
+    readonly byScope: number;
+    readonly byDegree: number;
+    /**
+     * How many nodes actually survive every filter and can be drawn right now.
+     * Reported rather than left to the caller to subtract: the survivors are
+     * what is left after scope, connected-only, story 5.3's layers AND
+     * semantic zoom, and a caller doing the arithmetic from the two counts
+     * above would silently miss the last two.
+     */
+    readonly visible: number;
+  };
 
   // ---- export (story 3.5) ----------------------------------------------
 

@@ -835,3 +835,82 @@ canvas {
   display: block;
   color: var(--ink-dim);
 }
+
+/* ---- story 5.4: the scope bar (FR-30) ---------------------------------- */
+
+/* Top-centre: the one region left free by the legend (bottom-left), the hint
+   (bottom-right) and the detail panel (right). It states what the frame is
+   showing, so it has to be where the eye lands before reading the map. */
+.scope-bar {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(680px, calc(100% - 36px));
+  padding: 7px 12px;
+  border: 1px solid var(--line-hi);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  line-height: 1.7;
+}
+
+.scope-bar[hidden] {
+  display: none;
+}
+
+.scope-bar p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-bar-scope {
+  color: var(--ink);
+}
+
+/* The counts and the "you left the scope" line are secondary to the scope
+   itself — same relationship the hint overlay has to the map. */
+.scope-bar-hidden,
+.scope-bar-left {
+  color: var(--ink-mute);
+}
+
+.scope-bar button {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.scope-bar button[hidden] {
+  display: none;
+}
+
+.scope-bar button:hover {
+  border-color: var(--line-hi);
+  color: var(--ink);
+}
+
+/* The toggle reads its own state, so the pressed look is driven by the same
+   attribute a screen reader is (UX-DR13) — never by a separate class. */
+.scope-bar button[aria-pressed="true"] {
+  border-color: var(--backend);
+  color: var(--backend);
+}
+
+.scope-bar button:focus-visible {
+  outline: 2px solid var(--backend);
+  outline-offset: 2px;
+}

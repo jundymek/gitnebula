@@ -49,6 +49,7 @@ import {
   type RenderableNode,
   type RenderScene,
 } from "./render.js";
+import { inScopeIds, visibleNodeIds } from "./scope.js";
 import { seedStars, type Star } from "./starfield.js";
 import {
   unfoldTransition,
@@ -160,6 +161,52 @@ export class CanvasGraphEngine implements GraphEngine {
    */
   private cameraTakenByUser = false;
 
+  // ---- scope and connected-only (story 5.4, FR-30) -----------------------
+  /**
+   * The module the map is scoped to, or null for the whole repository.
+   *
+   * Deliberately **not** part of the layout: the simulation keeps running on
+   * the whole graph and no position moves when this changes, which is what
+   * makes entering and leaving a scope instant and keeps the settle from being
+   * re-run (AC-4).
+   */
+  private scopeId: string | null = null;
+  /**
+   * The module the active scope holds unfolded, kept **separate** from
+   * `pinnedUnfolds`. A camera flight owns entries in that set and drops them
+   * when it lands; one shared entry for two owners is how searching inside
+   * your own scope used to collapse it.
+   */
+  private scopePin: string | null = null;
+  private connectedOnly = false;
+  /**
+   * The scope currently offered as a way back, or null for "offer nothing"
+   * (AC-5).
+   *
+   * This is the **state of the offer**, not a breadcrumb of the last scope
+   * visited: it is set only when a search left a scope, and cleared when a
+   * scope becomes active again or a new document is loaded. Keeping it as a
+   * breadcrumb is what made the chrome claim a search had happened after the
+   * user simply pressed Escape.
+   */
+  private lastScopeId: string | null = null;
+  /**
+   * Cached visible-id set, or null when no filter is active. Rebuilt only when
+   * a filter or the document changes, never per frame: `buildScene` runs on
+   * every one of them and rebuilding a 2,100-id set at 60 fps is exactly the
+   * kind of cost this story exists to remove.
+   */
+  private visibleCache: ReadonlySet<string> | null = null;
+  /**
+   * What the cached set was computed for: this story's two filters **and**
+   * story 5.3's layer set. Keying on the layers rather than subscribing to
+   * their change is what keeps the two stories uncoupled — neither setter has
+   * to know the other exists.
+   */
+  private visibleCacheKey: string | null = null;
+  private hiddenByScope = 0;
+  private hiddenByDegree = 0;
+
   private frameHandle: number | null = null;
   private settleStartMs: number | null = null;
   private settleAnnounced = false;
@@ -205,7 +252,20 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.addEventListener("pointercancel", this.onPointerCancel);
     this.canvas.addEventListener("pointerleave", this.onPointerLeave);
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    // Story 5.4. `dblclick` is the drill-down gesture: the single click
+    // already means "select" (story 3.4) and AC-1 requires a distinct one.
+    this.canvas.addEventListener("dblclick", this.onDoubleClick);
     globalThis.addEventListener?.("resize", this.onWindowResize);
+    // On `globalThis`, not on the canvas: a canvas is not focusable, so a
+    // canvas-level keydown never fires and Escape would silently do nothing.
+    globalThis.addEventListener?.("keydown", this.onKeyDown);
+    // Story 5.4 listens to story 5.3's `filter` event rather than editing its
+    // setter — the two belong to different stories and different branches.
+    // With connected-only on, a layer change alters which nodes still have an
+    // edge in the frame, so the counts, the interaction state and the chrome
+    // all need to follow. Without this the scope bar kept stale numbers and a
+    // node removed by the resulting cascade stayed selected.
+    this.emitter.on("filter", this.onLayerFilterChanged);
 
     this.resize();
   }
@@ -215,6 +275,9 @@ export class CanvasGraphEngine implements GraphEngine {
   load(document: AnalysisDocument, seed?: number): void {
     this.seed = seed ?? seedFor(document.repo.name);
     this.graph = buildGraph(document, this.hotThreshold);
+    // The cache is keyed on nothing but "the graph and the filters" — a new
+    // document invalidates it even when the filters themselves are unchanged.
+    this.invalidateVisible();
     // Through the setters, not by assigning the fields: the interface says
     // these publish `select` and `highlight`, so clearing them silently makes
     // `load()` untruthful about its own state. Chrome mirrors both into its
@@ -224,6 +287,21 @@ export class CanvasGraphEngine implements GraphEngine {
     this.setSelected(null);
     this.setHovered(null, null);
     this.setIsolated(null);
+    // Story 5.4: a scope names a module of the *previous* document, so neither
+    // it nor a pending "return to scope" offer can survive a load — an offer
+    // pointing into a document that is gone is worse than no offer, and
+    // clicking it would no-op against the new graph forever.
+    //
+    // Assigned directly and published once, deliberately unlike the three
+    // setters above. Routing through `setScope(null)` cannot do this job: it
+    // returns early when no scope is active, so an offer left over from a
+    // search would be cleared in the field but never announced, and chrome
+    // would keep a stale button on screen. It also *repopulates* `lastScopeId`
+    // from the scope it just left, which is the opposite of what a load needs.
+    this.scopeId = null;
+    this.lastScopeId = null;
+    this.invalidateVisible();
+    this.emitScope(null);
     this.startSettle("load");
     this.startLoop();
   }
@@ -246,6 +324,14 @@ export class CanvasGraphEngine implements GraphEngine {
     this.cameraTakenByUser = false;
     this.layout?.stop();
     this.layout = new ModuleLayout(graph, this.rng);
+    // Story 5.4: `clearUnfolds()` above drops every hold, including the one an
+    // active scope has on its focus module — but a replay does not leave the
+    // scope, so the chrome goes on reporting it. Without this the scope
+    // survives with its member files gone, which is the promise of AC-1
+    // quietly broken by a button that is supposed to change nothing but the
+    // animation. Re-taken here; the wake is rebuilt by `updateUnfolds` once
+    // the new layout has settled and the anchor positions are real.
+    this.scopePin = this.scopeId;
     this.stars = seedStars(this.rng);
     this.camera = IDENTITY_CAMERA;
     this.settleStartMs = null;
@@ -285,7 +371,9 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
     this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.canvas.removeEventListener("wheel", this.onWheel);
+    this.canvas.removeEventListener("dblclick", this.onDoubleClick);
     globalThis.removeEventListener?.("resize", this.onWindowResize);
+    globalThis.removeEventListener?.("keydown", this.onKeyDown);
     this.cancelFlight();
     this.clearUnfolds();
     this.layout?.stop();
@@ -407,6 +495,73 @@ export class CanvasGraphEngine implements GraphEngine {
   async flyTo(id: string, options: FlyToOptions = {}): Promise<void> {
     const node = this.getNode(id);
     if (!node) return;
+
+    // Story 5.4 / AC-5, the maintainer's binding decision: a search that
+    // targets a node outside the active scope **leaves the scope and flies**.
+    // Search stays globally useful and the scope stays a view filter rather
+    // than a cage. A silent no-op — refusing to fly because the target is out
+    // of frame — is explicitly not acceptable. The chrome is told the scope
+    // was left and which one, so it can offer the way back.
+    // Membership is tested against the scope alone, not against the whole
+    // visible set: a node that is *in* scope but hidden by connected-only is
+    // not out of scope, and clearing the scope for it would lose the user's
+    // frame without putting the target on screen.
+    const graphForScope = this.graph;
+    if (
+      this.scopeId !== null &&
+      graphForScope &&
+      !inScopeIds(graphForScope, this.scopeId).has(id)
+    ) {
+      const abandoned = this.scopeId;
+      this.lastScopeId = abandoned;
+      this.scopeId = null;
+      // The hold `setScope` took to reveal this module's files goes with it.
+      // Without this the abandoned module stays unfolded for the rest of the
+      // session, outside the semantic-zoom rule and keeping a member layout
+      // nobody is looking at — every other way of leaving a scope hands the
+      // module back to the viewport rule, and a search-driven exit must not
+      // be the odd one out.
+      this.scopePin = null;
+      this.updateUnfolds();
+      this.invalidateVisible();
+      this.emitScope(id);
+    }
+
+    // The same rule, applied to this story's other filter. Connected-only can
+    // hide a search target on its own — a file with no dependencies is exactly
+    // the sort of thing someone searches for by name — and flying to a node
+    // that is not drawn is worse than the silent no-op AC-5 already forbids:
+    // the camera lands on empty space and the panel describes something the
+    // user cannot see.
+    //
+    // So the filter gives way, exactly as the scope does. It is turned off
+    // rather than suspended: it is a view the user chose, and quietly
+    // half-applying it would be a third state nobody asked for. The `scope`
+    // event carries the change, so the toggle in the chrome follows.
+    //
+    // Story 5.3's layer filter can hide a target too. That one is NOT touched
+    // here: it belongs to another story, and switching off somebody else's
+    // control from inside this code path is exactly the kind of surprise this
+    // comment exists to prevent. Reported rather than silently handled.
+    // Asked of THIS story's filters alone, deliberately not of `visibleIds()`.
+    // That set also carries story 5.3's layer restriction, so a target hidden
+    // only by a layer would have looked like a connected-only exclusion — and
+    // switching connected-only off could not have revealed it. Turning off a
+    // filter the user chose, to no effect, is a worse outcome than the one
+    // this whole branch exists to avoid.
+    const hiddenByConnectedOnly =
+      this.connectedOnly &&
+      graphForScope !== null &&
+      !visibleNodeIds(graphForScope, {
+        scopeId: this.scopeId,
+        connectedOnly: true,
+      }).visible.has(id);
+    if (hiddenByConnectedOnly) {
+      this.connectedOnly = false;
+      this.invalidateVisible();
+      this.emitScope(id);
+    }
+
     this.cameraTakenByUser = true;
 
     // Retire any flight already in the air BEFORE taking out this one's pin.
@@ -486,6 +641,20 @@ export class CanvasGraphEngine implements GraphEngine {
    */
   private ensureUnfolded(moduleId: string): void {
     this.pinnedUnfolds.add(moduleId);
+    this.materialiseUnfold(moduleId);
+  }
+
+  /**
+   * Build a module's wake now, without claiming a pin on it.
+   *
+   * Split out for story 5.4: a scope holds a module open too, but through its
+   * **own** ownership rather than `pinnedUnfolds`. Sharing that set was a real
+   * defect — searching for a file inside the module you are already scoped to
+   * puts one entry in the set for two reasons, and the flight's cleanup then
+   * removed the scope's hold as well, collapsing the module and emptying the
+   * scope of the very files it promises to show.
+   */
+  private materialiseUnfold(moduleId: string): void {
     if (this.memberLayouts.has(moduleId)) return;
     const anchor = this.layout?.nodes.find((node) => node.id === moduleId);
     if (!anchor) return;
@@ -557,12 +726,19 @@ export class CanvasGraphEngine implements GraphEngine {
     // and the nearest-centre tie-break below would otherwise hand every pick
     // inside a module's disc to the module — making an unfolded file
     // unhoverable and unclickable, which is exactly what AC-2 needs.
+    const visible = this.visibleIds();
     for (const item of [...this.memberNodes(), ...layout.nodes]) {
       const node = graph.nodes[item.graphIndex]!;
       // Story 5.3: a filtered-out node is not on screen, so it is not under
       // the pointer either. This is the half of AC-2 that dimming can never
       // give you — a dimmed node still catches every pick.
       if (!this.isLayerVisible(node)) continue;
+      // Story 5.4 / AC-6: a node the frame does not carry is absent, not
+      // dimmed — so it cannot be hovered, tooltipped or clicked either.
+      // Two independent guards, resolved as a union at the 5.3/5.4 rebase:
+      // either filter alone is enough to take a node out of the pointer's
+      // reach, and neither subsumes the other.
+      if (visible && !visible.has(node.id)) continue;
       const dx = item.x - world.x;
       const dy = item.y - world.y;
       const distance = Math.hypot(dx, dy);
@@ -668,6 +844,299 @@ export class CanvasGraphEngine implements GraphEngine {
     return this.memberLayouts.has(moduleId);
   }
 
+  // ---- scope and connected-only (story 5.4, FR-30) -----------------------
+
+  getScope(): string | null {
+    return this.scopeId;
+  }
+
+  /**
+   * Scope the map to a module, or leave the scope with `null` (AC-1, AC-2).
+   *
+   * Nothing here touches `layout`, `memberLayouts`, `rng` or the camera. That
+   * is the story's central claim: scoping filters the built frame, so a
+   * scope/unscope cycle leaves every node exactly where it was and the settle
+   * is never re-run (AC-4).
+   */
+  setScope(moduleId: string | null): void {
+    const graph = this.graph;
+    // An id that is not a module in this document leaves the scope rather
+    // than scoping to nothing — a frame of zero nodes is never what a caller
+    // meant, and a silent empty map is the worst possible answer.
+    const next =
+      moduleId !== null &&
+      graph &&
+      graph.nodes[graph.indexById.get(moduleId) ?? -1]?.kind === "module"
+        ? moduleId
+        : null;
+    if (this.scopeId === next) return;
+    const previous = this.scopeId;
+    // Entering a scope answers the offer, so it goes. Leaving one by hand does
+    // NOT create an offer: only AC-5's search transition does, and it sets the
+    // field itself. An ordinary exit that left a breadcrumb behind is what had
+    // the chrome announce a search the user never ran.
+    if (next !== null) this.lastScopeId = null;
+    this.scopeId = next;
+    this.invalidateVisible();
+    // A scope promises the focus module's **member files**, not merely
+    // permission for them to be drawn. Members live in `memberLayouts`, which
+    // the viewport rule fills — so without this, drilling in at overview zoom
+    // shows the module and its neighbours and none of its files, which is the
+    // one thing the gesture exists to reveal.
+    //
+    // Held through `scopePin`, NOT through `pinnedUnfolds`: a camera flight
+    // uses that set and releases it on landing, and one shared entry for two
+    // owners meant searching for a file inside the scope you are already in
+    // collapsed the module the moment the flight finished.
+    this.scopePin = next;
+    if (next !== null) this.materialiseUnfold(next);
+    // Re-apply the viewport rule, so a module this scope was holding open can
+    // collapse now that nothing holds it.
+    if (previous !== null && previous !== next) this.updateUnfolds();
+    this.reconcileInteraction();
+    this.emitScope(null);
+  }
+
+  getConnectedOnly(): boolean {
+    return this.connectedOnly;
+  }
+
+  setConnectedOnly(connectedOnly: boolean): void {
+    if (this.connectedOnly === connectedOnly) return;
+    this.connectedOnly = connectedOnly;
+    this.invalidateVisible();
+    this.reconcileInteraction();
+    this.emitScope(null);
+  }
+
+  /**
+   * Drop hover, selection and isolate when their node has just left the frame.
+   *
+   * Without this the panel keeps describing a node that is no longer on the
+   * map and a stale hover chain keeps lighting nodes that are. Routed through
+   * the existing setters, so `hover` / `select` / `highlight` fire exactly as
+   * chrome already expects — this story adds no semantics to those three. The
+   * layer filter (5.3) does the same thing for the same reason; the two are
+   * deliberately consistent.
+   */
+  private reconcileInteraction(): void {
+    const visible = this.visibleIds();
+    if (!visible) return;
+    if (this.hoveredId !== null && !visible.has(this.hoveredId)) {
+      this.setHovered(null);
+    }
+    if (this.selectedId !== null && !visible.has(this.selectedId)) {
+      this.setIsolated(null);
+      this.setSelected(null);
+    }
+    // Isolate is checked on its own, not merely as a side effect of dropping
+    // the selection. `setIsolated` is a public operation independent of
+    // `setSelected`, so isolate can outlive a selection that is null or that
+    // points at a node still on screen — and a highlight focused on a node the
+    // filter just removed keeps dimming everything around nothing.
+    if (this.isolatedId !== null && !visible.has(this.isolatedId)) {
+      this.setIsolated(null);
+    }
+  }
+
+  hiddenCount(): {
+    readonly byScope: number;
+    readonly byDegree: number;
+    readonly visible: number;
+  } {
+    // Recomputed lazily so a caller asking before the first frame gets the
+    // truth rather than the zeroes the fields were initialised with.
+    const visible = this.visibleIds();
+    return {
+      byScope: this.hiddenByScope,
+      byDegree: this.hiddenByDegree,
+      // The survivor count is reported, never left to the caller to subtract:
+      // nodes also leave the frame through story 5.3's layers and through
+      // semantic zoom, and neither of those appears in the two counts above.
+      visible: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+    };
+  }
+
+  /** The scope a search last flew out of, for the chrome's way back (AC-5). */
+  getLastScope(): string | null {
+    return this.lastScopeId;
+  }
+
+  /**
+   * The ids the frame may carry, or **null when no filter is active**.
+   *
+   * The null fast path matters: with nothing filtered there is no set to build
+   * and no membership test per node, so an unscoped map costs exactly what it
+   * cost before this story. `buildScene` and `pick` both read this, which is
+   * what makes "absent, not dimmed" true for the pointer as well as for the
+   * eye (AC-6).
+   */
+  private visibleIds(): ReadonlySet<string> | null {
+    const graph = this.graph;
+    if (!graph) return null;
+    if (this.scopeId === null && !this.connectedOnly) {
+      this.hiddenByScope = 0;
+      this.hiddenByDegree = 0;
+      return null;
+    }
+
+    // Connected-only asks "does this node have an edge **in the frame**", and
+    // story 5.3's layer filter narrows that frame too. So its exclusions are
+    // fed in as a restriction — otherwise a file whose only dependency sits in
+    // a hidden layer survives this filter and is drawn edgeless anyway.
+    //
+    // The layer filter belongs to another story and this one must not reach
+    // into its setter to invalidate a cache, so the cache is keyed on the
+    // active layers instead: a change there produces a different key and the
+    // set is rebuilt on the next read, with no coupling in either direction.
+    const layers = this.getLayerFilter();
+    const restrictTo =
+      layers.length === ALL_LAYERS.length
+        ? undefined
+        : new Set(
+            graph.nodes
+              .filter((node) => this.isLayerVisible(node))
+              .map((node) => node.id),
+          );
+    // What the scene can actually draw right now: the top-level nodes, plus
+    // the members of whichever modules are unfolded (ADR-0006). A file inside
+    // a collapsed module has no position, so `buildScene` drops every edge
+    // touching it — counting those edges would mark a node connected and then
+    // draw it with nothing attached.
+    //
+    // Only computed while connected-only is on, because it is the only filter
+    // that asks about edges; scoping alone does not care.
+    const materialised = this.connectedOnly
+      ? this.materialisedIds(graph)
+      : undefined;
+    const unfoldKey = this.connectedOnly
+      ? [...this.memberLayouts.keys()].sort().join(",")
+      : "";
+    const key = `${this.scopeId ?? ""}|${this.connectedOnly}|${layers.join(",")}|${unfoldKey}`;
+    if (this.visibleCache && this.visibleCacheKey === key) {
+      return this.visibleCache;
+    }
+    const result = visibleNodeIds(graph, {
+      materialised,
+      scopeId: this.scopeId,
+      connectedOnly: this.connectedOnly,
+      restrictTo,
+    });
+    this.visibleCacheKey = key;
+    this.visibleCache = result.visible;
+    this.hiddenByScope = result.hiddenByScope;
+    this.hiddenByDegree = result.hiddenByDegree;
+    return this.visibleCache;
+  }
+
+  private invalidateVisible(): void {
+    this.visibleCache = null;
+  }
+
+  /**
+   * Every id the scene can give a position to right now: the top-level nodes
+   * the module layout carries, plus the members of the unfolded modules.
+   *
+   * This is the same set `buildScene` can place, which is the point — the
+   * connectivity question has to be asked about the frame the user is looking
+   * at, not about the document.
+   */
+  private materialisedIds(graph: Graph): ReadonlySet<string> {
+    const ids = new Set<string>();
+    for (const index of graph.topLevelIndices) {
+      ids.add(graph.nodes[index]!.id);
+    }
+    for (const moduleId of this.memberLayouts.keys()) {
+      for (const index of graph.membersByModule.get(moduleId) ?? []) {
+        ids.add(graph.nodes[index]!.id);
+      }
+    }
+    return ids;
+  }
+
+  /** Publish the frame's filter state. `leftForId` is set only for AC-5. */
+  private emitScope(leftForId: string | null): void {
+    const counts = this.hiddenCount();
+    const visible = this.visibleIds();
+    this.emitter.emit("scope", {
+      scopeId: this.scopeId,
+      connectedOnly: this.connectedOnly,
+      hiddenByScope: counts.byScope,
+      hiddenByDegree: counts.byDegree,
+      visibleCount: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      leftForId,
+      returnToScopeId: this.lastScopeId,
+    });
+  }
+
+  /**
+   * The drill-down gesture (AC-1, AC-2). A module under the pointer scopes to
+   * it; the focus module again, or empty space, leaves the scope. Both
+   * directions are the same gesture, which is what makes the exit as
+   * discoverable as the entry.
+   */
+  private readonly onDoubleClick = (event: MouseEvent): void => {
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.pick({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    // A file is not an exit. Scoping is what puts member files on screen in
+    // the first place, so double-clicking one is a likely thing to do by
+    // accident — and throwing the user out of the scope for it contradicts
+    // the gesture this method documents: empty space, or the focus module
+    // again. A file simply has no drill-down meaning, so nothing happens.
+    if (hit && hit.kind !== "module") return;
+    if (!hit || hit.id === this.scopeId) {
+      this.setScope(null);
+      return;
+    }
+    this.setScope(hit.id);
+  };
+
+  /**
+   * `Escape` leaves the scope (AC-2).
+   *
+   * Skipped while the keystroke is destined for a field: `chrome/search.ts`
+   * already owns Escape inside its input, where it closes the result list, and
+   * two handlers racing for one key is how a search box stops being able to
+   * dismiss itself. Story 5.1's owner ceded the key explicitly, so with the
+   * start-here panel open Escape still means exactly one thing.
+   */
+  /**
+   * Story 5.3 changed the layer set. If connected-only is on, that changes
+   * which nodes still carry an edge in the frame — so recompute, drop any
+   * interaction state whose node the cascade removed, and publish, exactly as
+   * this story's own setters do.
+   *
+   * A no-op when connected-only is off and nothing is scoped: `visibleIds()`
+   * short-circuits and the layer filter is entirely 5.3's business.
+   */
+  private readonly onLayerFilterChanged = (): void => {
+    if (this.scopeId === null && !this.connectedOnly) return;
+    this.invalidateVisible();
+    this.reconcileInteraction();
+    this.emitScope(null);
+  };
+
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") return;
+    if (this.scopeId === null) return;
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+    }
+    this.setScope(null);
+  };
+
   /**
    * Bring the unfolded set in line with the camera. Called on every camera
    * change, which is what makes unfold a *pan*-triggered event and not only a
@@ -701,6 +1170,10 @@ export class CanvasGraphEngine implements GraphEngine {
     // a flight in progress, and collapsing it would destroy the very node the
     // camera is flying toward.
     for (const moduleId of this.pinnedUnfolds) wanted.add(moduleId);
+    // The active scope holds its focus module open for the same reason and by
+    // its own right (story 5.4) — kept apart from the flight pins above so
+    // neither owner can release the other's hold.
+    if (this.scopePin !== null) wanted.add(this.scopePin);
     const transition = unfoldTransition(
       new Set(this.memberLayouts.keys()),
       wanted,
@@ -731,6 +1204,21 @@ export class CanvasGraphEngine implements GraphEngine {
     }
     if (entered.length > 0) {
       this.emitter.emit("unfold", { moduleIds: entered });
+    }
+
+    // Story 5.4. Unfolding or collapsing changes which nodes the scene can
+    // place, and connected-only judges connectivity on exactly that — so a
+    // module crossing the zoom threshold changes the visible set as surely as
+    // toggling a filter does. Treated the same way: recompute, drop any
+    // interaction state whose node has gone, and publish.
+    //
+    // Only while a filter of this story's is active; otherwise semantic zoom
+    // is nobody's business but ADR-0006's, and this must not add an event to
+    // the ordinary pan-and-zoom path.
+    if (this.scopeId !== null || this.connectedOnly) {
+      this.invalidateVisible();
+      this.reconcileInteraction();
+      this.emitScope(null);
     }
   }
 
@@ -777,6 +1265,7 @@ export class CanvasGraphEngine implements GraphEngine {
 
   private clearUnfolds(): void {
     this.pinnedUnfolds.clear();
+    this.scopePin = null;
     for (const wake of this.memberLayouts.values()) wake.stop();
     this.memberLayouts.clear();
   }
@@ -1063,6 +1552,27 @@ export class CanvasGraphEngine implements GraphEngine {
     // allocates nothing extra per frame.
     const filtered = this.applyLayerFilter(nodes, edges);
 
+    // ---- story 5.4: scope / connected-only narrowing ----------------------
+    // Applied over the arrays 5.3 just produced, which is the composition
+    // order its owner and I agreed before either of us wrote a line: two
+    // successive narrowings compose, two rewrites of the same lines do not.
+    // It only ever removes; it never rebuilds what the layer filter dropped.
+    // An edge survives only when BOTH ends do — a half-visible edge would
+    // point at a node that is not on screen.
+    //
+    // `visibleIds()` returns null when neither of this story's filters is
+    // active, and then the arrays pass straight through with no allocation,
+    // exactly as the layer filter's all-on case does.
+    const visible = this.visibleIds();
+    const scoped = visible
+      ? {
+          nodes: filtered.nodes.filter((item) => visible.has(item.node.id)),
+          edges: filtered.edges.filter(
+            (edge) => visible.has(edge.sourceId) && visible.has(edge.targetId),
+          ),
+        }
+      : filtered;
+
     // Isolate outranks hover, and hover outranks the chain still being held
     // from the node the pointer just left (story 5.2, AC-3).
     const hoverId = this.hoveredId ?? this.carriedHover(timeMs);
@@ -1073,8 +1583,8 @@ export class CanvasGraphEngine implements GraphEngine {
       viewport: this.viewport,
       camera: this.camera,
       stars: this.stars,
-      nodes: filtered.nodes,
-      edges: filtered.edges,
+      nodes: scoped.nodes,
+      edges: scoped.edges,
       mode: this.mode,
       timeMs,
       reducedMotion: this.reducedMotion,
