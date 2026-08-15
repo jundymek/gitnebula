@@ -1,9 +1,11 @@
 # Recording the README demo
 
-`docs/assets/demo.gif` is the README's 30-second demo. It is a recording of the
-real product — the map gitnebula draws of **this** repository — and it is
-expected to be re-recorded whenever the viewer changes enough that the GIF stops
-being an honest picture of it.
+`docs/assets/demo.gif` is the README's demo. It is a recording of the real
+product — the map gitnebula draws of **this** repository — and it is expected to
+be re-recorded whenever the viewer changes enough that the GIF stops being an
+honest picture of it. Epic 5 was exactly such a change: the pre-Epic-5 take
+opened by hovering a module so the rest of the map went dark, which is the
+behaviour story 5.2 removed.
 
 In-tool recording is a deliberate non-goal (brief §6). The recorder is external:
 Playwright, which is already a `viz` devDependency for the performance harness.
@@ -12,39 +14,59 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/4.3-repo-quality`, gitnebula analyzing its own checkout (295 nodes, 360 edges, 60 co-change pairs) |
+| Recorded from | `story/5.8-repo-docs-refresh`, gitnebula analysing a **fresh clone** of its own repository |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
-| Raw length | ~25 s of WebM |
-| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering — 3.7 MiB |
+| Raw length | ~28 s of WebM |
+| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering |
 
 The committed GIF is the ffmpeg encode of that WebM; the WebM itself is not
 committed.
 
+**Record against a clean clone, not against your working tree.** A working tree
+carries build output, generated fixtures and whatever scratch files the current
+branch happens to have, and every one of them becomes a node on the map. The
+first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
+recipe below clones the repository into a temp directory for exactly this
+reason, which is also why the README's sample run reports 368 nodes where the
+same command in a live worktree reports over 400.
+
 ## The scripted sequence
 
-`scripts/record-demo.mjs` drives the served map with real pointer, wheel and
-keyboard events, in this order:
+`scripts/record-demo.mjs` drives the served map with real pointer, keyboard and
+click events, in this order. The order is the product's onboarding path, not a
+tour of the feature list.
 
-1. **Launch and settle** — wait for the engine's `settled` event, so the
-   opening seconds are the force layout finding its shape (FR-12).
-2. **Hover a module** (`packages/`) — the dependency chain lights up and
-   everything else dims.
-3. **Click it** — the panel shows files, LOC, 90-day churn, authors, last
-   change and the top co-changing modules; then close the panel.
-4. **Zoom past `UNFOLD_ZOOM`** — 16 wheel steps at the module, which opens it
-   into its files with labels.
-5. **Hover a file** — the file with the widest one-hop chain in that module, so
-   its imports are visible against the dimmed rest.
-6. **Search** — click the box, type `pipeline`, take the first result; the
-   camera flies to it and the panel opens on arrival.
-7. **Heatmap** — switch view mode, hold on the churn colouring.
-8. **PNG export** — click `↓ png` and wait for the download the viewer starts.
-9. **Back to structure** — end on the map the visitor first saw.
+1. **Launch and settle** — wait for the engine's `settled` event, so the opening
+   seconds are the force layout finding its shape (FR-12).
+2. **The start-here panel** — the map's first state (5.1, UX-DR12): a reading
+   order in three categories rather than an inventory of everything.
+3. **Take the first entry** — the camera flies to that file and its detail panel
+   opens on arrival, through story 3.3's existing `flyTo` + `select` path. The
+   panel is held long enough to read the history rows and the window they
+   carry (5.5).
+4. **Drill down** — `dblclick` on `packages/` scopes the map to that module,
+   its files and its direct neighbours (5.4). The module's own panel is closed
+   straight away: this beat is about what the canvas carries.
+5. **Hover a file in the scope** — the file with the widest one-hop chain, so
+   the chain emphasis is actually visible. The rest of the map settles back
+   rather than going dark (5.2).
+6. **Connected only** — the files carrying no import edge leave the frame, and
+   the chrome states how many went (UX-DR14). Toggled back off.
+7. **`Escape`** — leaves the scope. The map returns exactly as it was, because
+   scoping never re-ran the layout.
+8. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
+   then switched back on and restored in place.
+9. **Heatmap** — the same map coloured by churn.
+10. **PNG export** — click `↓ png` and wait for the download the viewer starts.
+11. **Back to structure** — end on the map the visitor first saw.
 
 Node positions are resolved at runtime through the engine's public `pick()`,
 never hardcoded: the layout is seeded per repository, so fixed coordinates would
 point at empty space the moment the demo is re-recorded on another checkout.
+The file hovered in step 5 is chosen the same way — by asking the engine which
+on-screen file has the widest chain — because a file with two imports
+demonstrates nothing.
 
 ## Re-recording
 
@@ -52,10 +74,14 @@ point at empty space the moment the demo is re-recorded on another checkout.
 pnpm install
 pnpm build
 
-# terminal 1 — serve the real map of this repository
-node packages/cli/dist/bin/gitnebula.js . --no-open
+# a clean checkout to record, so no build output or scratch file is on the map
+git clone https://github.com/jundymek/gitnebula /tmp/gitnebula-clean
 
-# terminal 2 — record it (DEMO_URL must match the port printed above).
+# terminal 1 — serve the map of that clean checkout
+node packages/cli/dist/bin/gitnebula.js /tmp/gitnebula-clean --no-open
+
+# terminal 2 — record it (DEMO_URL must match the port printed above; the
+# server takes the next free port when 4137 is busy).
 # The script prints the path of the WebM it wrote: DEMO_OUT/demo.webm, one
 # fixed name, so re-recording into the same directory replaces the take
 # instead of leaving a second file behind for the glob below to trip on.
@@ -71,7 +97,7 @@ ffmpeg -y -i /tmp/gitnebula-demo/demo.webm \
 ```
 
 Overridable inputs: `DEMO_URL`, `DEMO_OUT`, `DEMO_MODULE` (default `packages/`)
-and `DEMO_QUERY` (default `pipeline`).
+and `DEMO_LAYER` (default `test`, the layer the filter beat switches off).
 
 ### Keeping the asset small
 

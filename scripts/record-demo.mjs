@@ -1,15 +1,22 @@
 /**
- * Records the README's 30-second demo (story 4.3, FR-25).
+ * Records the README's demo (story 4.3, FR-25; re-cut for Epic 5 by story 5.8).
  *
  * The recorder is Playwright — already a devDependency of `viz` for the
  * performance harness — driving the *real* served map with real pointer,
  * wheel and keyboard events, so what the GIF shows is what the product does.
  * Nothing here ships in the bundle; it is dev tooling, like `perf/`.
  *
+ * The tour follows the **onboarding-first** flow the epic rebuilt the product
+ * around: the map opens on an answer (the start-here panel), the reader takes
+ * a file from it, and then narrows the map — drill-down, connected-only, layer
+ * filter — rather than staring at everything at once. The pre-Epic-5 cut
+ * opened by hovering a module to dim the other 647 nodes, which is precisely
+ * the behaviour story 5.2 removed.
+ *
  * Usage (see docs/recording-demo.md for the full recipe):
  *
  *     pnpm build
- *     node packages/cli/dist/gitnebula.js . --no-open     # terminal 1
+ *     node packages/cli/dist/bin/gitnebula.js . --no-open    # terminal 1
  *     DEMO_URL=http://127.0.0.1:4137/ node scripts/record-demo.mjs
  *
  * It writes `demo.webm` into `DEMO_OUT` (default: a fresh temp dir) and prints
@@ -35,10 +42,10 @@ const OUT_DIR =
   process.env.DEMO_OUT ?? mkdtempSync(path.join(tmpdir(), "gitnebula-demo-"));
 /** The recording frame. 720p keeps the committed GIF small enough to inline. */
 const SIZE = { width: 1280, height: 720 };
-/** Which module the tour opens and unfolds. */
+/** Which module the tour drills into. */
 const TOUR_MODULE = process.env.DEMO_MODULE ?? "packages/";
-/** What the search demo types, and which result it takes. */
-const SEARCH_QUERY = process.env.DEMO_QUERY ?? "pipeline";
+/** Which layer the filter demo switches off and back on. */
+const TOUR_LAYER = process.env.DEMO_LAYER ?? "test";
 
 const HANDLE = "__gitnebula";
 
@@ -72,34 +79,33 @@ async function screenPointOf(page, id) {
 }
 
 /**
- * Click a node and wait for its panel. The point is re-resolved on every
- * attempt: hovering wakes the layout (3.3), so a node can drift a few pixels
- * between the scan that found it and the click that wants it.
+ * The file with the widest one-hop chain among those currently on screen,
+ * optionally restricted to one module's members. Hovering *that* file is what
+ * makes story 5.2's encoding readable on video: a file with two imports shows
+ * almost nothing.
  */
-async function clickNode(page, id, attempts = 4) {
-  for (let attempt = 0; attempt < attempts; attempt += 1) {
-    const point = await screenPointOf(page, id);
-    if (!point) throw new Error(`node not on screen: ${id}`);
-    await page.mouse.click(point.x, point.y);
-    try {
-      await page
-        .locator("#panel")
-        .waitFor({ state: "visible", timeout: 2_000 });
-      return point;
-    } catch {
-      /* the node moved under the cursor — scan again */
-    }
-  }
-  throw new Error(`clicking ${id} never opened the panel`);
-}
-
-/** Wheel in `steps` times at a point, slowly enough to read as a zoom. */
-async function zoomIn(page, point, steps) {
-  await page.mouse.move(point.x, point.y);
-  for (let i = 0; i < steps; i += 1) {
-    await page.mouse.wheel(0, -120);
-    await wait(70);
-  }
+async function widestChainFileOnScreen(page, moduleId) {
+  return page.evaluate(
+    ([handle, parent]) => {
+      const engine = globalThis[handle]?.engine;
+      const canvas = document.getElementById("stage");
+      if (!engine || !canvas) return null;
+      const rect = canvas.getBoundingClientRect();
+      let best = null;
+      for (let y = 0; y < canvas.clientHeight; y += 3) {
+        for (let x = 0; x < canvas.clientWidth; x += 3) {
+          const node = engine.pick({ x, y });
+          if (!node || node.kind !== "file") continue;
+          if (parent && node.parent !== parent) continue;
+          const chain = engine.chainOf(node.id).length;
+          if (!best || chain > best.chain)
+            best = { x: x + rect.x, y: y + rect.y, chain };
+        }
+      }
+      return best;
+    },
+    [HANDLE, moduleId ?? null],
+  );
 }
 
 async function main() {
@@ -123,72 +129,82 @@ async function main() {
   await page.evaluate((key) => globalThis[key].settled, HANDLE);
   await wait(1_200);
 
-  // 1. Hover a module — the dependency chain lights up, the rest dims.
-  const modulePoint = await screenPointOf(page, TOUR_MODULE);
-  if (!modulePoint) throw new Error(`module not on screen: ${TOUR_MODULE}`);
-  await page.mouse.move(modulePoint.x, modulePoint.y, { steps: 24 });
-  await wait(1_600);
-
-  // 2. Click it — the panel carries the git signals.
-  const clicked = await clickNode(page, TOUR_MODULE);
+  // 1. The map opens on an answer: the start-here panel (5.1, UX-DR12).
+  const startHere = page.locator("#start-here");
+  await startHere.waitFor({ state: "visible", timeout: 10_000 });
   await wait(2_600);
-  await page.locator("#panel .p-close").click();
-  await wait(500);
 
-  // 3. Zoom past UNFOLD_ZOOM — the module opens into its files.
-  await zoomIn(page, clicked, 16);
-  await wait(1_400);
-
-  // 4. Hover a file — one file's imports, isolated out of 300 nodes.
-  const filePoint = await page.evaluate(
-    ([handle, moduleId]) => {
-      const engine = globalThis[handle]?.engine;
-      const canvas = document.getElementById("stage");
-      if (!engine || !canvas) return null;
-      const rect = canvas.getBoundingClientRect();
-      let best = null;
-      for (let y = 0; y < canvas.clientHeight; y += 3) {
-        for (let x = 0; x < canvas.clientWidth; x += 3) {
-          const node = engine.pick({ x, y });
-          if (node?.kind === "file" && node.parent === moduleId) {
-            const chain = engine.chainOf(node.id).length;
-            if (!best || chain > best.chain)
-              best = { x: x + rect.x, y: y + rect.y, chain };
-          }
-        }
-      }
-      return best;
-    },
-    [HANDLE, TOUR_MODULE],
-  );
-  if (filePoint) {
-    await page.mouse.move(filePoint.x, filePoint.y, { steps: 24 });
-    await wait(2_000);
-  }
-
-  // 5. Search and fly to a result.
-  const search = page.getByRole("combobox", {
-    name: "search files and modules",
-  });
-  await search.click();
-  await search.pressSequentially(SEARCH_QUERY, { delay: 110 });
-  await wait(900);
-  await page.locator("li.search-result").first().hover();
-  await wait(300);
-  await page.locator("li.search-result").first().click();
-  await wait(2_800);
+  // 2. Take the first entry of the first category — a reading order, not an
+  //    inventory. The camera flies there and the detail panel opens on arrival
+  //    through story 3.3's existing flyTo + select path.
+  const entry = page.locator("#start-here .sh-entry").first();
+  await entry.hover();
+  await wait(600);
+  await entry.click();
+  await page.locator("#panel").waitFor({ state: "visible", timeout: 10_000 });
+  // The panel is where the git signals live: churn, authors and last change,
+  // each labelled with the window they cover (5.5).
+  await wait(3_000);
   await page.locator("#panel .p-close").click();
   await wait(400);
 
-  // 6. Heatmap mode — the same map coloured by churn.
-  await page.locator("#mode-heat").click();
-  await wait(2_600);
+  // 3. Drill down into a module (5.4). Double-click is the gesture — the
+  //    single click already means "select". The scope pins the module open,
+  //    so its files appear without touching the wheel.
+  const modulePoint = await screenPointOf(page, TOUR_MODULE);
+  if (!modulePoint) throw new Error(`module not on screen: ${TOUR_MODULE}`);
+  await page.mouse.move(modulePoint.x, modulePoint.y, { steps: 20 });
+  await page.mouse.dblclick(modulePoint.x, modulePoint.y);
+  await page
+    .locator("#scope-bar")
+    .waitFor({ state: "visible", timeout: 10_000 });
+  // A double-click is also a click, so the module's own panel opens over the
+  // map. Close it: the point of this beat is what the *canvas* now carries.
+  const modulePanel = page.locator("#panel .p-close");
+  if (await modulePanel.isVisible()) {
+    await modulePanel.click();
+    await wait(300);
+  }
+  await wait(1_600);
 
-  // 7. PNG export — the button reports its own progress.
+  // 4. Hover a file inside the scope. The chain brightens and gains a ring;
+  //    the rest of the map settles back rather than going dark (5.2).
+  const filePoint = await widestChainFileOnScreen(page, TOUR_MODULE);
+  if (filePoint) {
+    await page.mouse.move(filePoint.x, filePoint.y, { steps: 24 });
+    await wait(2_200);
+  }
+
+  // 5. Connected-only: the files carrying no import edge at all leave the
+  //    frame, and the chrome states how many went (5.4, UX-DR14).
+  const connected = page.locator("#scope-bar .scope-bar-connected");
+  await connected.click();
+  await wait(2_000);
+  await connected.click();
+  await wait(600);
+
+  // 6. Escape leaves the scope — the whole map is back where it was, because
+  //    scoping never re-ran the layout.
+  await page.keyboard.press("Escape");
+  await wait(1_400);
+
+  // 7. Layer filter: a layer switched off is not drawn at all, not dimmed
+  //    (5.3). Switching it back on restores it in place.
+  const layerToggle = page.locator(`#layer-${TOUR_LAYER}`);
+  await layerToggle.click();
+  await wait(2_000);
+  await layerToggle.click();
+  await wait(900);
+
+  // 8. Heatmap mode — the same map coloured by churn instead of by layer.
+  await page.locator("#mode-heat").click();
+  await wait(2_400);
+
+  // 9. PNG export — the button reports its own progress.
   const download = page.waitForEvent("download", { timeout: 30_000 });
   await page.locator("#export").click();
   await download;
-  await wait(1_800);
+  await wait(1_600);
 
   await page.locator("#mode-structure").click();
   await wait(1_500);
