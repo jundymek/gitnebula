@@ -49,6 +49,7 @@ import {
   type RenderableNode,
   type RenderScene,
 } from "./render.js";
+import { inScopeIds, visibleNodeIds } from "./scope.js";
 import { seedStars, type Star } from "./starfield.js";
 import {
   unfoldTransition,
@@ -160,6 +161,32 @@ export class CanvasGraphEngine implements GraphEngine {
    */
   private cameraTakenByUser = false;
 
+  // ---- scope and connected-only (story 5.4, FR-30) -----------------------
+  /**
+   * The module the map is scoped to, or null for the whole repository.
+   *
+   * Deliberately **not** part of the layout: the simulation keeps running on
+   * the whole graph and no position moves when this changes, which is what
+   * makes entering and leaving a scope instant and keeps the settle from being
+   * re-run (AC-4).
+   */
+  private scopeId: string | null = null;
+  private connectedOnly = false;
+  /**
+   * The scope a search flew out of, kept so the chrome can offer a one-click
+   * way back (AC-5). Survives the scope being cleared — that is its whole job.
+   */
+  private lastScopeId: string | null = null;
+  /**
+   * Cached visible-id set, or null when no filter is active. Rebuilt only when
+   * a filter or the document changes, never per frame: `buildScene` runs on
+   * every one of them and rebuilding a 2,100-id set at 60 fps is exactly the
+   * kind of cost this story exists to remove.
+   */
+  private visibleCache: ReadonlySet<string> | null = null;
+  private hiddenByScope = 0;
+  private hiddenByDegree = 0;
+
   private frameHandle: number | null = null;
   private settleStartMs: number | null = null;
   private settleAnnounced = false;
@@ -205,7 +232,13 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.addEventListener("pointercancel", this.onPointerCancel);
     this.canvas.addEventListener("pointerleave", this.onPointerLeave);
     this.canvas.addEventListener("wheel", this.onWheel, { passive: false });
+    // Story 5.4. `dblclick` is the drill-down gesture: the single click
+    // already means "select" (story 3.4) and AC-1 requires a distinct one.
+    this.canvas.addEventListener("dblclick", this.onDoubleClick);
     globalThis.addEventListener?.("resize", this.onWindowResize);
+    // On `globalThis`, not on the canvas: a canvas is not focusable, so a
+    // canvas-level keydown never fires and Escape would silently do nothing.
+    globalThis.addEventListener?.("keydown", this.onKeyDown);
 
     this.resize();
   }
@@ -215,6 +248,9 @@ export class CanvasGraphEngine implements GraphEngine {
   load(document: AnalysisDocument, seed?: number): void {
     this.seed = seed ?? seedFor(document.repo.name);
     this.graph = buildGraph(document, this.hotThreshold);
+    // The cache is keyed on nothing but "the graph and the filters" — a new
+    // document invalidates it even when the filters themselves are unchanged.
+    this.invalidateVisible();
     // Through the setters, not by assigning the fields: the interface says
     // these publish `select` and `highlight`, so clearing them silently makes
     // `load()` untruthful about its own state. Chrome mirrors both into its
@@ -224,6 +260,14 @@ export class CanvasGraphEngine implements GraphEngine {
     this.setSelected(null);
     this.setHovered(null, null);
     this.setIsolated(null);
+    // Story 5.4: a scope names a module of the *previous* document, so it
+    // cannot survive a load. Through `setScope` rather than by assignment, for
+    // the reason the three lines above give — the chrome mirrors this state
+    // and would otherwise keep showing a scope indicator for a module the new
+    // document need not contain. `lastScopeId` goes too: a "return to scope"
+    // offer pointing into a document that is gone is worse than no offer.
+    this.setScope(null);
+    this.lastScopeId = null;
     this.startSettle("load");
     this.startLoop();
   }
@@ -285,7 +329,9 @@ export class CanvasGraphEngine implements GraphEngine {
     this.canvas.removeEventListener("pointercancel", this.onPointerCancel);
     this.canvas.removeEventListener("pointerleave", this.onPointerLeave);
     this.canvas.removeEventListener("wheel", this.onWheel);
+    this.canvas.removeEventListener("dblclick", this.onDoubleClick);
     globalThis.removeEventListener?.("resize", this.onWindowResize);
+    globalThis.removeEventListener?.("keydown", this.onKeyDown);
     this.cancelFlight();
     this.clearUnfolds();
     this.layout?.stop();
@@ -407,6 +453,29 @@ export class CanvasGraphEngine implements GraphEngine {
   async flyTo(id: string, options: FlyToOptions = {}): Promise<void> {
     const node = this.getNode(id);
     if (!node) return;
+
+    // Story 5.4 / AC-5, the maintainer's binding decision: a search that
+    // targets a node outside the active scope **leaves the scope and flies**.
+    // Search stays globally useful and the scope stays a view filter rather
+    // than a cage. A silent no-op — refusing to fly because the target is out
+    // of frame — is explicitly not acceptable. The chrome is told the scope
+    // was left and which one, so it can offer the way back.
+    // Membership is tested against the scope alone, not against the whole
+    // visible set: a node that is *in* scope but hidden by connected-only is
+    // not out of scope, and clearing the scope for it would lose the user's
+    // frame without putting the target on screen.
+    const graphForScope = this.graph;
+    if (
+      this.scopeId !== null &&
+      graphForScope &&
+      !inScopeIds(graphForScope, this.scopeId).has(id)
+    ) {
+      this.lastScopeId = this.scopeId;
+      this.scopeId = null;
+      this.invalidateVisible();
+      this.emitScope(id);
+    }
+
     this.cameraTakenByUser = true;
 
     // Retire any flight already in the air BEFORE taking out this one's pin.
@@ -557,12 +626,19 @@ export class CanvasGraphEngine implements GraphEngine {
     // and the nearest-centre tie-break below would otherwise hand every pick
     // inside a module's disc to the module — making an unfolded file
     // unhoverable and unclickable, which is exactly what AC-2 needs.
+    const visible = this.visibleIds();
     for (const item of [...this.memberNodes(), ...layout.nodes]) {
       const node = graph.nodes[item.graphIndex]!;
       // Story 5.3: a filtered-out node is not on screen, so it is not under
       // the pointer either. This is the half of AC-2 that dimming can never
       // give you — a dimmed node still catches every pick.
       if (!this.isLayerVisible(node)) continue;
+      // Story 5.4 / AC-6: a node the frame does not carry is absent, not
+      // dimmed — so it cannot be hovered, tooltipped or clicked either.
+      // Two independent guards, resolved as a union at the 5.3/5.4 rebase:
+      // either filter alone is enough to take a node out of the pointer's
+      // reach, and neither subsumes the other.
+      if (visible && !visible.has(node.id)) continue;
       const dx = item.x - world.x;
       const dy = item.y - world.y;
       const distance = Math.hypot(dx, dy);
@@ -667,6 +743,154 @@ export class CanvasGraphEngine implements GraphEngine {
   isUnfolded(moduleId: string): boolean {
     return this.memberLayouts.has(moduleId);
   }
+
+  // ---- scope and connected-only (story 5.4, FR-30) -----------------------
+
+  getScope(): string | null {
+    return this.scopeId;
+  }
+
+  /**
+   * Scope the map to a module, or leave the scope with `null` (AC-1, AC-2).
+   *
+   * Nothing here touches `layout`, `memberLayouts`, `rng` or the camera. That
+   * is the story's central claim: scoping filters the built frame, so a
+   * scope/unscope cycle leaves every node exactly where it was and the settle
+   * is never re-run (AC-4).
+   */
+  setScope(moduleId: string | null): void {
+    const graph = this.graph;
+    // An id that is not a module in this document leaves the scope rather
+    // than scoping to nothing — a frame of zero nodes is never what a caller
+    // meant, and a silent empty map is the worst possible answer.
+    const next =
+      moduleId !== null &&
+      graph &&
+      graph.nodes[graph.indexById.get(moduleId) ?? -1]?.kind === "module"
+        ? moduleId
+        : null;
+    if (this.scopeId === next) return;
+    if (this.scopeId !== null) this.lastScopeId = this.scopeId;
+    this.scopeId = next;
+    this.invalidateVisible();
+    this.emitScope(null);
+  }
+
+  getConnectedOnly(): boolean {
+    return this.connectedOnly;
+  }
+
+  setConnectedOnly(connectedOnly: boolean): void {
+    if (this.connectedOnly === connectedOnly) return;
+    this.connectedOnly = connectedOnly;
+    this.invalidateVisible();
+    this.emitScope(null);
+  }
+
+  hiddenCount(): { readonly byScope: number; readonly byDegree: number } {
+    // Recomputed lazily so a caller asking before the first frame gets the
+    // truth rather than the zeroes the fields were initialised with.
+    this.visibleIds();
+    return { byScope: this.hiddenByScope, byDegree: this.hiddenByDegree };
+  }
+
+  /** The scope a search last flew out of, for the chrome's way back (AC-5). */
+  getLastScope(): string | null {
+    return this.lastScopeId;
+  }
+
+  /**
+   * The ids the frame may carry, or **null when no filter is active**.
+   *
+   * The null fast path matters: with nothing filtered there is no set to build
+   * and no membership test per node, so an unscoped map costs exactly what it
+   * cost before this story. `buildScene` and `pick` both read this, which is
+   * what makes "absent, not dimmed" true for the pointer as well as for the
+   * eye (AC-6).
+   */
+  private visibleIds(): ReadonlySet<string> | null {
+    const graph = this.graph;
+    if (!graph) return null;
+    if (this.scopeId === null && !this.connectedOnly) {
+      this.hiddenByScope = 0;
+      this.hiddenByDegree = 0;
+      return null;
+    }
+    if (this.visibleCache) return this.visibleCache;
+    const result = visibleNodeIds(graph, {
+      scopeId: this.scopeId,
+      connectedOnly: this.connectedOnly,
+    });
+    this.visibleCache = result.visible;
+    this.hiddenByScope = result.hiddenByScope;
+    this.hiddenByDegree = result.hiddenByDegree;
+    return this.visibleCache;
+  }
+
+  private invalidateVisible(): void {
+    this.visibleCache = null;
+  }
+
+  /** Publish the frame's filter state. `leftForId` is set only for AC-5. */
+  private emitScope(leftForId: string | null): void {
+    const counts = this.hiddenCount();
+    const visible = this.visibleIds();
+    this.emitter.emit("scope", {
+      scopeId: this.scopeId,
+      connectedOnly: this.connectedOnly,
+      hiddenByScope: counts.byScope,
+      hiddenByDegree: counts.byDegree,
+      visibleCount: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      leftForId,
+      previousScopeId: this.lastScopeId,
+    });
+  }
+
+  /**
+   * The drill-down gesture (AC-1, AC-2). A module under the pointer scopes to
+   * it; the focus module again, or empty space, leaves the scope. Both
+   * directions are the same gesture, which is what makes the exit as
+   * discoverable as the entry.
+   */
+  private readonly onDoubleClick = (event: MouseEvent): void => {
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.pick({
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    });
+    if (!hit || hit.kind !== "module" || hit.id === this.scopeId) {
+      this.setScope(null);
+      return;
+    }
+    this.setScope(hit.id);
+  };
+
+  /**
+   * `Escape` leaves the scope (AC-2).
+   *
+   * Skipped while the keystroke is destined for a field: `chrome/search.ts`
+   * already owns Escape inside its input, where it closes the result list, and
+   * two handlers racing for one key is how a search box stops being able to
+   * dismiss itself. Story 5.1's owner ceded the key explicitly, so with the
+   * start-here panel open Escape still means exactly one thing.
+   */
+  private readonly onKeyDown = (event: KeyboardEvent): void => {
+    if (event.key !== "Escape") return;
+    if (this.scopeId === null) return;
+    const target = event.target;
+    if (target instanceof HTMLElement) {
+      const tag = target.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        tag === "SELECT" ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+    }
+    this.setScope(null);
+  };
 
   /**
    * Bring the unfolded set in line with the camera. Called on every camera
@@ -1063,6 +1287,27 @@ export class CanvasGraphEngine implements GraphEngine {
     // allocates nothing extra per frame.
     const filtered = this.applyLayerFilter(nodes, edges);
 
+    // ---- story 5.4: scope / connected-only narrowing ----------------------
+    // Applied over the arrays 5.3 just produced, which is the composition
+    // order its owner and I agreed before either of us wrote a line: two
+    // successive narrowings compose, two rewrites of the same lines do not.
+    // It only ever removes; it never rebuilds what the layer filter dropped.
+    // An edge survives only when BOTH ends do — a half-visible edge would
+    // point at a node that is not on screen.
+    //
+    // `visibleIds()` returns null when neither of this story's filters is
+    // active, and then the arrays pass straight through with no allocation,
+    // exactly as the layer filter's all-on case does.
+    const visible = this.visibleIds();
+    const scoped = visible
+      ? {
+          nodes: filtered.nodes.filter((item) => visible.has(item.node.id)),
+          edges: filtered.edges.filter(
+            (edge) => visible.has(edge.sourceId) && visible.has(edge.targetId),
+          ),
+        }
+      : filtered;
+
     // Isolate outranks hover, and hover outranks the chain still being held
     // from the node the pointer just left (story 5.2, AC-3).
     const hoverId = this.hoveredId ?? this.carriedHover(timeMs);
@@ -1073,8 +1318,8 @@ export class CanvasGraphEngine implements GraphEngine {
       viewport: this.viewport,
       camera: this.camera,
       stars: this.stars,
-      nodes: filtered.nodes,
-      edges: filtered.edges,
+      nodes: scoped.nodes,
+      edges: scoped.edges,
       mode: this.mode,
       timeMs,
       reducedMotion: this.reducedMotion,

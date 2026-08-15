@@ -29,6 +29,12 @@ function store(repoName = "gitnebula") {
     // Story 5.3's slice, added for the same reason.
     visibleLayers: ALL_LAYERS,
     filteredOutCount: 0,
+    // Story 5.4's slice, added for the same reason.
+    scopeId: null,
+    connectedOnly: false,
+    hiddenByDegree: 0,
+    leftScopeId: null,
+    scopeVisibleCount: 0,
   });
 }
 

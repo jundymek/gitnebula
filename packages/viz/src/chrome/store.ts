@@ -84,4 +84,20 @@ export interface ChromeState {
    * never a combined total with another filter's count (UX-DR14).
    */
   readonly filteredOutCount: number;
+  // ---- story 5.4 (drill-down) — appended, nothing above is reshaped -------
+  /** The module the map is scoped to, or null for the whole repo (FR-30). */
+  readonly scopeId: string | null;
+  /** Whether degree-0 nodes are being dropped from the frame (AC-3). */
+  readonly connectedOnly: boolean;
+  /**
+   * How many nodes the connected-only filter hid. Story 5.3 carries its own
+   * count for its own cause; the two overlap and are deliberately not summed,
+   * because UX-DR14 asks a hidden state to name its cause and a merged total
+   * names none.
+   */
+  readonly hiddenByDegree: number;
+  /** The scope a search flew out of, offered as a way back (AC-5). */
+  readonly leftScopeId: string | null;
+  /** How many nodes survive both filters; 0 while scoped is the empty state. */
+  readonly scopeVisibleCount: number;
 }

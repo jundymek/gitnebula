@@ -25,6 +25,7 @@ import { renderLayerFilter, type LayerFilterHandle } from "./layer-filter.js";
 import { renderLegend, type LegendHandle } from "./legend.js";
 import { renderModeToggle, type ModeToggleHandle } from "./mode-toggle.js";
 import { renderPanel, type PanelHandle } from "./panel.js";
+import { renderScopeBar } from "./scope-bar.js";
 // Types only: the bootstrap constructs these and hands them in, so chrome
 // wires them without owning their lifetime.
 import type { SearchBox } from "./search.js";
@@ -132,6 +133,12 @@ export function mountChrome(
     // Story 5.3: every layer on until the reader says otherwise (FR-28).
     visibleLayers: ALL_LAYERS,
     filteredOutCount: 0,
+    // Story 5.4's slice.
+    scopeId: null,
+    connectedOnly: false,
+    hiddenByDegree: 0,
+    leftScopeId: null,
+    scopeVisibleCount: analysis.nodes.length,
   });
 
   // Set by `connectEngine`. The panel's controls are live from the moment
@@ -218,6 +225,37 @@ export function mountChrome(
     },
   });
 
+  // Story 5.4. The bar only asks; the engine owns scope and connected-only and
+  // publishes both back on `scope`, which is where the store reads them from.
+  // Same shape as story 3.4's isolate button — one owner for the state, one
+  // event carrying it.
+  const scopeBar = renderScopeBar({
+    onLeaveScope() {
+      engine?.setScope(null);
+    },
+    onReturnToScope() {
+      const target = store.getState().leftScopeId;
+      if (target !== null) engine?.setScope(target);
+    },
+    onConnectedOnly(connectedOnly) {
+      engine?.setConnectedOnly(connectedOnly);
+    },
+  });
+
+  // The bar follows the store, like the start-here panel above it, so the
+  // engine's event and any future caller are one path rather than two.
+  store.subscribe((state) => {
+    scopeBar.update({
+      scopeId: state.scopeId,
+      connectedOnly: state.connectedOnly,
+      hiddenByDegree: state.hiddenByDegree,
+      leftScopeId: state.leftScopeId,
+      // Nothing survived the two filters while a scope is active — the bar
+      // names that cause rather than showing an empty map with no explanation.
+      scopeIsEmpty: state.scopeId !== null && state.scopeVisibleCount === 0,
+    });
+  });
+
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
   header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
@@ -235,6 +273,7 @@ export function mountChrome(
     panel.element,
     startHere.element,
     filterEmpty.element,
+    scopeBar.element,
   );
   if (options.overlays) main.append(...options.overlays);
 
@@ -308,6 +347,19 @@ export function connectEngine(
     }),
     engine.on("collapse", () => {
       handle.setState({ unfolded: engine.unfoldedModules().length });
+    }),
+    // Story 5.4 — appended as its own entry rather than folded into a handler
+    // above, so this wave's three chrome stories stay on disjoint lines.
+    engine.on("scope", (payload) => {
+      handle.setState({
+        scopeId: payload.scopeId,
+        connectedOnly: payload.connectedOnly,
+        hiddenByDegree: payload.hiddenByDegree,
+        scopeVisibleCount: payload.visibleCount,
+        // Offered only once the scope is actually gone: while one is active
+        // there is nothing to go back to, and a stale offer is worse than none.
+        leftScopeId: payload.scopeId === null ? payload.previousScopeId : null,
+      });
     }),
     // Isolate state is the engine's, not the panel's. Reading it back from
     // the event it is published on means a change made anywhere — the panel
