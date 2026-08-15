@@ -80,9 +80,16 @@ all of Epic 5 merged.
 ## The demo
 
 - [x] The recorder runs end to end against a served map: 40 s of WebM, encoded
-      by the documented ffmpeg command to a **3.7 MiB** GIF — inside the ~5 MB
-      ceiling `docs/recording-demo.md` sets, and marginally smaller than the
-      asset it replaces.
+      by the documented ffmpeg command to a **3.4 MiB** GIF — inside the ~5 MB
+      ceiling `docs/recording-demo.md` sets, and smaller than the 3.7 MiB asset
+      it replaces despite covering more of the product.
+- [x] **The retry in the drill-down step was exercised deliberately.** Codex
+      found that resolving the module's screen point once is a race — hovering
+      wakes the layout, so the module can drift between the scan and the
+      double-click. With `DEMO_MODULE` set to a name no module matches, the
+      recorder now stops with
+      `search found nothing for DEMO_MODULE="does-not-exist/"` instead of an
+      opaque Playwright timeout, and the default run still completes.
 - [x] Frames extracted and inspected: the start-here panel is the opening state,
       the detail panel shows the history rows with their window **and the blast
       radius section with `show on map` active**, the scope bar appears on

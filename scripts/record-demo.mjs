@@ -108,6 +108,40 @@ async function widestChainFileOnScreen(page, moduleId) {
   );
 }
 
+/**
+ * Double-click a module until its scope actually opens.
+ *
+ * The point is re-resolved on every attempt, and that is not defensive
+ * padding: moving the pointer onto a node wakes the layout (story 3.3), so the
+ * module can drift several pixels between the scan that found it and the
+ * gesture that wants it — landing the double-click on empty space or on a
+ * neighbour, and leaving the recorder waiting for a scope bar that never
+ * appears. The pre-Epic-5 script carried the same retry in its `clickNode`
+ * helper for the same reason; dropping it made the tour a race.
+ */
+async function drillInto(page, moduleId, attempts = 4) {
+  const scopeBar = page.locator("#scope-bar");
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const point = await screenPointOf(page, moduleId);
+    if (!point)
+      throw new Error(
+        `module not on screen after search: ${moduleId} — check DEMO_MODULE names a module the search can reach`,
+      );
+    await page.mouse.move(point.x, point.y, { steps: 20 });
+    // Re-resolve after the move: the hover the move itself caused is exactly
+    // what can have shifted the target.
+    const settledPoint = (await screenPointOf(page, moduleId)) ?? point;
+    await page.mouse.dblclick(settledPoint.x, settledPoint.y);
+    try {
+      await scopeBar.waitFor({ state: "visible", timeout: 2_500 });
+      return;
+    } catch {
+      /* the module moved under the cursor, or the click missed — scan again */
+    }
+  }
+  throw new Error(`double-clicking ${moduleId} never opened a scope`);
+}
+
 async function main() {
   const browser = await chromium.launch();
   const context = await browser.newContext({
@@ -172,7 +206,15 @@ async function main() {
   await search.click();
   await search.pressSequentially(TOUR_MODULE, { delay: 100 });
   await wait(700);
-  await page.locator("li.search-result").first().click();
+  const firstResult = page.locator("li.search-result").first();
+  try {
+    await firstResult.waitFor({ state: "visible", timeout: 5_000 });
+  } catch {
+    throw new Error(
+      `search found nothing for DEMO_MODULE="${TOUR_MODULE}" — it must match a module in the repository being recorded`,
+    );
+  }
+  await firstResult.click();
   await wait(2_000);
   const arrivalPanel = page.locator("#panel .p-close");
   if (await arrivalPanel.isVisible()) {
@@ -183,16 +225,7 @@ async function main() {
   // 4. Drill down into that module (5.4). Double-click is the gesture — the
   //    single click already means "select". The scope pins the module open,
   //    so its files appear without touching the wheel.
-  const modulePoint = await screenPointOf(page, TOUR_MODULE);
-  if (!modulePoint)
-    throw new Error(
-      `module not on screen after search: ${TOUR_MODULE} — check DEMO_MODULE names a module the search can reach`,
-    );
-  await page.mouse.move(modulePoint.x, modulePoint.y, { steps: 20 });
-  await page.mouse.dblclick(modulePoint.x, modulePoint.y);
-  await page
-    .locator("#scope-bar")
-    .waitFor({ state: "visible", timeout: 10_000 });
+  await drillInto(page, TOUR_MODULE);
   // A double-click is also a click, so the module's own panel opens over the
   // map. Close it: the point of this beat is what the *canvas* now carries.
   const modulePanel = page.locator("#panel .p-close");

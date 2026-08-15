@@ -18,7 +18,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 40 s of WebM |
-| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering — 3.7 MiB |
+| Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering — 3.4 MiB |
 
 The committed GIF is the ffmpeg encode of that WebM; the WebM itself is not
 committed.
