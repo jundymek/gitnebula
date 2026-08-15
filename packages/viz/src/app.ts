@@ -16,6 +16,7 @@ import { renderViewSwitch } from "./chrome/view-switch.js";
 import { type GraphEngine } from "./engine/index.js";
 import {
   createViewEngine,
+  DEFAULT_VIEW,
   probe3D,
   viewFromSearch,
   type ViewKind,
@@ -64,7 +65,8 @@ export type ViewChangeOutcome = "switched" | "kept" | "broken";
  * the policy is asserted directly.
  *
  * `attempt` is called with the view to build and may throw. It is called at
- * most twice — once for `next`, once for `previous`.
+ * most twice — once for `next`, once for `previous` — and exactly once when
+ * the two are the same view, since there is then nothing to fall back to.
  */
 export function swapWithFallback(
   next: ViewKind,
@@ -75,6 +77,9 @@ export function swapWithFallback(
     attempt(next);
     return { outcome: "switched", view: next, cause: null };
   } catch (cause) {
+    // Nothing else to try: retrying the same view would just fail again, and
+    // twice is not more informative than once.
+    if (previous === next) return { outcome: "broken", view: previous, cause };
     try {
       attempt(previous);
       return { outcome: "kept", view: previous, cause };
@@ -290,22 +295,48 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   // Constructed after `mountChrome` has put the stage in the document: the
   // engine measures the canvas on construction, and an unattached element
   // measures 0 × 0.
-  try {
+  //
+  // The boot path takes the **same** fallback policy as a reader-initiated
+  // change, and for the same reason. `createViewEngine` only guards its own
+  // construction, so opening `?view=3d` on a document that 3D can build but
+  // cannot `load()` would otherwise replace a perfectly renderable 2D map with
+  // an error screen — the opposite of AC-5, reached by the one path AC-5 did
+  // not cover. When the requested view is already 2D there is nothing to fall
+  // back to and this behaves exactly as it did before.
+  const booted = swapWithFallback(view, DEFAULT_VIEW, (target) => {
+    view = target;
     swapEngine();
-  } catch (cause) {
+  });
+
+  if (booted.outcome === "broken") {
     // The loader's shape guard covers what the Viewer dereferences, but it is
-    // a guard, not the schema. Anything it lets through that the engine still
-    // cannot build becomes the FR-6 screen rather than a blank page with a
-    // stack trace in the console.
+    // a guard, not the schema. Anything it lets through that no engine can
+    // build becomes the FR-6 screen rather than a blank page with a stack
+    // trace in the console.
     teardown();
     renderErrorScreen(root, {
       kind: "malformed",
       title: "analysis.json could not be rendered",
       detail: `The document loaded but the map could not be built from it: ${
-        cause instanceof Error ? cause.message : String(cause)
+        booted.cause instanceof Error
+          ? booted.cause.message
+          : String(booted.cause)
       }. Re-run gitnebula to regenerate the file.`,
     });
     return null;
   }
+
+  if (booted.outcome === "kept") {
+    // 3D was asked for and could not be built, but 2D could. That is a
+    // degradation with a stated reason, not a failure (AC-5).
+    viewSwitch.setUnavailable(
+      `The 3D view could not be started (${
+        booted.cause instanceof Error
+          ? booted.cause.message
+          : String(booted.cause)
+      }). Showing the 2D map instead.`,
+    );
+  }
+
   return engine;
 }

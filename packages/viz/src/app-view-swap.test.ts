@@ -319,6 +319,34 @@ describe("swapWithFallback — a failed switch must not kill the viewer", () => 
     expect((result.cause as Error).message).toBe("the real cause");
   });
 
+  it("does not retry when there is no other view to fall back to", () => {
+    // The boot path passes the requested view and the default. When they are
+    // the same — an ordinary 2D load — retrying would fail identically and
+    // twice is not more informative than once.
+    let calls = 0;
+    const result = swapWithFallback("2d", "2d", () => {
+      calls += 1;
+      throw new Error("nothing can be built");
+    });
+    expect(calls).toBe(1);
+    expect(result.outcome).toBe("broken");
+  });
+
+  it("covers the boot path too: 3D that loads badly degrades to 2D", () => {
+    // `createViewEngine` guards only its own construction, so opening
+    // `?view=3d` on a document 3D can construct but cannot load would have
+    // replaced a perfectly renderable 2D map with an error screen — the
+    // opposite of AC-5, reached by the one path AC-5 did not cover.
+    const tried: string[] = [];
+    const result = swapWithFallback("3d", "2d", (v) => {
+      tried.push(v);
+      if (v === "3d") throw new Error("load failed after construction");
+    });
+    expect(result.outcome).toBe("kept");
+    expect(result.view).toBe("2d");
+    expect(tried).toEqual(["3d", "2d"]);
+  });
+
   it("attempts each view at most once", () => {
     // A retry loop here would rebuild the engine repeatedly on a broken page.
     let calls = 0;
