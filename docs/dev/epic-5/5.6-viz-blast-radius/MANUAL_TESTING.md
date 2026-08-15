@@ -11,6 +11,11 @@ this branch (`pnpm build`).
 ## Automated baseline
 
 - [x] `pnpm lint` — exit 0, ESLint and Prettier clean.
+- [x] `pnpm -r typecheck` — exit 0 across all five packages. Added to this list
+      after a Codex review caught a fixture in the new test file missing the
+      contract's `descriptionSource`: `vitest` does not typecheck, so lint,
+      test and build were all green while `tsc --noEmit` was not. Fixed, and
+      the whole workspace now type-checks.
 - [x] `pnpm test` (viz) — **664 passed, 47 files**, up from 620/45 on the base.
 - [x] `pnpm build` — tsup + vite succeed; `dist/bin/gitnebula.js` 425.73 KB.
 - [x] Both central assertions watched failing before being relied on:

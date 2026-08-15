@@ -485,7 +485,10 @@ function nodeStub(id: string): AnalysisDocument["nodes"][number] {
     authors: 1,
     churn: 0.1,
     lastChangedAt: "2026-08-01T00:00:00.000Z",
+    // Both halves of the reserved describe-layer slot (AD-10). Null in MVP,
+    // and required by the contract — a fixture missing it compiles nowhere.
     description: null,
+    descriptionSource: null,
   };
 }
 
