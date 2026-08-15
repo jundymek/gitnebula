@@ -31,6 +31,7 @@ The audit was a line-by-line pass over the old README against the merged epic.
 | "Files … over a 90-day window" with no account of a quiet repository. | The heatmap legend states the near-uniform case, so a flat heatmap reads as data rather than as a broken renderer. | **5.5** (AC-4) |
 | The sample run's numbers (295 nodes, 360 edges, 60 co-change pairs, 0.25 s) and its summary line. | Replaced by a real run over a fresh clone: 368 nodes, 400 edges, 140 co-change pairs, and the summary line now names the analysis window. | **5.5** (AC-5), plus history since 4.3 |
 | Root files were absent from the map and from the README's account of it. | Files in the repository root are drawn; the README says so. | **4.7** (pre-epic, never documented) |
+| "plus the files that keep changing together" — one clause, describing story 3.4's top-three metric row. | Co-change is a first-class **blast radius** section with shared-commit counts, a `show on map` toggle, and an empty state naming the ≥ 3 threshold; 3.4's metric row is folded into it and no longer exists. | **5.6** |
 
 Two claims in the old README were checked and are **unchanged**, so they stay as
 they were: the `1.8×` unfold threshold (`UNFOLD_ZOOM`) and the ⌘K search.

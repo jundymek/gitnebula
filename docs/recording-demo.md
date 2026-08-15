@@ -45,30 +45,35 @@ tour of the feature list.
    opens on arrival, through story 3.3's existing `flyTo` + `select` path. The
    panel is held long enough to read the history rows and the window they
    carry (5.5).
-4. **Search for the module the tour drills into** — a beat in its own right,
+4. **Blast radius** — still on that panel: the files this one keeps being
+   committed with, then `show on map` to mark them on the canvas and off again
+   (5.6). The entry taken in step 3 is what makes this beat possible — 86% of
+   this repository's nodes have no co-change partners, so a randomly chosen
+   node would record the empty state rather than the feature.
+5. **Search for the module the tour drills into** — a beat in its own right,
    and the thing that makes the next step reliable: step 3 leaves the camera
    zoomed in on a ranked file, and a module that happens to be off-screen there
    cannot be found by a viewport scan. Arriving through search centres it.
-5. **Drill down** — `dblclick` on `packages/` scopes the map to that module,
+6. **Drill down** — `dblclick` on `packages/` scopes the map to that module,
    its files and its direct neighbours (5.4). The module's own panel is closed
    straight away: this beat is about what the canvas carries.
-6. **Hover a file in the scope** — the file with the widest one-hop chain, so
+7. **Hover a file in the scope** — the file with the widest one-hop chain, so
    the chain emphasis is actually visible. The rest of the map settles back
    rather than going dark (5.2).
-7. **Connected only** — the files carrying no import edge leave the frame, and
+8. **Connected only** — the files carrying no import edge leave the frame, and
    the chrome states how many went (UX-DR14). Toggled back off.
-8. **`Escape`** — leaves the scope. The map returns exactly as it was, because
+9. **`Escape`** — leaves the scope. The map returns exactly as it was, because
    scoping never re-ran the layout.
-9. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
+10. **Layer filter** — one layer switched off is *not drawn*, not dimmed (5.3),
    then switched back on and restored in place.
-10. **Heatmap** — the same map coloured by churn.
-11. **PNG export** — click `↓ png` and wait for the download the viewer starts.
-12. **Back to structure** — end on the map the visitor first saw.
+11. **Heatmap** — the same map coloured by churn.
+12. **PNG export** — click `↓ png` and wait for the download the viewer starts.
+13. **Back to structure** — end on the map the visitor first saw.
 
 Node positions are resolved at runtime through the engine's public `pick()`,
 never hardcoded: the layout is seeded per repository, so fixed coordinates would
 point at empty space the moment the demo is re-recorded on another checkout.
-The file hovered in step 6 is chosen the same way — by asking the engine which
+The file hovered in step 7 is chosen the same way — by asking the engine which
 on-screen file has the widest chain — because a file with two imports
 demonstrates nothing.
 

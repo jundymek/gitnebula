@@ -144,7 +144,20 @@ async function main() {
   await page.locator("#panel").waitFor({ state: "visible", timeout: 10_000 });
   // The panel is where the git signals live: churn, authors and last change,
   // each labelled with the window they cover (5.5).
-  await wait(3_000);
+  await wait(2_600);
+
+  // 2b. Blast radius (5.6) — what has historically been committed with this
+  //     file. The start-here entry is deliberately the node this beat opens on:
+  //     86% of nodes on this repository have no partners at all, so a randomly
+  //     chosen node would record the empty state instead of the feature.
+  const blastShow = page.locator("#panel .p-blast-show");
+  if ((await blastShow.count()) > 0 && (await blastShow.isVisible())) {
+    await wait(1_400);
+    await blastShow.click();
+    await wait(2_200);
+    await blastShow.click();
+    await wait(500);
+  }
   await page.locator("#panel .p-close").click();
   await wait(400);
 

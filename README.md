@@ -93,6 +93,16 @@ covers — `history · last 90 days`, or whatever `--window-days` you asked for.
 A file nobody has touched inside that window says **"no change in last 90
 days"** rather than a bare `0`, so a quiet file never reads as a broken tool.
 
+**And what tends to change alongside it.** Below the history rows, a **blast
+radius** section lists the files this one has repeatedly been committed with,
+and how many commits they share. This is the part no import parser can tell
+you: in this repository `chrome/chrome.ts` and `styles.css` keep changing
+together and there is no import between them, because a stylesheet is not an
+import. `show on map` marks that set on the canvas — a mark on those nodes, not
+a line between them, because co-change is not a dependency. Most files have no
+partners at all (318 of 368 here), so the section names its cause rather than
+showing an empty box, and points at `--window-days` as the lever.
+
 **Then narrow the map.** Three levers, each of which _removes_ nodes rather
 than restyling them, so what is left is genuinely all there is to click:
 
