@@ -117,6 +117,13 @@ all of Epic 5 merged.
       shows the graph in perspective before returning to 2D.
 - [x] **Recorded from a clean clone** made by the documented recipe, so no
       worktree scratch file is on the map. The committed GIF is that take.
+- [x] **Re-recorded after PR #68 merged**, against a build of the corrected
+      3D engine. The previous take predated it by eight minutes. Its 3D frames
+      showed modules only — the camera sits below `UNFOLD_ZOOM` at that beat, so
+      nothing in it depended on the unfold rule #68 restored — but the take that
+      ships should be of the code being merged, not of the code an hour earlier.
+      Frames re-checked: 393 files, blast radius populated with `hide on map`
+      active, and the 3D view showing modules without unfolding.
 - [x] The recipe was run **verbatim**, including from a detached HEAD, and the
       resulting map reports `name: gitnebula`, `defaultBranch: master` and the
       canonical remote — so the demo's "open on github" links point where a
