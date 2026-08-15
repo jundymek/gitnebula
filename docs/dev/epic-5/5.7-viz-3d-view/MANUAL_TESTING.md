@@ -67,11 +67,14 @@ Steps M1–M7 below were executed against this dev server through Playwright
       `select` and `hover` on the 3D engine and set both.
       **Observed:** `events: ["select", "hover"]`, `selected: "mod-000/"`. The
       same events chrome already listens to, from the second implementation. ✅
-- [x] **M8 — the 2D view is unchanged.** `git diff` against the epic base for
-      `packages/viz/src/engine/{engine,layout,render,camera}.ts` and every 2D
-      test file.
-      **Observed:** no changes to any 2D engine module.
-      `chrome/boundary.test.ts` has a **zero-line diff** and passes. ✅
+- [x] **M8 — the 2D view's behaviour is unchanged.** `git diff` against the
+      epic base for `packages/viz/src/engine/{engine,layout,render,camera}.ts`
+      and every 2D test file.
+      **Observed:** `layout.ts`, `render.ts` and `camera.ts` unchanged; every
+      existing 2D test file unchanged; `chrome/boundary.test.ts` **zero-line
+      diff** and passing. `engine.ts` carries **+13 lines and 0 changed
+      lines** — the additive `setReturnScope` the maintainer approved in review
+      round seven. No existing 2D code path is modified. ✅
 - [x] **M9 — the whole suite and the toolchain.**
       **Observed:** `pnpm --filter @gitnebula/viz test` → **708 passed**;
       `pnpm lint` → clean; `pnpm build` → succeeds;

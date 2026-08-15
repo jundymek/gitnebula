@@ -168,6 +168,15 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
      * layer up, with the panel still implying the radius was active.
      */
     readonly blastRadius: readonly string[];
+    /**
+     * Story 5.4's pending "return to scope" offer.
+     *
+     * Portable state like the rest, and the least obvious to remember: after a
+     * search flies out of a scope, `getScope()` is null while the offer is
+     * live, so carrying the scope alone silently drops the reader's way back
+     * while they are still looking at the same search result.
+     */
+    readonly returnScopeId: string | null;
   }
 
   const captureState = (from: GraphEngine): CarriedState => ({
@@ -178,6 +187,7 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     selectedId: from.getSelected()?.id ?? null,
     isolatedId: from.getIsolated()?.id ?? null,
     blastRadius: [...from.getBlastRadius()],
+    returnScopeId: from.getReturnScope(),
   });
 
   const restoreState = (to: GraphEngine, state: CarriedState): void => {
@@ -196,6 +206,9 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     // Restored unconditionally: an empty set is the correct "nothing marked"
     // instruction, and `setBlastRadius` treats `[]` and `null` alike.
     to.setBlastRadius(state.blastRadius);
+    // Last, and after `setScope`: entering a scope clears the offer by design,
+    // so restoring the offer first would have the scope restore wipe it out.
+    to.setReturnScope(state.returnScopeId);
   };
 
   /**

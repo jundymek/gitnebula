@@ -4,7 +4,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { swapWithFallback, unavailabilityAfterSwap } from "./app.js";
 import { connectEngine, mountChrome } from "./chrome/chrome.js";
 import { createSearchBox } from "./chrome/search.js";
-import { createGraphEngine, type GraphEngine } from "./engine/index.js";
+import {
+  CanvasGraphEngine,
+  createGraphEngine,
+  type GraphEngine,
+} from "./engine/index.js";
 import { createNebula3DEngine } from "./engine/engine3d.js";
 import { installFakeCanvas } from "./test-support/fake-canvas.js";
 import { loadContractFixture } from "./test-support/fixtures.js";
@@ -48,6 +52,7 @@ function carry(from: GraphEngine, to: GraphEngine): void {
     selectedId: from.getSelected()?.id ?? null,
     isolatedId: from.getIsolated()?.id ?? null,
     blastRadius: [...from.getBlastRadius()],
+    returnScopeId: from.getReturnScope(),
   };
   to.setMode(state.mode);
   to.setLayerFilter(state.layers);
@@ -56,6 +61,7 @@ function carry(from: GraphEngine, to: GraphEngine): void {
   if (state.selectedId !== null) to.setSelected(state.selectedId);
   if (state.isolatedId !== null) to.setIsolated(state.isolatedId);
   to.setBlastRadius(state.blastRadius);
+  to.setReturnScope(state.returnScopeId);
 }
 
 describe("the search box survives a view swap", () => {
@@ -355,5 +361,101 @@ describe("swapWithFallback — a failed switch must not kill the viewer", () => 
       throw new Error("nope");
     });
     expect(calls).toBe(2);
+  });
+});
+
+describe("the return-to-scope offer survives a view swap (5.4 x 5.7)", () => {
+  it("carries the offer a search left behind", async () => {
+    // Story 5.4: a search that targets a node outside the active scope leaves
+    // the scope and flies, and the chrome then offers a way back. While that
+    // offer is live `getScope()` is already null — so carrying the scope alone
+    // drops the reader's way back while they are still looking at the very
+    // search result that created it.
+    const canvas = stage();
+    document.body.append(canvas);
+
+    // The concrete class, not the interface: this test reads `buildScene` to
+    // find a node the scoped frame does not carry, and that is a class member
+    // rather than a seam member (deliberately — chrome never sees the scene).
+    const twoD = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    built.push(twoD);
+    twoD.load(analysis);
+
+    const scoped = twoD.nodes.find((node) => node.kind === "module")!;
+    twoD.setScope(scoped.id);
+
+    // A module's scope includes its neighbours, so "some other module" is not
+    // necessarily outside it. Ask the engine which nodes the scoped frame
+    // actually carries and pick one it does not — that is the search target
+    // whose flight leaves the scope.
+    const inFrame = new Set(
+      twoD.buildScene(0)!.nodes.map((item) => item.node.id),
+    );
+    const outside = twoD.nodes.find((node) => !inFrame.has(node.id));
+    expect(outside, "fixture has no node outside the scope").toBeDefined();
+
+    // Reduced motion makes the flight synchronous.
+    await twoD.flyTo(outside!.id);
+
+    expect(twoD.getScope()).toBeNull();
+    expect(twoD.getReturnScope()).toBe(scoped.id);
+
+    const threeD = createNebula3DEngine({ canvas, reducedMotion: true });
+    built.push(threeD);
+    threeD.load(analysis);
+    expect(threeD.getReturnScope()).toBeNull();
+
+    carry(twoD, threeD);
+    expect(threeD.getReturnScope()).toBe(scoped.id);
+    // ...and it did not invent a scope to go with it.
+    expect(threeD.getScope()).toBeNull();
+  });
+
+  it("does not invent an offer where there was none", () => {
+    const canvas = stage();
+    document.body.append(canvas);
+    const twoD = createGraphEngine({ canvas, reducedMotion: true });
+    built.push(twoD);
+    twoD.load(analysis);
+    const threeD = createNebula3DEngine({ canvas, reducedMotion: true });
+    built.push(threeD);
+    threeD.load(analysis);
+    carry(twoD, threeD);
+    expect(threeD.getReturnScope()).toBeNull();
+  });
+
+  it("restores the offer after the scope, not before it", () => {
+    // Entering a scope clears the offer by design (5.4), so restoring the
+    // offer first would have the scope restore wipe it straight out again.
+    const canvas = stage();
+    document.body.append(canvas);
+    const engine = createNebula3DEngine({ canvas, reducedMotion: true });
+    built.push(engine);
+    engine.load(analysis);
+    const moduleId = engine.nodes.find((n) => n.kind === "module")!.id;
+
+    engine.setReturnScope(moduleId);
+    engine.setScope(moduleId);
+    expect(engine.getReturnScope()).toBeNull();
+
+    engine.setReturnScope(moduleId);
+    expect(engine.getReturnScope()).toBe(moduleId);
+  });
+
+  it("is implemented by both engines, so either can receive the state", () => {
+    const canvas = stage();
+    document.body.append(canvas);
+    for (const engine of [
+      createGraphEngine({ canvas, reducedMotion: true }),
+      createNebula3DEngine({ canvas, reducedMotion: true }),
+    ]) {
+      built.push(engine);
+      engine.load(analysis);
+      const moduleId = engine.nodes.find((n) => n.kind === "module")!.id;
+      engine.setReturnScope(moduleId);
+      expect(engine.getReturnScope()).toBe(moduleId);
+      engine.setReturnScope(null);
+      expect(engine.getReturnScope()).toBeNull();
+    }
   });
 });

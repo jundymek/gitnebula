@@ -940,6 +940,19 @@ export class Nebula3DEngine implements GraphEngine {
     return this.lastScopeId;
   }
 
+  /**
+   * Restore a pending "return to scope" offer (story 5.7's view swap).
+   *
+   * Deliberately does nothing but set the field: no event, no scope change, no
+   * camera move. The offer's *creation* still belongs solely to the search
+   * transition in `flyTo` — this only hands an existing one to a replacement
+   * engine, and `connectEngine` mirrors `getReturnScope()` on attach, so
+   * publishing here would duplicate it.
+   */
+  setReturnScope(moduleId: string | null): void {
+    this.lastScopeId = moduleId;
+  }
+
   private reconcileInteraction(): void {
     const visible = this.visibleIds();
     if (!visible) return;

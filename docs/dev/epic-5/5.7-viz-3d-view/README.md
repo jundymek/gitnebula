@@ -55,6 +55,13 @@ file — agreed with 5.6's owner so two parallel stories in one package never
 meet in a merge, and it keeps the 2D suite's diff empty, which is how "2D comes
 out of this story unchanged" is demonstrated rather than claimed.
 
+One qualification, added late and deliberately not buried: `engine.ts` **is**
+touched, by 13 additive lines implementing `setReturnScope`. Code review found
+that a view swap silently dropped story 5.4's "return to scope" offer, and the
+getter had no counterpart to restore it through. The fix needed an interface
+member in both engines; it was escalated to the maintainer and implemented on
+their instruction. No existing 2D code path changed.
+
 ### Updated
 
 | file | change |
@@ -125,7 +132,7 @@ Idle auto-rotation runs until the reader rotates by hand, and never runs under
 
 | AC | where |
 | --- | --- |
-| AC-1 second impl. behind the seam, 2D default, `boundary.test.ts` unchanged | `engine3d.test.ts` "AC-1" block; `boundary.test.ts` has a **zero-line diff** |
+| AC-1 second impl. behind the seam, 2D default, `boundary.test.ts` unchanged | `engine3d.test.ts` "AC-1" block; `boundary.test.ts` has a **zero-line diff**. `engine.ts` gains one additive method (round 7, maintainer-approved) and no changed line |
 | AC-2 determinism incl. initial orientation | `engine3d.test.ts` "AC-2" block; `layout3d.test.ts` |
 | AC-3 3D perf measured and recorded | [PERFORMANCE.md](PERFORMANCE.md); `fps-3d.pw.ts`, `degradation-3d.pw.ts` |
 | AC-4 bundle within ADR-0004's budget | [PERFORMANCE.md](PERFORMANCE.md) §2; `packages/cli` budget tests |
