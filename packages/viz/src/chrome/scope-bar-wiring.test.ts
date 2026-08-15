@@ -133,6 +133,37 @@ describe("AC-2 — a scope is never invisible and never inescapable", () => {
     ).toBe("true");
   });
 
+  it("restores a pending return offer when chrome reconnects", () => {
+    // Auto-review finding: the offer lives in the engine, and the `scope`
+    // event that created it can have fired before this chrome was listening.
+    // Without mirroring it at connect time the button simply is not there, and
+    // the user's way back is gone with nothing having said so.
+    const first = mount();
+    const focus = firstModuleId();
+    engine.setScope(focus);
+    // A search leaves the scope, creating the offer.
+    const scope = inScopeIds(buildGraph(langgraphShapedDocument()), focus);
+    const outside = engine.nodes.find((node) => !scope.has(node.id))!;
+    void engine.flyTo(outside.id, { durationMs: 0 });
+    expect(engine.getReturnScope()).toBe(focus);
+
+    // Chrome goes away and a fresh one connects to the same engine.
+    teardown?.();
+    const root = document.createElement("div");
+    document.body.replaceChildren(root);
+    const chrome = mountChrome(root, langgraphShapedDocument(), {
+      stage:
+        first.root.querySelector("canvas") ?? document.createElement("canvas"),
+      actions: { onReplay: () => {} },
+    });
+    teardown = connectEngine(chrome, engine, {
+      analysis: langgraphShapedDocument(),
+    });
+
+    const bar = root.querySelector<HTMLElement>(`#${SCOPE_BAR_ID}`)!;
+    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+  });
+
   it("leaves the scope when the bar's exit is pressed", () => {
     const { bar } = mount();
     engine.setScope(firstModuleId());
@@ -267,7 +298,7 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     engine.load(langgraphShapedDocument());
 
     expect(visibleText(bar, ".scope-bar-back")).toBe("");
-    expect(engine.getLastScope()).toBeNull();
+    expect(engine.getReturnScope()).toBeNull();
   });
 
   it("withdraws the offer once a scope is active again", async () => {

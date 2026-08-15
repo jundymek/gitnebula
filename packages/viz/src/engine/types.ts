@@ -288,6 +288,17 @@ export interface GraphEngine {
   setConnectedOnly(connectedOnly: boolean): void;
 
   /**
+   * The scope currently offered as a way back after a search left one, or null
+   * for "offer nothing" (AC-5).
+   *
+   * On the interface so chrome can mirror it when it connects: the `scope`
+   * event that created the offer may have fired before anything was
+   * listening, and an offer the engine still holds but the chrome cannot see
+   * is a way back the user has silently lost.
+   */
+  getReturnScope(): string | null;
+
+  /**
    * How many nodes each filter is currently hiding, kept apart by cause.
    * Never a combined total — UX-DR14 asks a hidden state to name its cause,
    * and the two counts are not additive.

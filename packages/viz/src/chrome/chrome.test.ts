@@ -176,7 +176,8 @@ function fakeEngine(nodes: readonly EngineNode[] = []) {
     // `connectEngine` throw for every suite in this file.
     getScope: () => null,
     getConnectedOnly: () => false,
-    hiddenCount: () => ({ byScope: 0, byDegree: 0 }),
+    getReturnScope: () => null,
+    hiddenCount: () => ({ byScope: 0, byDegree: 0, visible: nodes.length }),
   } as unknown as GraphEngine;
 
   function emit(event: GraphEngineEvent, payload: unknown): void {
