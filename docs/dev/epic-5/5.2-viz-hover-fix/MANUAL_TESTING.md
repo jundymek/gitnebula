@@ -121,9 +121,16 @@ is a comparison rather than an assertion.
       `exportPNG()` returned an `image/png` blob of 5,381 KB (base: 5,401 KB;
       the difference is the ring and the labels this story keeps, which is the
       export doing its job of reproducing what is on screen).
-- [x] **Automated suites**: `pnpm --filter @gitnebula/viz test` → 36 files, 439
-      tests pass. `pnpm lint`, `pnpm test` (all six packages) and `pnpm build`
-      all exit 0.
+- [x] **Automated suites**: `pnpm --filter @gitnebula/viz test` → **39 files,
+      488 tests** pass (36/439 before the rebase onto pamela's 5.3, plus her
+      suite and the pan-behaviour test this branch added afterwards).
+      `pnpm lint` and `pnpm build` exit 0, and so does the workspace-wide
+      `pnpm test` — which is what covers `cli` here, 15 files / 145 tests.
+      Note for anyone reproducing: the **`pnpm --filter @gitnebula/cli` form
+      matches no project and exits 0** — the package is named `gitnebula` — so a
+      cli result quoted from that filter is a run that never happened. Nothing
+      in this story rests on it; it is specced separately as
+      `5.9-repo-test-command-false-green`.
 - [x] **`pnpm --filter @gitnebula/viz perf`**: the fps floor holds (see
       [`PERFORMANCE.md`](PERFORMANCE.md)). One test in that suite,
       `export.pw.ts`, fails **identically on the untouched base checkout** —
