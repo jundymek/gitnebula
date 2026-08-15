@@ -130,6 +130,38 @@ describe("project", () => {
     expect(p.viewZ).toBeCloseTo(BASE_DISTANCE + 100);
   });
 
+  it("centres the target point itself, at any orientation", () => {
+    // The orbit target is a point in three dimensions: `camera.x`/`camera.y`
+    // and `targetZ`. Whatever the orientation, the point the camera is looking
+    // at projects to the middle of the viewport — that is what makes it the
+    // target. Without `targetZ` the target was pinned to the z = 0 plane.
+    const node = { x: 37, y: -12, z: 88 };
+    const p = project(
+      node,
+      { x: node.x, y: node.y, k: 1.4 },
+      { yaw: 0.884, pitch: -0.128 },
+      VIEWPORT,
+      node.z,
+    )!;
+    expect(p.x).toBeCloseTo(500);
+    expect(p.y).toBeCloseTo(300);
+  });
+
+  it("does NOT centre a node with depth when the target has none", () => {
+    // The defect this guards: with `targetZ` left at 0, the node's own z
+    // rotates into screen x/y and no x/y pan can cancel it. Asserted as a
+    // real offset rather than a rounding error, so the fix above is not
+    // passing for a trivial reason.
+    const node = { x: 37, y: -12, z: 200 };
+    const p = project(
+      node,
+      { x: node.x, y: node.y, k: 1 },
+      { yaw: 0.884, pitch: -0.128 },
+      VIEWPORT,
+    )!;
+    expect(Math.abs(p.x - 500)).toBeGreaterThan(50);
+  });
+
   it("is a pure function of its inputs — the same call twice agrees (AD-6)", () => {
     const args = [
       { x: 37, y: -12, z: 88 },

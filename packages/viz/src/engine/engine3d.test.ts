@@ -5,6 +5,7 @@ import { Nebula3DEngine, seedOrientation } from "./engine3d.js";
 import { CanvasGraphEngine } from "./engine.js";
 import { MAX_ZOOM, MIN_ZOOM, UNFOLD_ZOOM } from "./constants.js";
 import { PITCH_LIMIT } from "./project3d.js";
+import { placeNodes } from "./render3d.js";
 import {
   installFakeCanvas,
   type FakeContext,
@@ -248,6 +249,50 @@ describe("AC-2 — determinism (AD-6)", () => {
     run(a, 200);
     run(b, 200);
     expect(a.buildScene(0)).toEqual(b.buildScene(0));
+  });
+});
+
+describe("flyTo centres its target", () => {
+  it("puts a flown-to node at the middle of the viewport", () => {
+    // `flyTo` is how search arrives at a node (FR-18). Landing with the target
+    // visibly beside the centre is the difference between "the search worked"
+    // and "the search moved the camera somewhere near the answer".
+    engine = create(true);
+    engine.load(loadContractFixture("cyclic-imports"));
+    run(engine, 5);
+
+    const target = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(target.id, { durationMs: 0 });
+
+    const scene = engine.buildScene(0)!;
+    const placed = placeNodes(scene).find((p) => p.id === target.id);
+    expect(placed).toBeDefined();
+    expect(placed!.sx).toBeCloseTo(scene.viewport.width / 2, 0);
+    expect(placed!.sy).toBeCloseTo(scene.viewport.height / 2, 0);
+  });
+
+  it("centres it whatever the camera orientation is", () => {
+    // The seeded orientation has a nonzero yaw, which is exactly the case that
+    // broke: the node's depth rotated into screen x/y. Checked across several
+    // orientations so the assertion cannot pass by a lucky angle.
+    engine = create(true);
+    engine.load(loadContractFixture("cyclic-imports"));
+    run(engine, 5);
+    const target = engine.nodes.find((node) => node.kind === "module")!;
+
+    for (const orientation of [
+      { yaw: 0, pitch: 0 },
+      { yaw: 0.9, pitch: -0.3 },
+      { yaw: 2.4, pitch: 0.7 },
+      { yaw: -1.2, pitch: 0.2 },
+    ]) {
+      engine.setOrientation(orientation);
+      void engine.flyTo(target.id, { durationMs: 0 });
+      const scene = engine.buildScene(0)!;
+      const placed = placeNodes(scene).find((p) => p.id === target.id)!;
+      expect(placed.sx).toBeCloseTo(scene.viewport.width / 2, 0);
+      expect(placed.sy).toBeCloseTo(scene.viewport.height / 2, 0);
+    }
   });
 });
 

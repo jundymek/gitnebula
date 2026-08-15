@@ -110,12 +110,24 @@ export function project(
   camera: CameraState,
   orientation: Orientation,
   viewport: Viewport,
+  targetZ = 0,
 ): Projected | null {
   // Pan moves the orbit target, so subtract it before rotating: panning is
   // "look at somewhere else", not "translate the screen".
+  //
+  // The target has a **depth** as well as an x/y, and `targetZ` is it. Only
+  // two of its three coordinates fit on `CameraState`, so the third lives in
+  // the engine — the same arrangement yaw and pitch have, and for the same
+  // reason (DECISIONS.md D2).
+  //
+  // Without it the target is pinned to the z = 0 plane, and a node's own depth
+  // rotates into screen x/y that no amount of x/y panning can cancel: at the
+  // seeded orientation a node at z = 200 lands ~155 world units off centre, so
+  // `flyTo` would leave its target visibly beside the middle of the viewport.
+  // Defaults to 0, which is exactly the old behaviour.
   const dx = point.x - camera.x;
   const dy = point.y - camera.y;
-  const dz = point.z;
+  const dz = point.z - targetZ;
 
   const cosYaw = Math.cos(orientation.yaw);
   const sinYaw = Math.sin(orientation.yaw);

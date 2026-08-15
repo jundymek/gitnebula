@@ -81,11 +81,15 @@ what keeps the O(n²) repulsion at ~100 nodes instead of 2,000.
 interface must not change, so:
 
 - `k` → orbit **distance** (inverse: zoom in = closer),
-- `x`/`y` → pan of the orbit **target**,
-- **yaw/pitch → engine-internal state**, not on the seam.
+- `x`/`y` → two coordinates of the orbit **target**,
+- **yaw/pitch and the target's depth (`targetZ`) → engine-internal state**, not
+  on the seam.
 
-Yaw and pitch are the same *kind* of thing as hover: interaction the engine
-owns and chrome never reaches into. Putting them on `CameraState` would have
+Yaw, pitch and the target's depth are the same *kind* of thing as hover:
+interaction the engine owns and chrome never reaches into. The target needs
+three coordinates and `CameraState` has room for two — code review found that
+the missing third one meant `flyTo` could not centre a node with any depth,
+landing ~155 world units off centre at the seeded orientation. Putting them on `CameraState` would have
 been a breaking change forcing every 2D consumer to carry two meaningless
 fields — weakening the seam this story exists to prove. `getOrientation()` is a
 class member, not an interface one; tests and the perf harness read it, chrome

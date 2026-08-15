@@ -95,6 +95,12 @@ export interface Scene3D {
   readonly showFileLabels: boolean;
   /** 0 disables the depth fog; 1 is the full ramp. */
   readonly fogStrength: number;
+  /**
+   * Depth of the orbit target. The third coordinate of the point the camera
+   * looks at; the other two are `camera.x`/`camera.y`. Optional, defaulting to
+   * the z = 0 plane.
+   */
+  readonly targetZ?: number;
 }
 
 /** A node that survived projection and culling, with its drawing inputs. */
@@ -168,9 +174,16 @@ export function emphasised3D(scene: FocusState, nodeId: string): boolean {
  */
 export function placeNodes(scene: Scene3D): Placed3DNode[] {
   const { camera, orientation, viewport } = scene;
+  const targetZ = scene.targetZ ?? 0;
   const placed: Placed3DNode[] = [];
   for (const item of scene.nodes) {
-    const p: Projected | null = project(item, camera, orientation, viewport);
+    const p: Projected | null = project(
+      item,
+      camera,
+      orientation,
+      viewport,
+      targetZ,
+    );
     if (!p) continue;
     if (
       p.x < -CULL_MARGIN_PX ||

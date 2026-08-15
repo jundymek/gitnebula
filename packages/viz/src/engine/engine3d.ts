@@ -147,6 +147,17 @@ export class Nebula3DEngine implements GraphEngine {
   private viewport: Viewport = { width: 0, height: 0 };
   private camera: CameraState = IDENTITY_CAMERA;
   private orientation: Orientation = { yaw: 0, pitch: 0 };
+  /**
+   * Depth of the orbit target — the third coordinate of the point the camera
+   * looks at, where `camera.x`/`camera.y` are the other two.
+   *
+   * Engine-internal for the same reason yaw and pitch are (D2): `CameraState`
+   * has room for two coordinates and the target needs three. Without it the
+   * target is stuck on the z = 0 plane and `flyTo` cannot centre a node with
+   * any depth — the node's own z rotates into screen x/y that no x/y pan can
+   * cancel.
+   */
+  private targetZ = 0;
   /** The orientation `load()` seeded, so `replay()` can return to it exactly. */
   private initialOrientation: Orientation = { yaw: 0, pitch: 0 };
   private flight: CameraFlight | null = null;
@@ -274,6 +285,7 @@ export class Nebula3DEngine implements GraphEngine {
     this.initialOrientation = seedOrientation(this.seed);
     this.orientation = this.initialOrientation;
     this.camera = { x: 0, y: 0, k: 1 };
+    this.targetZ = 0;
     this.settleStartMs = null;
     this.settleAnnounced = false;
     this.emitter.emit("settle-start", { reason });
@@ -497,6 +509,9 @@ export class Nebula3DEngine implements GraphEngine {
         2 *
         BASE_DISTANCE,
     );
+    // Framing the cloud means looking at its centre in all three axes, not at
+    // the z = 0 slice of it.
+    this.targetZ = (bounds.minZ + bounds.maxZ) / 2;
     return { x: cx, y: cy, k: clampZoom(BASE_DISTANCE / wanted) };
   }
 
@@ -546,6 +561,11 @@ export class Nebula3DEngine implements GraphEngine {
       options.zoom ??
       (node.kind === "module" ? FLY_ZOOM_MODULE : FLY_ZOOM_FILE);
     const position = this.positionOf(id);
+    // The target's depth as well as its x/y: with all three matching the node
+    // it projects to the exact centre of the viewport at ANY orientation.
+    // Setting only x/y left the node's own z rotating into screen x/y, which
+    // put a searched node ~155 world units off centre at the seeded yaw.
+    if (position) this.targetZ = position.z;
     const target: CameraState = {
       x: position?.x ?? this.camera.x,
       y: position?.y ?? this.camera.y,
@@ -1198,6 +1218,7 @@ export class Nebula3DEngine implements GraphEngine {
       selectedId: this.selectedId,
       blastRadius:
         this.blastRadiusIds.length > 0 ? new Set(this.blastRadiusIds) : null,
+      targetZ: this.targetZ,
       showFileLabels: this.camera.k >= FILE_LABEL_ZOOM,
       fogStrength: this.fogStrength,
     };
