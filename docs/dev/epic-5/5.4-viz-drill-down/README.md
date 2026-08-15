@@ -81,12 +81,19 @@ the **scope alone**, not against the whole visible set. A node that is *in*
 scope but hidden by connected-only is not out of scope, and clearing the scope
 for it would cost the user their frame without putting the target on screen.
 
-**Known gap, not fixed here.** If connected-only alone hides a search target,
-the camera still flies to a node that is not drawn. AC-5 covers the scope case
-only, and extending the same principle to connected-only is a real improvement
-but not one this story's criteria ask for — widening it unilaterally into a
-shared file three agents are editing this wave is the wrong trade. Flagged for
-the owner.
+**Connected-only gives way too, for the same reason.** If that filter alone
+hides a search target, it is switched off before the flight. This was
+originally left as a known gap on the grounds that AC-5 names only the scope —
+a fifth review pass flagged it P1 and was right to: the failure it produces is
+worse than the silent no-op AC-5 forbids, because the camera lands on empty
+space and the panel describes a node the user cannot see. The reasoning for
+declining ("it widens the story into a file three agents are editing") was
+wrong on inspection: the whole change lives in this story's own code path.
+
+**Story 5.3's layer filter is deliberately NOT touched** when it hides a
+target. Switching off another story's control from inside this code path is
+the kind of surprise that is worse than the problem. Reported rather than
+silently handled.
 
 ## Files
 

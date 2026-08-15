@@ -324,6 +324,14 @@ export class CanvasGraphEngine implements GraphEngine {
     this.cameraTakenByUser = false;
     this.layout?.stop();
     this.layout = new ModuleLayout(graph, this.rng);
+    // Story 5.4: `clearUnfolds()` above drops every hold, including the one an
+    // active scope has on its focus module — but a replay does not leave the
+    // scope, so the chrome goes on reporting it. Without this the scope
+    // survives with its member files gone, which is the promise of AC-1
+    // quietly broken by a button that is supposed to change nothing but the
+    // animation. Re-taken here; the wake is rebuilt by `updateUnfolds` once
+    // the new layout has settled and the anchor positions are real.
+    this.scopePin = this.scopeId;
     this.stars = seedStars(this.rng);
     this.camera = IDENTITY_CAMERA;
     this.settleStartMs = null;
@@ -515,6 +523,28 @@ export class CanvasGraphEngine implements GraphEngine {
       // be the odd one out.
       this.scopePin = null;
       this.updateUnfolds();
+      this.invalidateVisible();
+      this.emitScope(id);
+    }
+
+    // The same rule, applied to this story's other filter. Connected-only can
+    // hide a search target on its own — a file with no dependencies is exactly
+    // the sort of thing someone searches for by name — and flying to a node
+    // that is not drawn is worse than the silent no-op AC-5 already forbids:
+    // the camera lands on empty space and the panel describes something the
+    // user cannot see.
+    //
+    // So the filter gives way, exactly as the scope does. It is turned off
+    // rather than suspended: it is a view the user chose, and quietly
+    // half-applying it would be a third state nobody asked for. The `scope`
+    // event carries the change, so the toggle in the chrome follows.
+    //
+    // Story 5.3's layer filter can hide a target too. That one is NOT touched
+    // here: it belongs to another story, and switching off somebody else's
+    // control from inside this code path is exactly the kind of surprise this
+    // comment exists to prevent. Reported rather than silently handled.
+    if (this.connectedOnly && !this.visibleIds()?.has(id)) {
+      this.connectedOnly = false;
       this.invalidateVisible();
       this.emitScope(id);
     }

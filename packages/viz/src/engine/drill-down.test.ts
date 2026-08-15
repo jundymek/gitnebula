@@ -497,6 +497,37 @@ describe("AC-4 — scoping never re-runs the settle", () => {
     expect(onSettleStart).not.toHaveBeenCalled();
   });
 
+  it("keeps the scope's member files across a replay", () => {
+    // Fifth pass, P2: `startSettle` clears every unfold hold, including the
+    // scope's — but a replay does not leave the scope, so the chrome went on
+    // reporting one whose files had vanished. A button that changes only the
+    // animation must not quietly break AC-1.
+    settledEngine();
+    const focus = firstModuleId();
+    engine.setCamera({ k: 1 });
+    engine.setScope(focus);
+    expect(engine.isUnfolded(focus)).toBe(true);
+
+    engine.replay();
+    run(600);
+    // After the replay the engine re-frames the graph, and on a three-module
+    // fixture that lands above the unfold threshold — where the viewport rule
+    // would open the module anyway and hide the defect. Zooming back out is
+    // what leaves the scope's own hold as the only thing that can keep the
+    // files on screen.
+    engine.setCamera({ k: 1 });
+    run(2);
+
+    expect(engine.getScope()).toBe(focus);
+    expect(engine.isUnfolded(focus)).toBe(true);
+    const graph = buildGraph(langgraphShapedDocument());
+    const members = (graph.membersByModule.get(focus) ?? []).map(
+      (index) => graph.nodes[index]!.id,
+    );
+    const drawn = new Set(scene().nodes.map((item) => item.node.id));
+    for (const member of members) expect(drawn.has(member)).toBe(true);
+  });
+
   it("does not move positions while scoped either", () => {
     settledEngine();
     const focus = firstModuleId();
@@ -603,6 +634,51 @@ describe("AC-5 — search out of the scope leaves it and flies", () => {
     expect(engine.isUnfolded(focus)).toBe(true);
     const drawn = new Set(scene().nodes.map((item) => item.node.id));
     expect(drawn.has(member)).toBe(true);
+  });
+
+  it("puts a connected-only-hidden target back in the frame before flying", async () => {
+    // Fifth Codex pass, P1 — and the gap I had declined as out of scope. It is
+    // the same failure AC-5 forbids, one filter over: the camera lands on
+    // empty space and the panel describes a node that is not drawn. A file
+    // with no dependencies is exactly what someone searches for by name.
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    const graph = buildGraph(loadContractFixture("synthetic-100x2000"));
+    const edgeless = graph.nodes.find(
+      (node) => node.kind === "file" && degreeOf(graph, node.id) === 0,
+    )!;
+    engine.setConnectedOnly(true);
+    expect(engine.getConnectedOnly()).toBe(true);
+
+    await engine.flyTo(edgeless.id, { durationMs: 0 });
+
+    // The filter gave way, and the target is actually on screen.
+    expect(engine.getConnectedOnly()).toBe(false);
+    const drawn = new Set(scene().nodes.map((item) => item.node.id));
+    expect(drawn.has(edgeless.id)).toBe(true);
+    expect(engine.getSelected()?.id).toBe(edgeless.id);
+  });
+
+  it("leaves connected-only alone when the target is already drawn", async () => {
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    const graph = buildGraph(loadContractFixture("synthetic-100x2000"));
+    const connected = graph.nodes.find(
+      (node) => node.kind === "module" && degreeOf(graph, node.id) > 0,
+    )!;
+    engine.setConnectedOnly(true);
+
+    await engine.flyTo(connected.id, { durationMs: 0 });
+
+    expect(engine.getConnectedOnly()).toBe(true);
   });
 
   it("keeps the scope when the target is inside it", async () => {
