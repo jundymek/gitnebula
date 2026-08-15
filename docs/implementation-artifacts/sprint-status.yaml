@@ -91,13 +91,13 @@ development_status:
   5.4-viz-drill-down: done
   5.5-viz-history-window: done
   # Wave B — launched after wave A lands on the epic branch:
-  5.6-viz-blast-radius: review
-  5.7-viz-3d-view: review
+  5.6-viz-blast-radius: done
+  5.7-viz-3d-view: done
   # 5.8 documents what 5.1-5.7 build, so it is worked and merged last. Its
   # Depends_on is [] because the harness stores exactly one blocking
   # predecessor and seven cannot be declared — the ordering is the
   # supervisor's, exactly as it was for 4.3.
-  5.8-repo-docs-refresh: backlog
+  5.8-repo-docs-refresh: done
   # 5.9 was written by the epic-5 supervisor during wave A, with the
   # maintainer's agreement, from a defect no story owned: the cli test command
   # in six specs matches no project and exits 0. Unassigned — the wave it
