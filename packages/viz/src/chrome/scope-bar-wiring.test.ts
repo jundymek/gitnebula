@@ -73,7 +73,9 @@ afterEach(() => {
 describe("AC-2 — a scope is never invisible and never inescapable", () => {
   it("puts the indicator in the DOM the moment the engine is scoped", () => {
     const { bar } = mount();
-    expect(bar.hidden).toBe(true);
+    // The bar is always present — it carries the connected-only toggle — but
+    // it says nothing about a scope until there is one.
+    expect(visibleText(bar, ".scope-bar-scope")).toBe("");
 
     const focus = firstModuleId();
     engine.setScope(focus);

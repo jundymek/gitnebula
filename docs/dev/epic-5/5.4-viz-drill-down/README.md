@@ -171,6 +171,16 @@ happened — and loading a new document left the offer on screen pointing into
 the previous repository. The `scope` event now carries `returnToScopeId`, the
 state of the offer itself, and chrome mirrors it without inferring anything.
 
+## The bar is always on screen
+
+Its **parts** come and go — the scope line, the leave button, the way back —
+but the bar itself does not, because it carries the only control that switches
+connected-only on. An earlier version hid the whole bar while idle, which made
+that filter unreachable from the default view: a reader had to discover
+drill-down and enter a module scope before they could find a toggle that has
+nothing to do with scoping. Caught by review, not by the suite — the tests at
+the time asserted the bar hides, which is the mechanism, not the promise.
+
 ## Notes for the reviewer
 
 - The visible-id set is **cached and invalidated on filter or document

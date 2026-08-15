@@ -44,11 +44,37 @@ describe("AC-2 — the scope is always visible while one is active", () => {
     expect(leave?.hidden).toBe(false);
   });
 
-  it("hides the indicator when nothing is scoped", () => {
+  it("hides the scope line when nothing is scoped", () => {
     const handle = bar();
     handle.update(IDLE);
     expect(text(handle.element, ".scope-bar-scope")).toBe("");
-    expect(handle.element.hidden).toBe(true);
+    expect(
+      handle.element.querySelector<HTMLElement>(".scope-bar-leave")?.hidden,
+    ).toBe(true);
+  });
+
+  it("keeps the connected-only toggle reachable in the default view", () => {
+    // The bar carries the ONLY control that switches connected-only on.
+    // Hiding the whole bar while idle made that filter unreachable from the
+    // default view: a user had to discover drill-down and enter a scope before
+    // they could find a toggle that has nothing to do with scoping.
+    const handle = bar();
+    handle.update(IDLE);
+    expect(handle.element.hidden).toBe(false);
+    const toggle = handle.element.querySelector<HTMLElement>(
+      ".scope-bar-connected",
+    );
+    expect(toggle?.hidden).toBe(false);
+  });
+
+  it("can switch connected-only on straight from the idle state", () => {
+    const onConnectedOnly = vi.fn();
+    const handle = bar({ onConnectedOnly });
+    handle.update(IDLE);
+    handle.element
+      .querySelector<HTMLButtonElement>(".scope-bar-connected")!
+      .click();
+    expect(onConnectedOnly).toHaveBeenCalledWith(true);
   });
 
   it("asks to leave the scope when the exit is pressed", () => {

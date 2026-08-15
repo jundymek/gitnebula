@@ -18,9 +18,16 @@ step needing a live browser is unticked below.
       purpose: it is in neither `lint` nor `test`, and it is the only thing
       that catches a new required `ChromeState` field breaking
       `export-button.test.ts` (reported by story 5.1's owner mid-wave).
-- [x] `pnpm test` → **exit 0** across the workspace: viz 493, cli 145,
-      scanner 145, githist 74, deps 66 (+2 skipped), contract passing.
+- [x] `pnpm test` → **exit 0** across the workspace: viz 583, cli 145,
+      scanner 145, githist 74, deps 66 (+2 skipped), contract 105.
       `chrome/boundary.test.ts` passes **byte-unchanged** (AC-6, AD-5).
+      *On the command:* the cli figure comes from this **workspace-wide** run,
+      not from `--filter @gitnebula/cli`. That filter matches nothing — the
+      package is named `gitnebula` — and pnpm exits 0 on a no-match, so
+      quoting it would report a suite that never ran. Raised across the epic by
+      the supervisor and specced as story 5.9; nothing here rests on it. The
+      viz filter in this spec's test command is genuine: `@gitnebula/viz` is
+      that package's real name, verified.
 - [x] `pnpm build` → viz `dist/index.html` 205.89 kB (gzip 63.03 kB), cli
       bundle built and assets assembled.
 

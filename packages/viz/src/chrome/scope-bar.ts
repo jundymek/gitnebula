@@ -148,7 +148,13 @@ export function renderScopeBar(actions: ScopeBarActions): ScopeBarHandle {
         back.textContent = `return to ${state.leftScopeId}`;
       }
 
-      element.hidden = !scoped && !offerReturn && !state.connectedOnly;
+      // The bar itself is ALWAYS on screen, because it carries the only
+      // control that can switch connected-only on. Hiding it while idle made
+      // that filter unreachable from the default view: a user had to discover
+      // drill-down, enter a scope, and only then could they find the toggle
+      // for a filter that has nothing to do with scoping. Its parts come and
+      // go (see above); the bar does not.
+      element.hidden = false;
     },
   };
 
