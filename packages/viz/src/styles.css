@@ -773,3 +773,65 @@ canvas {
   padding: 6px 12px;
   cursor: pointer;
 }
+
+/* ---- story 5.5: the analysis window made legible ----
+   Appended at the end of the file, no existing selector touched — the
+   convention the wave-A cohort agreed so five branches union cleanly. */
+
+/* The history group's caption. It carries AC-1: the window is stated once for
+   the metrics it covers rather than suffixed onto each of their labels. */
+.p-window {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 14px 0 2px;
+}
+
+/* An absent value, not a zero (AC-2). Colour alone would not survive a
+   greyscale render or a colour-vision deficiency, so the italic carries the
+   distinction independently of the hue. */
+.p-row.is-empty span:last-child {
+  color: var(--ink-mute);
+  font-style: italic;
+}
+
+/* The panel-level empty state: cause, then exit (UX-DR14). */
+.p-notice {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  border-left: 2px solid var(--line);
+  padding-left: 9px;
+  margin: 12px 0 0;
+}
+
+.p-notice-cause,
+.p-notice-exit {
+  display: block;
+}
+
+/* The exit is the actionable half, so it reads one step brighter than the
+   cause rather than one step dimmer. */
+.p-notice-exit {
+  color: var(--ink-dim);
+}
+
+/* The heatmap's near-uniform notice (AC-4). Sits under the legend keys and
+   only in heat mode; `max-width` keeps it off the canvas on a narrow window. */
+.legend-notice {
+  display: block;
+  max-width: 30ch;
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  line-height: 1.6;
+}
+
+.legend-notice-exit {
+  display: block;
+  color: var(--ink-dim);
+}

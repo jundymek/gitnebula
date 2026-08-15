@@ -22,7 +22,7 @@ import {
 import { renderFilterEmpty, type FilterEmptyHandle } from "./filter-empty.js";
 import { renderHint } from "./hint.js";
 import { renderLayerFilter, type LayerFilterHandle } from "./layer-filter.js";
-import { renderLegend } from "./legend.js";
+import { renderLegend, type LegendHandle } from "./legend.js";
 import { renderModeToggle, type ModeToggleHandle } from "./mode-toggle.js";
 import { renderPanel, type PanelHandle } from "./panel.js";
 // Types only: the bootstrap constructs these and hands them in, so chrome
@@ -68,6 +68,8 @@ export interface ChromeHandle extends Store<ChromeState> {
   /** Story 5.3's layer filter and its empty state (FR-28). */
   readonly layerFilter: LayerFilterHandle;
   readonly filterEmpty: FilterEmptyHandle;
+  /** Story 5.5's legend, which follows the mode to show its notice (AC-4). */
+  readonly legend: LegendHandle;
   /**
    * Give the chrome the engine its controls act on. Called by
    * `connectEngine`, because the engine cannot exist before the stage it
@@ -220,10 +222,15 @@ export function mountChrome(
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
   header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
 
+  // Story 5.5: the legend reads the document so it can name the heatmap's
+  // near-uniform case, and follows the engine's mode (wired in
+  // `connectEngine`).
+  const legend = renderLegend(analysis);
+
   const main = document.createElement("main");
   main.append(
     options.stage,
-    renderLegend(),
+    legend.element,
     renderHint(),
     panel.element,
     startHere.element,
@@ -240,6 +247,7 @@ export function mountChrome(
     startHere,
     layerFilter,
     filterEmpty,
+    legend,
     attachEngine(next) {
       engine = next;
     },
@@ -311,6 +319,13 @@ export function connectEngine(
     engine.on("mode", ({ mode }) => {
       handle.setState({ mode });
       handle.modeToggle.setMode(mode);
+      // Story 5.5: the legend's heatmap notice follows the mode. One line in
+      // the existing handler rather than a second `mode` subscription —
+      // chrome.test.ts's engine double keys listeners by event name, so a
+      // second subscription silently REPLACES this one and the mode toggle
+      // stops repainting. Relying on the real emitter's Set semantics here
+      // would be a trap for the next reader either way.
+      handle.legend.setMode(mode);
     }),
     // Story 5.3, appended as its own entry rather than folded into a handler
     // above — the convention this wave's five agents agreed on for this array.
@@ -353,6 +368,7 @@ export function connectEngine(
     visible: engine.nodes.length - hidden,
     hidden,
   });
+  handle.legend.setMode(mode);
   // The PNG button (3.5) is mounted here rather than in `mountChrome` because
   // this is where the engine handle exists — the header only reserves the slot.
   document

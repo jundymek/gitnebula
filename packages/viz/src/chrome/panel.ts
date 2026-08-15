@@ -24,6 +24,7 @@
 import type { AnalysisDocument } from "@gitnebula/contract";
 
 import type { EngineNode } from "../engine/index.js";
+import { EMPTY_STATE_CLASS } from "./empty-state.js";
 import { buildPanelModel, type PanelModel } from "./panel-model.js";
 
 export interface PanelActions {
@@ -81,6 +82,15 @@ export function renderPanel(actions: PanelActions): PanelHandle {
   const rows = document.createElement("div");
   rows.className = "p-rows";
 
+  // Story 5.5: the panel-level empty state. One element, repainted per node,
+  // so a zero-history repository states its case once rather than once per
+  // row (AC-3).
+  const notice = document.createElement("div");
+  notice.className = "p-notice";
+  const noticeCause = span("p-notice-cause");
+  const noticeExit = span("p-notice-exit");
+  notice.append(noticeCause, noticeExit);
+
   const bar = document.createElement("div");
   bar.className = "p-bar";
   const barFill = document.createElement("i");
@@ -103,7 +113,7 @@ export function renderPanel(actions: PanelActions): PanelHandle {
   const panelActions = document.createElement("div");
   panelActions.className = "p-actions";
 
-  panel.append(close, head, path, kind, rows, bar, panelActions);
+  panel.append(close, head, path, kind, rows, notice, bar, panelActions);
 
   const handle: PanelHandle = {
     element: panel,
@@ -133,18 +143,53 @@ export function renderPanel(actions: PanelActions): PanelHandle {
     path.textContent = model.path;
     kind.textContent = model.kindLine;
 
-    rows.replaceChildren(
-      ...model.rows.map((row) => {
-        const line = document.createElement("div");
-        line.className = "p-row";
-        const label = document.createElement("span");
-        label.textContent = row.label;
-        const value = document.createElement("span");
-        value.textContent = row.value;
-        line.append(label, value);
-        return line;
-      }),
+    const renderRow = (row: PanelModel["rows"][number]): HTMLElement => {
+      const line = document.createElement("div");
+      // AC-2: an absent value is marked, not merely worded differently, so
+      // the stylesheet can make it visibly distinct from a real zero.
+      line.className = row.empty ? `p-row ${EMPTY_STATE_CLASS}` : "p-row";
+      const label = document.createElement("span");
+      label.textContent = row.label;
+      const value = document.createElement("span");
+      value.textContent = row.value;
+      line.append(label, value);
+      return line;
+    };
+
+    // AC-1: the history rows live in a labelled group whose caption names the
+    // window, so every metric inside it states the window it covers — to a
+    // screen reader through `aria-label` as well as to the eye through the
+    // caption. The alternative, suffixing `365d` onto four labels, produces
+    // `last change 365d`, which is not a label anyone can read.
+    const historyGroup = document.createElement("div");
+    historyGroup.className = "p-history";
+    historyGroup.setAttribute("role", "group");
+    historyGroup.setAttribute("aria-label", model.historyCaption);
+    const caption = span("p-window");
+    caption.textContent = model.historyCaption;
+    historyGroup.append(
+      caption,
+      ...model.rows.filter((row) => row.history).map(renderRow),
     );
+
+    rows.replaceChildren(
+      ...model.rows.filter((row) => !row.history).map(renderRow),
+      historyGroup,
+    );
+
+    // AC-2 / AC-3: the exit out of an empty state, stated once per panel.
+    if (model.notice === null) {
+      notice.hidden = true;
+      noticeCause.textContent = "";
+      noticeExit.textContent = "";
+      delete notice.dataset["kind"];
+    } else {
+      notice.hidden = false;
+      // The kind, not the copy, is what a caller should branch on.
+      notice.dataset["kind"] = model.notice.kind;
+      noticeCause.textContent = model.notice.cause;
+      noticeExit.textContent = model.notice.exit;
+    }
 
     // AC-1: the bar's width IS the churn row's number, not a second reading
     // of the same value.

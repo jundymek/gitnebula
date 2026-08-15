@@ -116,7 +116,7 @@ describe("panel model — a file (AC-1)", () => {
 });
 
 describe("panel model — documents with nothing to say", () => {
-  it("prints em dashes for a node with no history and no partners", () => {
+  it("says the repository was quiet rather than printing a bare dash", () => {
     const document_ = loadContractFixture("zero-history");
     const model = buildPanelModel(
       document_,
@@ -124,7 +124,10 @@ describe("panel model — documents with nothing to say", () => {
       { now: NOW },
     );
     expect(model.rows[3]!.value).toBe("0");
-    expect(model.rows[4]!.value).toBe("—");
+    // Story 5.5: `—` said "the tool has nothing"; this says "the repository
+    // was quiet", which is the truth and the whole point of the story.
+    expect(model.rows[4]!.value).toBe("no change in last 365 days");
+    expect(model.rows[4]!.empty).toBe(true);
     expect(model.rows[5]!.value).toBe("—");
     expect(model.churnPercent).toBe("0%");
     expect(model.hot).toBe(false);
@@ -140,6 +143,120 @@ describe("panel model — documents with nothing to say", () => {
       now: NOW,
     });
     expect(model.rows[2]!.label).toBe("churn 30d");
+  });
+});
+
+describe("panel model — the analysis window is data, never a literal (AC-1)", () => {
+  // Every committed fixture analyses a full year, so a window of 90 appearing
+  // anywhere in the output would have to have been hardcoded.
+  const document_ = loadContractFixture("single-module");
+
+  it("captions the history rows with the document's window", () => {
+    expect(document_.repo.analysisWindowDays).not.toBe(90);
+    const model = buildPanelModel(
+      document_,
+      engineNodeFrom(document_, "app/"),
+      {
+        now: NOW,
+      },
+    );
+    expect(model.windowDays).toBe(365);
+    expect(model.historyCaption).toBe("history · last 365 days");
+  });
+
+  it("marks exactly the rows the window applies to", () => {
+    const model = buildPanelModel(
+      document_,
+      engineNodeFrom(document_, "app/"),
+      {
+        now: NOW,
+      },
+    );
+    const history = model.rows
+      .filter((row) => row.history)
+      .map((row) => row.label);
+    // `files` and `loc` are properties of the tree at HEAD; the rest are
+    // measured over the window and must say so.
+    expect(history).toEqual([
+      "churn 365d",
+      "authors",
+      "last change",
+      "co-changes with",
+    ]);
+  });
+
+  it("follows a reconfigured window everywhere it states one", () => {
+    const windowed: AnalysisDocument = {
+      ...document_,
+      repo: { ...document_.repo, analysisWindowDays: 14 },
+    };
+    const model = buildPanelModel(windowed, engineNodeFrom(windowed, "app/"), {
+      now: NOW,
+    });
+    expect(model.windowDays).toBe(14);
+    expect(model.historyCaption).toBe("history · last 14 days");
+    expect(model.rows[2]!.label).toBe("churn 14d");
+  });
+});
+
+describe("panel model — the empty states (AC-2, AC-3)", () => {
+  it("offers --window-days as the exit for an out-of-window node (AC-2)", () => {
+    // A repository WITH history, holding one node that has none — the case
+    // AC-2 is about, and the one that dominates a real checkout: 386 of 650
+    // files on a langgraph clone are in exactly this state.
+    const base = loadContractFixture("single-module");
+    const quietNode = base.nodes.find((node) => node.kind === "file")!;
+    const document_: AnalysisDocument = {
+      ...base,
+      nodes: base.nodes.map((node) =>
+        node.id === quietNode.id ? { ...node, lastChangedAt: null } : node,
+      ),
+    };
+
+    const model = buildPanelModel(
+      document_,
+      engineNodeFrom(document_, quietNode.id),
+      { now: NOW },
+    );
+
+    expect(model.notice).not.toBeNull();
+    expect(model.notice!.kind).toBe("node-out-of-window");
+    expect(model.notice!.cause).toBe("no change in last 365 days");
+    expect(model.notice!.exit).toContain("--window-days");
+  });
+
+  it("is silent for a node that does have history in the window", () => {
+    const document_ = loadContractFixture("single-module");
+    const model = buildPanelModel(
+      document_,
+      engineNodeFrom(document_, "app/"),
+      {
+        now: NOW,
+      },
+    );
+    expect(model.notice).toBeNull();
+    expect(model.rows.some((row) => row.empty)).toBe(false);
+  });
+
+  it("states the zero-history repository once, not per node (AC-3)", () => {
+    const document_ = loadContractFixture("zero-history");
+    expect(document_.repo.stats.commits).toBe(0);
+
+    for (const node of document_.nodes) {
+      const model = buildPanelModel(
+        document_,
+        engineNodeFrom(document_, node.id),
+        {
+          now: NOW,
+        },
+      );
+      // Every node in this document also has `lastChangedAt: null`, so the
+      // per-node notice would fire on all of them. The repository-level case
+      // wins precisely so the reader is told once, in the right terms.
+      expect(model.notice!.kind).toBe("repo-zero-history");
+      expect(model.notice!.cause).toBe("no commits in the last 365 days");
+      expect(model.notice!.exit).toContain("--window-days");
+    }
   });
 });
 
