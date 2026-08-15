@@ -25,13 +25,31 @@ import type { AnalysisDocument } from "@gitnebula/contract";
 
 import type { EngineNode } from "../engine/index.js";
 import { EMPTY_STATE_CLASS } from "./empty-state.js";
-import { buildPanelModel, type PanelModel } from "./panel-model.js";
+import {
+  buildPanelModel,
+  formatSharedCommits,
+  type PanelModel,
+} from "./panel-model.js";
 
 export interface PanelActions {
   /** Toggle isolate for the open node. */
   onIsolate(): void;
   /** Close the panel — the `×` button. */
   onClose(): void;
+  /**
+   * Go to a co-change partner (story 5.6, AC-2).
+   *
+   * The panel only *asks*. Chrome answers it with the `flyTo` the search box
+   * and the start-here panel already use, which selects on arrival — so this
+   * introduces no second way to move the camera or change the selection
+   * (AD-5).
+   */
+  onSelectPartner(id: string): void;
+  /**
+   * Ask the map to mark this node's partner set, or clear it (story 5.6,
+   * AC-4). `ids` is empty when the toggle is switched off.
+   */
+  onShowBlastRadius(ids: readonly string[]): void;
 }
 
 /** What one opening of the panel is given. */
@@ -91,6 +109,32 @@ export function renderPanel(actions: PanelActions): PanelHandle {
   const noticeExit = span("p-notice-exit");
   notice.append(noticeCause, noticeExit);
 
+  // Story 5.6. One section element, repainted per node like the notice above
+  // it — the partner list is short and rebuilt wholesale, so nothing here
+  // survives a node change and stales.
+  const blast = document.createElement("section");
+  blast.className = "p-blast";
+  const blastCaption = span("p-blast-caption");
+  // The section is named by its own caption, so a screen reader announces
+  // "blast radius · files · last 365 days" on entering it rather than reading
+  // a bare list of ids with no idea what relates them.
+  blastCaption.id = "p-blast-caption";
+  blast.setAttribute("aria-labelledby", blastCaption.id);
+  const blastShow = button("iconbtn p-blast-show", "show on map");
+  blastShow.setAttribute("aria-pressed", "false");
+  const blastList = document.createElement("div");
+  blastList.className = "p-blast-list";
+  const blastEmpty = document.createElement("div");
+  // Its own class, not `.p-notice`. It looks like one and is built from the
+  // same cause/exit halves, but the panel-level notice is a singleton story
+  // 5.5 counts — a second element answering to `.p-notice` would make that
+  // count read 2 and its "state it once" assertion fail for the right reason.
+  blastEmpty.className = `p-blast-empty ${EMPTY_STATE_CLASS}`;
+  const blastCause = span("p-notice-cause");
+  const blastExit = span("p-notice-exit");
+  blastEmpty.append(blastCause, blastExit);
+  blast.append(blastCaption, blastList, blastEmpty, blastShow);
+
   const bar = document.createElement("div");
   bar.className = "p-bar";
   const barFill = document.createElement("i");
@@ -113,7 +157,26 @@ export function renderPanel(actions: PanelActions): PanelHandle {
   const panelActions = document.createElement("div");
   panelActions.className = "p-actions";
 
-  panel.append(close, head, path, kind, rows, notice, bar, panelActions);
+  panel.append(close, head, path, kind, rows, notice, bar, blast, panelActions);
+
+  // The open node's partner ids, and whether the map is currently marking
+  // them. Panel-local because nothing else reads it: the engine holds the
+  // authoritative set, and this is only what the toggle draws itself from.
+  let partnerIds: readonly string[] = [];
+  let showing = false;
+
+  function setShowing(next: boolean): void {
+    showing = next;
+    blastShow.setAttribute("aria-pressed", String(next));
+    blastShow.textContent = next ? "hide on map" : "show on map";
+  }
+
+  blastShow.addEventListener("click", () => {
+    // Off sends an empty set rather than nothing at all — "stop marking" is a
+    // request the map has to receive, not an absence chrome can imply.
+    setShowing(!showing);
+    actions.onShowBlastRadius(showing ? partnerIds : []);
+  });
 
   const handle: PanelHandle = {
     element: panel,
@@ -129,6 +192,12 @@ export function renderPanel(actions: PanelActions): PanelHandle {
     close() {
       panel.hidden = true;
       handle.setIsolated(false);
+      // A mark left on the map for a node whose panel is shut points at
+      // nothing the reader can still see the name of.
+      if (showing) {
+        setShowing(false);
+        actions.onShowBlastRadius([]);
+      }
     },
 
     setIsolated(isolated) {
@@ -191,6 +260,8 @@ export function renderPanel(actions: PanelActions): PanelHandle {
       noticeExit.textContent = model.notice.exit;
     }
 
+    paintBlastRadius(model.blastRadius);
+
     // AC-1: the bar's width IS the churn row's number, not a second reading
     // of the same value.
     barFill.style.width = model.churnPercent;
@@ -201,6 +272,66 @@ export function renderPanel(actions: PanelActions): PanelHandle {
     } else {
       github.href = model.githubUrl;
       panelActions.replaceChildren(isolate, github);
+    }
+  }
+
+  /**
+   * The blast-radius section (story 5.6, FR-27).
+   *
+   * Painting it repoints the toggle at the newly opened node: the map is asked
+   * to drop the previous node's mark, and the toggle returns to its resting
+   * state. Carrying `showing` across a selection change would leave the map
+   * marking one node's partners under another node's panel — a mark the reader
+   * would read as belonging to what they just clicked.
+   */
+  function paintBlastRadius(model: PanelModel["blastRadius"]): void {
+    blastCaption.textContent = model.caption;
+    partnerIds = model.partners.map((partner) => partner.id);
+
+    if (showing) {
+      setShowing(false);
+      actions.onShowBlastRadius([]);
+    }
+
+    // The whole section leaves the accessibility tree when the panel above it
+    // has already stated the cause (story 5.5's precedence rule).
+    blast.hidden = model.suppressed;
+
+    if (model.partners.length > 0) {
+      blastEmpty.hidden = true;
+      blastCause.textContent = "";
+      blastExit.textContent = "";
+      blastShow.hidden = false;
+      blastList.replaceChildren(
+        ...model.partners.map((partner) => {
+          // A button, not a link: it moves the camera inside one page.
+          const row = button("p-blast-row", "");
+          const name = document.createElement("span");
+          name.textContent = partner.id;
+          const count = document.createElement("span");
+          count.textContent = formatSharedCommits(partner.count);
+          row.append(name, count);
+          // The count is in the accessible name too — a list of ids read aloud
+          // with no counts loses the ordering's whole meaning.
+          row.setAttribute(
+            "aria-label",
+            `${partner.id}, ${formatSharedCommits(partner.count)}`,
+          );
+          row.addEventListener("click", () =>
+            actions.onSelectPartner(partner.id),
+          );
+          return row;
+        }),
+      );
+    } else {
+      // UX-DR14: cause, then exit. And no toggle — a control that would mark
+      // an empty set is a promise the map cannot keep (the same
+      // absent-not-disabled rule the GitHub action follows).
+      blastList.replaceChildren();
+      blastEmpty.hidden = model.empty === null;
+      blastCause.textContent = model.empty?.cause ?? "";
+      blastExit.textContent = model.empty?.exit ?? "";
+      blastShow.hidden = true;
     }
   }
 

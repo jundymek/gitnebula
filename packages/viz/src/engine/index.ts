@@ -34,6 +34,19 @@ export { fuzzySearch, scoreMatch, type FuzzyMatch } from "./fuzzy.js";
 export { hashString, seedFor } from "./prng.js";
 
 /**
+ * Story 5.6's co-change mark. Exported for the same reason the layer colours
+ * are: chrome describes the mark in the panel, and a swatch that drifts from
+ * the canvas is worse than no swatch.
+ */
+export {
+  COCHANGE_RING_ALPHA,
+  COCHANGE_RING_COLOR,
+  COCHANGE_RING_DASH,
+  COCHANGE_RING_OFFSET_PX,
+  COCHANGE_RING_WIDTH,
+} from "./constants.js";
+
+/**
  * Story 5.3's layer list. The filter control draws one toggle per entry, so
  * the order it renders in and the order the engine defaults to are one
  * constant rather than two that can drift.

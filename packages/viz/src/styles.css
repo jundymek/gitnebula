@@ -21,6 +21,10 @@
   --infra: #7c8598;
   --test: #a8cf52;
   --hot: #ff7a3d;
+  /* Story 5.6's co-change mark. The same value as the engine's
+     COCHANGE_RING_COLOR, so the panel's toggle and the ring the canvas draws
+     are visibly one feature. */
+  --cochange: #ff5fa2;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
 }
@@ -818,6 +822,108 @@ canvas {
    cause rather than one step dimmer. */
 .p-notice-exit {
   color: var(--ink-dim);
+}
+
+/* The blast-radius section (story 5.6, FR-27). Sits between the churn bar and
+   the panel actions, so the panel still ends with its buttons. */
+.p-blast {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.p-blast[hidden] {
+  display: none;
+}
+
+/* Built from the same cause/exit halves as the panel-level notice and styled
+   to match it, under its own class so 5.5's "one notice per panel" count
+   stays true. */
+.p-blast-empty {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  border-left: 2px solid var(--line);
+  padding-left: 9px;
+  margin: 0 0 8px;
+}
+
+.p-blast-empty[hidden] {
+  display: none;
+}
+
+.p-blast-caption {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+
+.p-blast-list {
+  display: flex;
+  flex-direction: column;
+}
+
+/* A partner row: id on the left, its shared-commit count on the right — the
+   .p-row rhythm, made actionable. */
+.p-blast-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  padding: 5px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.p-blast-row:hover {
+  color: var(--cochange);
+}
+
+.p-blast-row span:last-child {
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+/* Keyboard focus must be visible on a control that moves the camera — the
+   partner rows are reachable by Tab like every other button in the panel. */
+.p-blast-row:focus-visible {
+  outline: 1px solid var(--cochange);
+  outline-offset: 2px;
+}
+
+.p-blast-empty span {
+  display: block;
+}
+
+/* The exit is the actionable half, so it reads one step brighter than the
+   cause — the same relationship .p-notice-exit has to .p-notice-cause. */
+.p-blast-empty span:last-child {
+  color: var(--ink-dim);
+}
+
+.p-blast-show {
+  margin-top: 8px;
+}
+
+/* Pressed reads as pressed: the toggle borrows the mark's own colour, so the
+   control and the ring on the canvas are visibly the same feature. */
+.p-blast-show[aria-pressed="true"] {
+  color: var(--cochange);
+  border-color: var(--cochange);
+}
+
+.p-blast-show[hidden] {
+  display: none;
 }
 
 /* The heatmap's near-uniform notice (AC-4). Sits under the legend keys and

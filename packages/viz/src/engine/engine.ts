@@ -191,6 +191,15 @@ export class CanvasGraphEngine implements GraphEngine {
    */
   private lastScopeId: string | null = null;
   /**
+   * The co-change partner set the map is marking, in the order chrome gave it
+   * (story 5.6, AC-4).
+   *
+   * A frame concern like the scope above it: nothing here reaches the layout,
+   * the graph or the edge list. Marking a blast radius adds **no** edge —
+   * co-change is not a dependency, and drawing it as a line would say it is.
+   */
+  private blastRadiusIds: readonly string[] = [];
+  /**
    * Cached visible-id set, or null when no filter is active. Rebuilt only when
    * a filter or the document changes, never per frame: `buildScene` runs on
    * every one of them and rebuilding a 2,100-id set at 60 fps is exactly the
@@ -300,6 +309,11 @@ export class CanvasGraphEngine implements GraphEngine {
     // from the scope it just left, which is the opposite of what a load needs.
     this.scopeId = null;
     this.lastScopeId = null;
+    // Story 5.6: the marked partners name nodes of the *previous* document.
+    // Carrying the set across a load would mark whichever nodes of the new
+    // document happen to share an id — a mark that means nothing about the
+    // repository now on screen.
+    this.blastRadiusIds = [];
     this.invalidateVisible();
     this.emitScope(null);
     this.startSettle("load");
@@ -822,6 +836,25 @@ export class CanvasGraphEngine implements GraphEngine {
       focusId: this.isolatedId ?? this.hoveredId,
       isolated: this.isolatedId !== null,
     });
+  }
+
+  // ---- blast radius (story 5.6, FR-27) -----------------------------------
+
+  /**
+   * Mark a node's co-change partners, or clear the mark with `null` / `[]`.
+   *
+   * Ids that are not in the document are kept rather than rejected: they
+   * simply match no node when the scene is built, so a set that outlives its
+   * document marks less instead of throwing. No event is emitted — chrome
+   * asked for this set and already knows it, and `getBlastRadius()` is here
+   * for anything that connects later.
+   */
+  setBlastRadius(ids: readonly string[] | null): void {
+    this.blastRadiusIds = ids === null ? [] : [...ids];
+  }
+
+  getBlastRadius(): readonly string[] {
+    return this.blastRadiusIds;
   }
 
   getMode(): ViewMode {
@@ -1595,6 +1628,11 @@ export class CanvasGraphEngine implements GraphEngine {
       selectedId: this.selectedId,
       showFileLabels: this.camera.k >= FILE_LABEL_ZOOM,
       pulse: this.pulseProgress(timeMs),
+      // Story 5.6 — the co-change mark. Note what is NOT here: no entry was
+      // added to `edges` above, and nothing was removed from `nodes`. The
+      // partners are marked exactly where they already are (AC-4).
+      blastRadius:
+        this.blastRadiusIds.length > 0 ? new Set(this.blastRadiusIds) : null,
     };
   }
 

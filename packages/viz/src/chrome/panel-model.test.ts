@@ -41,7 +41,11 @@ describe("panel model — a module (AC-1)", () => {
       `churn ${document_.repo.analysisWindowDays}d`,
       "authors",
       "last change",
-      "co-changes with",
+      // Story 3.4's `co-changes with` row is deliberately gone: story 5.6
+      // folds it into the blast-radius section, which names the same three
+      // partners first and adds the counts, the rest of the list and a way to
+      // navigate there. Two renderings of one datum in one panel is the
+      // duplication that story was told to reconcile.
     ]);
   });
 
@@ -77,9 +81,9 @@ describe("panel model — a module (AC-1)", () => {
       expect(partner.id.startsWith("mod-")).toBe(true);
       expect(partner.id).not.toBe("mod-000/");
     }
-    expect(model.rows[5]!.value).toBe(
-      partners.map((partner) => `${partner.id} ${partner.count}`).join(" · "),
-    );
+    // Story 5.6: the summary is the head of the section's list, not a second
+    // derivation beside it. One ordering feeds both, so they cannot disagree.
+    expect(partners).toEqual(model.blastRadius.partners.slice(0, 3));
   });
 });
 
@@ -128,7 +132,12 @@ describe("panel model — documents with nothing to say", () => {
     // was quiet", which is the truth and the whole point of the story.
     expect(model.rows[4]!.value).toBe("no change in last 365 days");
     expect(model.rows[4]!.empty).toBe(true);
-    expect(model.rows[5]!.value).toBe("—");
+    // Story 5.6: a repository with no commits in the window has no co-change
+    // anywhere, and the panel-level notice above already says so. The section
+    // adds nothing rather than repeating it per node (5.5's precedence rule).
+    expect(model.blastRadius.partners).toEqual([]);
+    expect(model.blastRadius.suppressed).toBe(true);
+    expect(model.blastRadius.empty).toBeNull();
     expect(model.churnPercent).toBe("0%");
     expect(model.hot).toBe(false);
   });
@@ -177,12 +186,10 @@ describe("panel model — the analysis window is data, never a literal (AC-1)", 
       .map((row) => row.label);
     // `files` and `loc` are properties of the tree at HEAD; the rest are
     // measured over the window and must say so.
-    expect(history).toEqual([
-      "churn 365d",
-      "authors",
-      "last change",
-      "co-changes with",
-    ]);
+    expect(history).toEqual(["churn 365d", "authors", "last change"]);
+    // The window travels with the co-change counts too — they are commits
+    // inside it, and the section's caption is where it now says so (5.6).
+    expect(model.blastRadius.caption).toContain("last 365 days");
   });
 
   it("follows a reconfigured window everywhere it states one", () => {
