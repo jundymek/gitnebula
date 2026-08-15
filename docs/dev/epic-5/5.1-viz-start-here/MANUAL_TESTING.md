@@ -60,6 +60,9 @@ human reviewer knows what is already covered and need not repeat it:
 - [x] A repository with no `test` layer renders the cause **and** the exit for
       that category instead of a blank block (AC-5).
 - [x] No global keyboard shortcut is bound; `Escape` stays story 5.4's.
+- [x] Under `prefers-reduced-motion`, where the engine finishes settling before
+      the chrome is listening, the panel is still the first state and the
+      replay control is still live. Both assertions were seen red first.
 
 ## 4. For the human reviewer (AC-6 and the visual half)
 
