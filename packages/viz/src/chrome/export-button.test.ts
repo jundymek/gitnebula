@@ -23,6 +23,9 @@ function store(repoName = "gitnebula") {
     selected: null,
     isolated: false,
     mode: "structure",
+    // Story 5.1's slice, added for the same reason.
+    startHereOpen: false,
+    startHereShown: false,
   });
 }
 
