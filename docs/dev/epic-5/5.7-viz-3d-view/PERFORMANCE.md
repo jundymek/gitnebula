@@ -118,8 +118,8 @@ pnpm --filter gitnebula exec vitest run src/bundle.test.ts   # the budget check
 | build | raw | gzipped | share of the 2 MB budget |
 | --- | --- | --- | --- |
 | `epic/5-onboarding` (before this story) | 220,194 B | 65,716 B | 3.13 % |
-| with the 3D view | 249,988 B | 70,774 B | **3.37 %** |
-| delta | +29,794 B | **+5,058 B** | +0.24 pp |
+| with the 3D view | 250,100 B | 70,814 B | **3.37 %** |
+| delta | +29,906 B | **+5,098 B** | +0.24 pp |
 
 **+7.7 % gzipped for an entire second renderer.** The before-figure was
 produced by building `epic/5-onboarding` from a clean `git archive` extraction,

@@ -29,7 +29,7 @@ existing `onReplay` action has. Chrome never learns what a view is; it places
 the control exactly as it already places the canvas.
 
 **No WebGL, no Three.js.** Perspective projection onto the same 2D context the
-2D view uses. This is what keeps ADR-0004's bundle budget (+5,058 B gzipped,
+2D view uses. This is what keeps ADR-0004's bundle budget (+5,098 B gzipped,
 3.37 % of 2 MB) and what makes the unavailable-3D path a small probe instead of
 a second rendering stack.
 
@@ -59,7 +59,7 @@ out of this story unchanged" is demonstrated rather than claimed.
 
 | file | change |
 | --- | --- |
-| `packages/viz/src/app.ts` | owns the engine swap, carries the reader's state across it, reads `?view=`, wires the switch. |
+| `packages/viz/src/app.ts` | owns the engine swap, carries the reader's state across it (incl. 5.6's mark), reads `?view=`, wires the switch, exports `unavailabilityAfterSwap`. |
 | `packages/viz/src/chrome/chrome.ts` | places the switch in the header slot; adds the `destroyControls` option (code review). |
 | `packages/viz/src/chrome/header.ts` | one new slot, `VIEW_SLOT_ID`, on its own line. |
 | `packages/viz/src/engine/index.ts` | exports the 3D factory and the view helpers (append only). |

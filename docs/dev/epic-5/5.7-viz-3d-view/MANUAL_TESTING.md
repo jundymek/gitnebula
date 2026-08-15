@@ -77,7 +77,7 @@ Steps M1–M7 below were executed against this dev server through Playwright
       `pnpm lint` → clean; `pnpm build` → succeeds;
       `pnpm --filter @gitnebula/viz perf` → 9 passed. ✅
 - [x] **M10 — bundle budget (AC-4).** Built and measured.
-      **Observed:** 70,774 B gzipped against a 2,097,152 B budget — **3.37 %**,
+      **Observed:** 70,814 B gzipped against a 2,097,152 B budget — **3.37 %**,
       up from 3.13 % on the epic base (measured after rebasing onto the epic
       with 5.6 merged). `packages/cli`'s 17 budget tests pass.
       See [PERFORMANCE.md](PERFORMANCE.md) §2. ✅

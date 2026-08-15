@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { unavailabilityAfterSwap } from "./app.js";
 import { connectEngine, mountChrome } from "./chrome/chrome.js";
 import { createSearchBox } from "./chrome/search.js";
 import { createGraphEngine, type GraphEngine } from "./engine/index.js";
@@ -33,6 +34,29 @@ afterEach(() => {
   for (const engine of built.splice(0)) engine.destroy();
   document.body.replaceChildren();
 });
+
+/**
+ * What `app.ts` captures and restores across a swap, exercised directly on two
+ * engines. Kept in step with `captureState`/`restoreState` in `app.ts`.
+ */
+function carry(from: GraphEngine, to: GraphEngine): void {
+  const state = {
+    mode: from.getMode(),
+    layers: [...from.getLayerFilter()],
+    scopeId: from.getScope(),
+    connectedOnly: from.getConnectedOnly(),
+    selectedId: from.getSelected()?.id ?? null,
+    isolatedId: from.getIsolated()?.id ?? null,
+    blastRadius: [...from.getBlastRadius()],
+  };
+  to.setMode(state.mode);
+  to.setLayerFilter(state.layers);
+  to.setScope(state.scopeId);
+  to.setConnectedOnly(state.connectedOnly);
+  if (state.selectedId !== null) to.setSelected(state.selectedId);
+  if (state.isolatedId !== null) to.setIsolated(state.isolatedId);
+  to.setBlastRadius(state.blastRadius);
+}
 
 describe("the search box survives a view swap", () => {
   it("is not destroyed by a disconnect that passes destroyControls: false", () => {
@@ -101,24 +125,6 @@ describe("the search box survives a view swap", () => {
 });
 
 describe("graph state carries across a view swap", () => {
-  /** What `app.ts` captures and restores, exercised directly on two engines. */
-  function carry(from: GraphEngine, to: GraphEngine): void {
-    const state = {
-      mode: from.getMode(),
-      layers: [...from.getLayerFilter()],
-      scopeId: from.getScope(),
-      connectedOnly: from.getConnectedOnly(),
-      selectedId: from.getSelected()?.id ?? null,
-      isolatedId: from.getIsolated()?.id ?? null,
-    };
-    to.setMode(state.mode);
-    to.setLayerFilter(state.layers);
-    to.setScope(state.scopeId);
-    to.setConnectedOnly(state.connectedOnly);
-    if (state.selectedId !== null) to.setSelected(state.selectedId);
-    if (state.isolatedId !== null) to.setIsolated(state.isolatedId);
-  }
-
   it("carries mode, layers, scope, connected-only and selection 2D → 3D", () => {
     // A view switch changes how the graph is drawn, not what the reader is
     // looking at. Without this the reader silently loses the frame they built.
@@ -194,5 +200,75 @@ describe("graph state carries across a view swap", () => {
     expect(threeD.getConnectedOnly()).toBe(false);
     expect(threeD.getSelected()).toBeNull();
     expect(threeD.getIsolated()).toBeNull();
+  });
+});
+
+describe("the co-change mark survives a view swap (5.6 x 5.7)", () => {
+  it("carries the blast radius 2D -> 3D", () => {
+    // This story insisted 3D *draw* 5.6's mark rather than merely store it,
+    // on the grounds that a capability vanishing on the view switch would
+    // falsify "same map, one interface". Dropping the ids from the carried
+    // state reintroduced exactly that defect one layer up — the mark would
+    // disappear while the panel still implied it was active.
+    const canvas = stage();
+    document.body.append(canvas);
+
+    const twoD = createGraphEngine({ canvas, reducedMotion: true });
+    built.push(twoD);
+    twoD.load(analysis);
+    const partners = twoD.nodes.slice(0, 2).map((node) => node.id);
+    twoD.setBlastRadius(partners);
+
+    const threeD = createNebula3DEngine({ canvas, reducedMotion: true });
+    built.push(threeD);
+    threeD.load(analysis);
+    expect(threeD.getBlastRadius()).toEqual([]);
+
+    carry(twoD, threeD);
+    expect([...threeD.getBlastRadius()]).toEqual(partners);
+  });
+
+  it("carries an empty blast radius without inventing one", () => {
+    const canvas = stage();
+    document.body.append(canvas);
+    const twoD = createGraphEngine({ canvas, reducedMotion: true });
+    built.push(twoD);
+    twoD.load(analysis);
+    const threeD = createNebula3DEngine({ canvas, reducedMotion: true });
+    built.push(threeD);
+    threeD.load(analysis);
+    carry(twoD, threeD);
+    expect(threeD.getBlastRadius()).toEqual([]);
+  });
+});
+
+describe("unavailabilityAfterSwap — the 3D button's reason (AC-5)", () => {
+  it("keeps a constructor failure's reason instead of probing it away", () => {
+    // The regression: `?view=3d`, probe passes, constructor throws, fall back
+    // to 2D. A later unconditional probe returned null, which re-enabled the
+    // button and erased the only explanation the reader was given.
+    const reason = unavailabilityAfterSwap(
+      {
+        view: "2d",
+        reason: "The 3D view could not be started (context lost).",
+      },
+      () => null,
+    );
+    expect(reason).toContain("could not be started");
+  });
+
+  it("asks the probe when 3D was never attempted", () => {
+    expect(
+      unavailabilityAfterSwap({ view: "2d", reason: null }, () => "no canvas"),
+    ).toBe("no canvas");
+    expect(
+      unavailabilityAfterSwap({ view: "2d", reason: null }, () => null),
+    ).toBeNull();
+  });
+
+  it("never disables 3D while 3D is the view actually running", () => {
+    expect(
+      unavailabilityAfterSwap({ view: "3d", reason: null }, () => "stale"),
+    ).toBeNull();
   });
 });

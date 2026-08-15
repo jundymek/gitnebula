@@ -24,6 +24,27 @@ import { renderErrorScreen } from "./error-screen.js";
 import { publishHarnessHandle } from "./harness-handle.js";
 import { loadAnalysis } from "./loader.js";
 
+/**
+ * What the 3D button should say after a swap: a reason (disabled) or null
+ * (offered).
+ *
+ * A reason produced by `createViewEngine` always wins — it describes a 3D view
+ * that was actually attempted and failed, which is strictly better evidence
+ * than a probe. The probe is only consulted when 3D was *not* attempted.
+ *
+ * Extracted as a pure function because the bug it encodes was an ordering
+ * mistake rather than a logic one, and an ordering mistake inside `boot()` —
+ * which needs a document fetch to run at all — is exactly the kind that gets
+ * re-introduced. Here it is directly testable.
+ */
+export function unavailabilityAfterSwap(
+  built: { readonly view: ViewKind; readonly reason: string | null },
+  probe: () => string | null,
+): string | null {
+  if (built.reason !== null) return built.reason;
+  return built.view === "2d" ? probe() : null;
+}
+
 export async function boot(root: Element): Promise<GraphEngine | null> {
   const result = await loadAnalysis();
   if (!result.ok) {
@@ -97,6 +118,14 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     readonly connectedOnly: boolean;
     readonly selectedId: string | null;
     readonly isolatedId: string | null;
+    /**
+     * Story 5.6's co-change mark. This story argued that a blast radius which
+     * vanished on the view switch would falsify the claim that both views are
+     * the same map — which is why 3D *draws* the mark instead of merely
+     * storing it. Dropping it here would have reintroduced the same defect one
+     * layer up, with the panel still implying the radius was active.
+     */
+    readonly blastRadius: readonly string[];
   }
 
   const captureState = (from: GraphEngine): CarriedState => ({
@@ -106,6 +135,7 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     connectedOnly: from.getConnectedOnly(),
     selectedId: from.getSelected()?.id ?? null,
     isolatedId: from.getIsolated()?.id ?? null,
+    blastRadius: [...from.getBlastRadius()],
   });
 
   const restoreState = (to: GraphEngine, state: CarriedState): void => {
@@ -121,6 +151,9 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     // reconciles that itself, so this is safe to ask for unconditionally.
     if (state.selectedId !== null) to.setSelected(state.selectedId);
     if (state.isolatedId !== null) to.setIsolated(state.isolatedId);
+    // Restored unconditionally: an empty set is the correct "nothing marked"
+    // instruction, and `setBlastRadius` treats `[]` and `null` alike.
+    to.setBlastRadius(state.blastRadius);
   };
 
   /**
@@ -136,8 +169,14 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
     // The switch reflects what was actually built, not what was asked for: a
     // 3D request that fell back must not leave "3D" looking selected.
     viewSwitch.setCurrent(built.view);
-    viewSwitch.setUnavailable(built.reason);
     view = built.view;
+    // Probing unconditionally after the swap re-enabled the button and erased
+    // the constructor's reason in exactly the case AC-5 exists for:
+    // `?view=3d`, probe passes, constructor throws, fall back to 2D — and the
+    // reader was shown an enabled 3D button and no explanation.
+    viewSwitch.setUnavailable(
+      unavailabilityAfterSwap(built, () => probe3D(stage)),
+    );
 
     // Before `load()`: under reduced motion the settle is announced
     // synchronously inside it, and the harness has to be listening by then.
@@ -161,10 +200,6 @@ export async function boot(root: Element): Promise<GraphEngine | null> {
   // measures 0 × 0.
   try {
     swapEngine();
-    // Offered only where it can actually run, with the reason attached when it
-    // cannot (AC-5). Asked once here rather than per click, so the control is
-    // never briefly enabled for a browser that will refuse it.
-    if (view === "2d") viewSwitch.setUnavailable(probe3D(stage));
   } catch (cause) {
     // The loader's shape guard covers what the Viewer dereferences, but it is
     // a guard, not the schema. Anything it lets through that the engine still
