@@ -69,6 +69,36 @@ development_status:
   # No AC covers it. Unassigned — the wave is the maintainer's call.
   4.7-viz-root-files: done
 
+  # Epic 5 — Onboarding-First Map (post-MVP), planned 2026-08-15.
+  #
+  # Motivated by the maintainer's verdict after a manual pass on langgraph
+  # (662 nodes): "a library like this has no real value for a developer".
+  # Measured in that pass and quoted in the specs: hover dims 647/650 nodes;
+  # pointer hit-areas cover 78% of the viewport at 6x; 232/650 files carry no
+  # edge; 386/650 have no history in the 90-day window; the 128 co-change
+  # pairs the contract already carries are unused by the UI.
+  #
+  # ONE branch, `epic/5-onboarding`, unlike Epic 4's three. Wave A merges into
+  # it; wave B launches FROM it (AGENT_PR_BASE_BRANCH=epic/5-onboarding) with
+  # wave A already in the base — which is what makes 5.6's dependency on 5.5 a
+  # base-state fact rather than a cross-wave block. The epic reaches master as
+  # a single merge commit after the maintainer's manual verification.
+  #
+  # Wave A — disjoint territories, all Depends_on []:
+  5.1-viz-start-here: backlog
+  5.2-viz-hover-fix: backlog
+  5.3-viz-layer-filter: backlog
+  5.4-viz-drill-down: backlog
+  5.5-viz-history-window: backlog
+  # Wave B — launched after wave A lands on the epic branch:
+  5.6-viz-blast-radius: backlog
+  5.7-viz-3d-view: backlog
+  # 5.8 documents what 5.1-5.7 build, so it is worked and merged last. Its
+  # Depends_on is [] because the harness stores exactly one blocking
+  # predecessor and seven cannot be declared — the ordering is the
+  # supervisor's, exactly as it was for 4.3.
+  5.8-repo-docs-refresh: backlog
+
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
   M2: "Epic 2 merged: gitnebula run in the fixture repo emits a valid analysis.json and the viewer renders fixtures"

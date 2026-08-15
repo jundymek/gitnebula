@@ -7,6 +7,21 @@ inputDocuments:
   - docs/GITNEBULA_PROJECT_BRIEF.md
   - reference/mockup.html
   - CLAUDE.md
+epic5:
+  stepsCompleted: [1, 2, 3]
+  added: 2026-08-15
+  branch: epic/5-onboarding
+  inputDocuments:
+    - docs/planning-artifacts/prds/prd-gitnebula-2026-08-10/prd.md
+    - docs/planning-artifacts/prds/prd-gitnebula-2026-08-10/addendum.md
+    - docs/planning-artifacts/prds/prd-gitnebula-2026-08-10/reconcile-brief.md
+    - docs/planning-artifacts/architecture.md
+    - docs/planning-artifacts/architecture/architecture-gitnebula-2026-08-10
+    - reference/mockup.html
+    - CLAUDE.md
+  # The measurements that justify FR-29..FR-31 were taken in-session on a real
+  # langgraph checkout (662 nodes) rather than read from a document; they are
+  # recorded inline in the Epic 5 section so the reasoning survives the session.
 ---
 
 # gitnebula - Epic Breakdown
@@ -49,6 +64,21 @@ FR-23: Static bundle — one self-contained index.html + sibling analysis.json, 
 FR-24: CI recipe — Actions workflow, green on this repo (dogfooding)
 FR-25: Launch-ready repository — README demo GIF + map link, MIT LICENSE, CONTRIBUTING.md, CI badge
 
+#### Post-MVP — Epic 5 (onboarding-first map)
+
+Added 2026-08-15. These extend the inventory; FR-1..FR-25 are unchanged. Every
+one is derived from `analysis.json` as it already stands — no contract change,
+`schemaVersion` remains "1.0" (NFR-11).
+
+FR-26: Start-here ranking — three categories computed from the graph: core (non-test files by in-degree), entry points (non-test, in-degree 0, out-degree > 0), tests-as-documentation (layer `test` by out-degree)
+FR-27: Blast radius — a selected node's co-change partners surfaced in the panel, with an explicit empty state naming why it is empty
+FR-28: Layer filter — multi-select over backend/frontend/infra/test/other, restricting what the map draws
+FR-29: Hover highlights the chain instead of dimming the map
+FR-30: Drill-down into a module, plus a connected-only filter hiding edgeless nodes
+FR-31: Analysis window made legible in the UI — metrics carry their window, and "no change in window" is distinguishable from "no data"
+FR-32: 3D view — a switchable, co-equal alternative to the 2D map
+FR-33: README and docs reflect the post-Epic-5 product: changed behaviours, new capabilities, re-recorded demo
+
 ### NonFunctional Requirements
 
 NFR-1: Local-first/offline — no data leaves the machine; only URL-mode clone touches the network (AD-8)
@@ -58,9 +88,16 @@ NFR-4: Determinism — byte-identical output except analyzedAt; seeded layout (A
 NFR-5: Contract ≤ 5 MB @ 2,000 files; viewer bundle ≤ 2 MB gzipped
 NFR-6: Zero-config, no native compilation anywhere in the npx path (AD-11, ADR-0001)
 NFR-7: Accessibility floor — prefers-reduced-motion honoured everywhere (settle, pulse, fly-to); keyboard-navigable search
+
 NFR-8: Visual fidelity — palette/constants match mockup exactly (SM-6); wow is a requirement
 NFR-9: No telemetry, no accounts, no GitHub API
 NFR-10: Node ≥ 20; pure ESM; pnpm workspaces
+
+#### Post-MVP — Epic 5
+
+NFR-11: No contract change — FR-26..FR-31 are computed in the Viewer from the existing `analysis.json`; `schemaVersion` stays "1.0" (a bump would need its own story and an ADR, AD-9)
+NFR-12: Rankings and filters are deterministic — ties break on `id`, no `localeCompare` anywhere (AD-4, AD-6)
+NFR-13: The 3D view either holds NFR-3's ≥ 55 fps floor on the 2,000-node fixture, or documents its own measured floor and the node count at which it degrades
 
 ### Additional Requirements (Architecture)
 
@@ -92,6 +129,16 @@ Source: `reference/mockup.html` (behavioural/visual contract; PRD FR consequence
 - UX-DR10: Cursor states (grab/grabbing), tooltip styling (mono, dark, border), focus-visible outlines
 - UX-DR11: prefers-reduced-motion: no settle animation, no pulse, instant fly-to
 
+Post-MVP — Epic 5. The mockup is silent on these: it was drawn for a few dozen
+hardcoded nodes, and the behaviours below are what a 650-node repository
+demands of it.
+
+- UX-DR12: The map opens on an answer, not an empty canvas — the start-here panel is the default first state, dismissible, and reachable again from the header
+- UX-DR13: Filter controls carry `aria-pressed` and match the existing mode-toggle styling (UX-DR6); active filters are visible without opening a menu
+- UX-DR14: Empty states name their cause and offer the exit (e.g. "no co-change data in the 90-day window — try `--window-days 365`"), never a bare zero
+- UX-DR15: The 3D view honours prefers-reduced-motion — no auto-rotation, no entry animation (extends UX-DR11)
+- UX-DR16: README leads with the question the tool answers ("where do I start reading this repo"), not a feature list
+
 ### FR Coverage Map
 
 FR-1: Epic 2 — pipeline produces the map end-to-end (serve half in Epic 3)
@@ -119,6 +166,14 @@ FR-22: Epic 3 — PNG export
 FR-23: Epic 4 — static bundle
 FR-24: Epic 4 — CI recipe (dogfooding)
 FR-25: Epic 1 (LICENSE, CONTRIBUTING skeleton, CI) + Epic 4 (README, demo, badge)
+FR-26: Epic 5 — start-here ranking
+FR-27: Epic 5 — blast radius from co-change
+FR-28: Epic 5 — layer filter
+FR-29: Epic 5 — hover fix
+FR-30: Epic 5 — drill-down + connected-only
+FR-31: Epic 5 — analysis window in the UI
+FR-32: Epic 5 — 3D view
+FR-33: Epic 5 — README and docs refresh
 
 ## Epic List
 
@@ -166,6 +221,48 @@ publishing this repo's own map, the launch-ready README with demo, and the
 DoD validation run on the three demo repos with the human-review checklist.
 **FRs covered:** FR-23, FR-24, FR-25 (completion)
 **Stories:** 4 — bundle, CI recipe, repo quality, DoD validation.
+
+### Epic 5: Onboarding-First Map (post-MVP)
+The map stops being an inventory and starts being an answer. It opens on
+"where do I start reading this repo", makes the history it already collects
+legible, and stays readable at 650 nodes instead of strobing under the cursor.
+After merge: a developer dropped into an unfamiliar repository gets a reading
+order, can trace what changes together, and can filter the map down to the
+part they care about — in 2D or in 3D.
+**FRs covered:** FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33
+**Stories:** 8, in two waves on one shared epic branch (see below).
+
+> **Why one epic and not three.** Every story here is `Owner: viz` and most
+> touch `chrome/` and `engine/`. Splitting them across epics would be the
+> file-churn antipattern — three epics editing the same core files, each
+> waiting on the others' merges. One epic with ordered stories is the correct
+> shape; the two waves are a launch constraint (≤ 5 agents), not a boundary.
+
+> **Branching (differs from Epic 4).** Epic 4 ran three separate `epic/4-*`
+> branches, each merged to `master` on its own. Epic 5 uses **one** branch,
+> `epic/5-onboarding`, for both waves: wave A merges into it, wave B starts
+> **from it** (`AGENT_PR_BASE_BRANCH=epic/5-onboarding`) with wave A's work
+> already in the base, and the whole epic reaches `master` as a single merge
+> commit after the maintainer's manual verification. This is what makes
+> 5.6's dependency on 5.5 a base-state fact rather than a cross-wave block.
+
+**Wave A — the map becomes readable and answers a question (5 stories)**
+5.1 start-here ranking · 5.2 hover fix · 5.3 layer filter · 5.4 drill-down and
+connected-only · 5.5 analysis window in the UI. All `Depends_on: []` —
+territories are disjoint (new panel / renderer / filter chrome / engine
+scoping / panel copy), so the wave runs in intent-sync like 3.3–3.5 did.
+
+**Wave B — depth and closure (3 stories)**
+5.6 blast radius · 5.7 3D view · 5.8 README and docs. Launched only after
+wave A has landed on `epic/5-onboarding`, so 5.6 finds 5.5's empty-state
+convention and window labelling already in its base.
+
+> **Deliberate deviation — 5.8.** Principle 5 (no story depends on a future
+> story) is broken by the README story, which documents what 5.1–5.7 build.
+> It is recorded rather than engineered away: the harness stores exactly one
+> blocking predecessor, so seven cannot be declared. 5.8 carries
+> `Depends_on: []` and the ordering lives in its spec prose and in the
+> supervisor's hands — the same treatment story 4.3 got for the same reason.
 
 > **Story metadata.** Per brief §13.2 every story carries `Owner` (lead module;
 > `contract` extends the §9 vocabulary — the architecture made it a real
@@ -571,3 +668,243 @@ So that "done" is a recorded measurement, not a feeling (SM-1, DoD 7).
 **Given** the human-review checklist (visual sensibility, layer sanity, mockup fidelity items marked human-review in the PRD)
 **When** the maintainer walks it per repo
 **Then** every item is checked or has a filed follow-up issue — the checklist walk itself MUST be left unticked for the maintainer (owner gate).
+
+## Epic 5: Onboarding-First Map (post-MVP)
+
+Added 2026-08-15. One branch, `epic/5-onboarding`; wave A (5.1–5.5) merges into
+it, wave B (5.6–5.8) starts from it, and the whole epic reaches `master` as one
+merge commit after the maintainer's manual walk.
+
+Every criterion below is computable from `analysis.json` as it stands. Where a
+number appears it was measured in-session on a real langgraph checkout (662
+nodes, 90-day window) — those measurements are the reason these stories exist,
+so they are quoted rather than paraphrased.
+
+### Story 5.1: Start-here ranking (`5.1-viz-start-here`)
+
+Owner: `viz` · Touches: — · Depends_on: `[]` · Cohort: wave A, intent-sync
+
+As a developer dropped into an unfamiliar repository,
+I want the map to tell me what to read first,
+So that I get a reading order instead of an inventory (FR-26, UX-DR12).
+
+**Acceptance Criteria:**
+
+**Given** a loaded `analysis.json`
+**When** the ranking is computed
+**Then** three categories are produced from the graph alone: **core** = `kind: file`, `layer != test`, ranked by in-degree; **entry points** = `kind: file`, `layer != test`, in-degree 0 and out-degree > 0, ranked by out-degree; **tests as documentation** = `layer == test`, ranked by out-degree
+**And** ties break on `id` and no comparison uses `localeCompare`, so the same document always yields the same list (NFR-12, AD-6).
+
+**Given** the langgraph fixture (or an equivalent multi-package Python repo)
+**When** the three lists render
+**Then** core is headed by the most-imported non-test file, entry points exclude test files entirely, and tests-as-documentation is non-empty — the three lists are disjoint by construction.
+
+**Given** a first load with no prior selection
+**When** the viewer finishes settling
+**Then** the start-here panel is the default first state, is dismissible, and can be reopened from the header without reloading (UX-DR12)
+**And** selecting an entry flies the camera to that node and opens its detail panel, reusing the existing flight and selection path (AD-5 — chrome never moves the camera by hand).
+
+**Given** a repository where a category has no members (e.g. no test layer)
+**When** the panel renders
+**Then** that category states why it is empty rather than rendering a blank block (UX-DR14).
+
+### Story 5.2: Hover that highlights instead of dimming (`5.2-viz-hover-fix`)
+
+Owner: `viz` · Touches: — · Depends_on: `[]` · Cohort: wave A, intent-sync
+
+As a developer moving the pointer across a dense map,
+I want hover to reveal a chain without extinguishing everything else,
+So that the map stops strobing under the cursor (FR-29).
+
+**Acceptance Criteria:**
+
+**Given** the measured baseline — a hovered node dims 647 of 650 nodes to `NODE_ALPHA_DIMMED`, because the median 1-hop chain is 3 nodes
+**When** a node is hovered after this story
+**Then** nodes outside the chain keep a legible resting opacity and the chain is marked by emphasis (brightness, ring, edge alpha) rather than by everything else disappearing
+**And** the hovered node and its one-hop chain remain unambiguously identifiable — FR-17's intent survives, its mechanism does not.
+
+**Given** a pointer sweeping across the map at 6× zoom, where hit-areas cover 78% of the viewport
+**When** the pointer crosses many nodes in quick succession
+**Then** no frame-level flicker is introduced: the transition between hover states is stable, and hover is still suppressed during a pan (existing behaviour, do not regress).
+
+**Given** the isolate action (story 3.4) and the search-arrival pulse (story 3.3)
+**When** either is active
+**Then** they keep working unchanged — this story changes the hover encoding only, not the selection or isolate semantics.
+
+**Given** `prefers-reduced-motion`
+**When** hover state changes
+**Then** no animated transition is introduced (NFR-7, UX-DR11).
+
+### Story 5.3: Layer filter (`5.3-viz-layer-filter`)
+
+Owner: `viz` · Touches: — · Depends_on: `[]` · Cohort: wave A, intent-sync
+
+As a developer interested in one side of a mixed repository,
+I want to filter the map by layer,
+So that I can look at the backend without the frontend and tests on top of it (FR-28).
+
+**Acceptance Criteria:**
+
+**Given** the five contract layers (backend, frontend, infra, test, other)
+**When** the filter control renders
+**Then** each layer is independently toggleable (multi-select), controls carry `aria-pressed`, and the active set is visible without opening a menu (UX-DR13)
+**And** the control's styling matches the existing mode toggle (UX-DR6).
+
+**Given** a filter excluding one or more layers
+**When** the frame renders
+**Then** excluded nodes are not drawn at all — not dimmed — so they cannot be hovered, picked, or counted as hit-area
+**And** an edge is drawn only when both endpoints survive the filter.
+
+**Given** a filter that excludes every layer
+**When** the map renders
+**Then** the empty result is named ("no nodes match the active filters") with a one-click way back (UX-DR14).
+
+**Given** an active filter
+**When** the user exports a PNG
+**Then** the export matches what is on screen, filters included (FR-22's "matches camera/mode/highlight" extends to filters).
+
+### Story 5.4: Drill-down and connected-only (`5.4-viz-drill-down`)
+
+Owner: `viz` · Touches: — · Depends_on: `[]` · Cohort: wave A, intent-sync
+
+As a developer facing 650 nodes at once,
+I want to scope the map to one module and hide the nodes that carry no edges,
+So that I can look at a part of the repository instead of all of it (FR-30).
+
+**Acceptance Criteria:**
+
+**Given** a module on the map
+**When** the user drills into it via a dedicated gesture (not the single click, which already means "select")
+**Then** the map scopes to that module, its member files and the modules it actually imports or is imported by; everything else leaves the frame
+**And** the scope is exited by an equally discoverable gesture plus `Escape`, and the current scope is always visible in the chrome — a user must never be unable to tell they are scoped, or how to leave.
+
+**Given** the measured baseline — 232 of 650 files carry no edge at all
+**When** the connected-only filter is enabled
+**Then** nodes with degree 0 are not drawn, and the count of what was hidden is stated rather than silently dropped.
+
+**Given** a scoped view
+**When** the simulation runs
+**Then** scoping affects what the frame carries, not what the layout simulates — leaving a scope must not re-run the settle (measured: whole-repo scene 662 nodes / 2388 edges; `libs/langgraph/` scope 169 / 917).
+
+**Given** an active scope
+**When** search flies to a node outside it
+**Then** the behaviour is defined and implemented — either the scope is left or the target is refused with a reason; a silent no-op is not acceptable.
+
+### Story 5.5: Analysis window made legible (`5.5-viz-history-window`)
+
+Owner: `viz` · Touches: `packages/cli` (terminal summary wording only) · Depends_on: `[]` · Cohort: wave A, intent-sync
+
+As a developer reading a node's metrics,
+I want to know that they describe a 90-day window,
+So that a zero reads as "quiet lately" rather than "broken tool" (FR-31, UX-DR14).
+
+**Acceptance Criteria:**
+
+**Given** the measured baseline — 386 of 650 files carry `commits: 0` because their last change predates the window, and the panel renders a bare `0`
+**When** the panel shows history metrics
+**Then** each metric states the window it covers, sourced from `repo.analysisWindowDays` and never hardcoded
+**And** the wording works for any window value, not only 90.
+
+**Given** a node with `lastChangedAt: null` (no commit inside the window)
+**When** its panel renders
+**Then** it is presented as "no change in the last N days" and is visibly distinct from a node that has history in the window
+**And** the panel names the way to widen it (`--window-days`), per UX-DR14.
+
+**Given** a repository with no commits at all in the window
+**When** the map and panel render
+**Then** the zero-history case is stated once, clearly, rather than repeated as a bare zero on every node.
+
+**Given** the heatmap mode
+**When** most nodes have zero churn
+**Then** the mode's legend or empty state says so, so that a nearly-uniform heatmap is understood as data rather than as a rendering failure.
+
+### Story 5.6: Blast radius from co-change (`5.6-viz-blast-radius`)
+
+Owner: `viz` · Touches: — · Depends_on: `[5.5-viz-history-window]` · Cohort: wave B
+
+As a developer about to change a file,
+I want to see what has historically changed together with it,
+So that I learn what else I am likely to touch — knowledge no static analysis can give me (FR-27).
+
+**Acceptance Criteria:**
+
+**Given** a selected node and the `cochanges` array already present in the contract
+**When** its panel renders
+**Then** its co-change partners are listed with their shared-commit counts, ordered by count descending then by `id` (NFR-12)
+**And** selecting a partner navigates to it through the existing selection path.
+
+**Given** the measured baseline — 128 pairs exist but only 52 of 662 nodes appear in any pair
+**When** a node has no co-change partners
+**Then** the panel states why (below the ≥ 3 shared-commit threshold, or no shared commits inside the window) and names `--window-days` as the lever — this is the majority case and must not read as a bug (UX-DR14, consistent with 5.5's conventions already in the base).
+
+**Given** a node with partners
+**When** the map is asked to show them
+**Then** the partner set is visually distinguishable from the import chain — co-change is not a dependency edge and must not be drawn as one.
+
+**Given** module-level and file-level pairs in the same array
+**When** either is displayed
+**Then** the level is unambiguous to the reader, and a file's panel never silently shows a module pair as if it were its own.
+
+### Story 5.7: 3D view (`5.7-viz-3d-view`)
+
+Owner: `viz` · Touches: `docs/adr/` · Depends_on: `[]` · Cohort: wave B
+
+As a developer exploring a dense repository,
+I want a three-dimensional view of the same graph,
+So that a cloud that overlaps in the plane can be separated by depth (FR-32).
+
+**Acceptance Criteria:**
+
+**Given** the AD-5 seam
+**When** the 3D view is implemented
+**Then** it is a second implementation behind the `GraphEngine` interface, switchable at runtime, with 2D remaining the default
+**And** chrome reaches it through the same interface and events — `chrome/boundary.test.ts` keeps passing unchanged.
+
+**Given** AD-6's determinism promise
+**When** the same `analysis.json` is loaded twice
+**Then** the 3D layout and initial camera orientation are identical, seeded from the document as the 2D layout is — no unseeded randomness anywhere in the view.
+
+**Given** NFR-3's frame budget
+**When** the automated perf harness runs against the 2,000-node fixture in 3D
+**Then** it either holds the ≥ 55 fps floor, or records a measured floor and the node count at which it degrades, in the story's docs artifact (NFR-13) — an unmeasured 3D view does not satisfy this story.
+
+**Given** ADR-0004's 2 MB gzipped viewer budget and product principle 1 (zero-config, always a useful result)
+**When** the bundle is measured and the view runs on a machine without working WebGL
+**Then** the budget still passes, and the absence of 3D degrades to the 2D map with a stated reason rather than a blank canvas
+**And** an ADR records the decision and its consequences for AD-5, AD-6 and ADR-0004.
+
+**Given** `prefers-reduced-motion`
+**When** the 3D view is entered
+**Then** there is no auto-rotation and no entry animation (UX-DR15, NFR-7).
+
+### Story 5.8: README and docs refresh (`5.8-repo-docs-refresh`)
+
+Owner: `cli` · Touches: repo root, `docs/` · Depends_on: `[]` · Cohort: wave B, merges last
+
+As a visitor deciding whether gitnebula is worth running,
+I want the README to describe the tool as it now behaves,
+So that the documentation does not promise the previous version's product (FR-33, UX-DR16).
+
+> **Ordering note.** This story documents what 5.1–5.7 build, so it is worked
+> and merged last. `Depends_on` is `[]` because the harness stores exactly one
+> blocking predecessor and seven cannot be declared — the ordering is the
+> supervisor's to enforce, exactly as it was for story 4.3.
+
+**Acceptance Criteria:**
+
+**Given** the README's current claims
+**When** it is revised
+**Then** every statement contradicted by Epic 5 is corrected — specifically the "everything outside the hovered node's one-hop chain dims to ~0.2 opacity" line, which 5.2 replaces, and the navigation description, which 5.4 extends with drill-down
+**And** no claim is made that the shipped code does not support.
+
+**Given** the capabilities added by this epic
+**When** the README describes the product
+**Then** start-here, blast radius, layer filtering and the 3D view are documented, and the document leads with the question the tool answers rather than a feature list (UX-DR16).
+
+**Given** the demo GIF, which shows the pre-Epic-5 flow
+**When** the README is finished
+**Then** the demo reflects the onboarding-first flow, and `docs/recording-demo.md` is updated to match the recipe actually used (a placeholder is forbidden at story close, as in 4.3).
+
+**Given** `CLAUDE.md`'s frozen-artifact rule
+**When** documentation is updated
+**Then** completed-work sections are appended to, never rewritten, and the epic's ADRs are listed in `docs/adr/`.
