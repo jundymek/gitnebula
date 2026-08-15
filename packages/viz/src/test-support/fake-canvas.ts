@@ -67,6 +67,20 @@ export function createFakeContext(): FakeContext {
     setLineDash: record("setLineDash"),
     fillText: record("fillText"),
     setTransform: record("setTransform"),
+    /**
+     * Text metrics (story 5.7). The 2D renderer draws labels without measuring
+     * them, so nothing needed this before; the 3D view budgets labels against
+     * an occupancy grid and has to know how wide one is.
+     *
+     * A monospace approximation rather than a real measurement — the renderer
+     * asks for a monospace font, and the tests assert on *which* labels were
+     * drawn and where, never on their exact pixel width.
+     */
+    measureText(text: unknown) {
+      const size = Number.parseFloat(String(context.font)) || 10;
+      calls.push({ op: "measureText", args: [text] });
+      return { width: String(text).length * size * 0.6 };
+    },
     createRadialGradient(...args: unknown[]) {
       const stops: { offset: number; color: string }[] = [];
       gradients.push(stops);

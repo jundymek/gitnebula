@@ -299,6 +299,32 @@ export interface GraphEngine {
   getReturnScope(): string | null;
 
   /**
+   * Restore the pending "return to scope" offer (story 5.7).
+   *
+   * The offer is normally *created* by the engine, when a search flies out of
+   * an active scope — there is deliberately no other way to raise one, because
+   * an offer that did not come from that transition would tell the user a
+   * search happened that did not.
+   *
+   * This exists for one caller and one purpose: **carrying the offer across a
+   * view swap.** Rebuilding the engine for the other view resets it, and the
+   * reader — who is still looking at the same search result — would silently
+   * lose their way back. `getReturnScope()` is a getter with no counterpart,
+   * so there was no way to hand the state to the replacement engine.
+   *
+   * It sets the offer and nothing else: no event, no camera move, no scope
+   * change. `connectEngine` mirrors `getReturnScope()` when it attaches, which
+   * is what puts the restored offer back on screen, so publishing here would
+   * only duplicate it.
+   *
+   * Added late in epic 5 and implemented in both engines. ADR-0007 notes that
+   * an addition to this interface is now a cross-story change, because it has
+   * to be implemented twice; this one was escalated to the maintainer rather
+   * than taken unilaterally.
+   */
+  setReturnScope(moduleId: string | null): void;
+
+  /**
    * How many nodes each filter is currently hiding, kept apart by cause.
    * Never a combined total — UX-DR14 asks a hidden state to name its cause,
    * and the two counts are not additive.

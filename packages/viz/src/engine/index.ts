@@ -10,6 +10,23 @@
 
 export { createGraphEngine, CanvasGraphEngine } from "./engine.js";
 
+/**
+ * The 3D view (story 5.7) — a second implementation of the same interface,
+ * reached through the same barrel. `app.ts` picks between them via
+ * `createViewEngine`, which is also where the AC-5 fallback lives; chrome
+ * never names either constructor.
+ */
+export { createNebula3DEngine, Nebula3DEngine } from "./engine3d.js";
+export {
+  createViewEngine,
+  DEFAULT_VIEW,
+  isViewKind,
+  probe3D,
+  viewFromSearch,
+  type ViewEngineResult,
+  type ViewKind,
+} from "./view.js";
+
 export {
   FILE_LABEL_ZOOM,
   HOT_COLOR,

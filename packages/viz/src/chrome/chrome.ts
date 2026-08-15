@@ -17,6 +17,7 @@ import {
   FILTER_SLOT_ID,
   MODE_SLOT_ID,
   renderHeader,
+  VIEW_SLOT_ID,
   type HeaderActions,
 } from "./header.js";
 import { renderFilterEmpty, type FilterEmptyHandle } from "./filter-empty.js";
@@ -44,6 +45,12 @@ export interface MountOptions {
    * unchanged for the stories building alongside this one.
    */
   readonly overlays?: readonly HTMLElement[];
+  /**
+   * Story 5.7's 2D/3D switch, placed in the header's view slot. Optional and
+   * a plain element, so chrome never learns what a view is — and so every
+   * existing caller keeps working unchanged.
+   */
+  readonly viewSwitch?: HTMLElement;
 }
 
 /** What `connectEngine` needs beyond the handle. */
@@ -54,6 +61,24 @@ export interface ConnectOptions {
   readonly analysis: AnalysisDocument;
   /** Reference instant for the panel's relative last-change row (3.4). */
   readonly now?: number;
+  /**
+   * Whether disconnecting should also destroy the shared overlay controls —
+   * currently the search box, which holds a document-level `keydown` listener
+   * for its shortcut.
+   *
+   * Defaults to `true`, which is the behaviour every existing caller has and
+   * the right one when a page connects exactly once: the teardown is the page
+   * teardown, so it takes everything with it.
+   *
+   * Story 5.7 introduced a **second** reason to disconnect — swapping the 2D
+   * engine for the 3D one and back — and the search box outlives that: it is
+   * created once by `app.ts`, handed to `mountChrome` as an overlay, and
+   * reused by every engine. Destroying it on the first swap removed its
+   * shortcut listener and search stopped responding, while still looking
+   * present. Passing `false` says "unsubscribe this engine, leave the shared
+   * controls alone".
+   */
+  readonly destroyControls?: boolean;
 }
 
 /**
@@ -271,6 +296,13 @@ export function mountChrome(
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
   header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
+  // Story 5.7's 2D/3D switch. Chrome *places* it and nothing more — the
+  // control is constructed by `app.ts`, which owns swapping the engine, since
+  // chrome may not name a canvas or build an engine (AD-5, boundary.test.ts).
+  // Exactly the arrangement `options.stage` already uses.
+  if (options.viewSwitch) {
+    header.querySelector(`#${VIEW_SLOT_ID}`)?.append(options.viewSwitch);
+  }
 
   // Story 5.5: the legend reads the document so it can name the heatmap's
   // near-uniform case, and follows the engine's mode (wired in
@@ -468,6 +500,9 @@ export function connectEngine(
   return () => {
     handle.attachEngine(null);
     for (const unsubscribe of off) unsubscribe();
-    options.search?.destroy();
+    // Default true, so a page that connects once behaves exactly as before.
+    // A view swap (5.7) passes false: the search box is shared across engines
+    // and outlives any one of them.
+    if (options.destroyControls !== false) options.search?.destroy();
   };
 }

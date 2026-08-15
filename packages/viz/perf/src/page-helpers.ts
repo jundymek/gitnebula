@@ -14,9 +14,21 @@ import type { Page } from "@playwright/test";
 
 import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";
 
+export interface OpenViewerOptions {
+  /**
+   * Which view to open. Story 5.7 selects it with `?view=3d`, which is also
+   * how a human reproduces a 3D run by hand — the URL in `PERFORMANCE.md` is
+   * the same one this sends.
+   */
+  readonly view?: "2d" | "3d";
+}
+
 /** Navigate and wait until the Viewer has published its engine. */
-export async function openViewer(page: Page): Promise<void> {
-  await page.goto("/");
+export async function openViewer(
+  page: Page,
+  options: OpenViewerOptions = {},
+): Promise<void> {
+  await page.goto(options.view === "3d" ? "/?view=3d" : "/");
   await page.waitForFunction(
     (key) => key in globalThis,
     HARNESS_HANDLE_KEY,
