@@ -939,11 +939,22 @@ export class CanvasGraphEngine implements GraphEngine {
     }
   }
 
-  hiddenCount(): { readonly byScope: number; readonly byDegree: number } {
+  hiddenCount(): {
+    readonly byScope: number;
+    readonly byDegree: number;
+    readonly visible: number;
+  } {
     // Recomputed lazily so a caller asking before the first frame gets the
     // truth rather than the zeroes the fields were initialised with.
-    this.visibleIds();
-    return { byScope: this.hiddenByScope, byDegree: this.hiddenByDegree };
+    const visible = this.visibleIds();
+    return {
+      byScope: this.hiddenByScope,
+      byDegree: this.hiddenByDegree,
+      // The survivor count is reported, never left to the caller to subtract:
+      // nodes also leave the frame through story 5.3's layers and through
+      // semantic zoom, and neither of those appears in the two counts above.
+      visible: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+    };
   }
 
   /** The scope a search last flew out of, for the chrome's way back (AC-5). */
@@ -1193,6 +1204,21 @@ export class CanvasGraphEngine implements GraphEngine {
     }
     if (entered.length > 0) {
       this.emitter.emit("unfold", { moduleIds: entered });
+    }
+
+    // Story 5.4. Unfolding or collapsing changes which nodes the scene can
+    // place, and connected-only judges connectivity on exactly that — so a
+    // module crossing the zoom threshold changes the visible set as surely as
+    // toggling a filter does. Treated the same way: recompute, drop any
+    // interaction state whose node has gone, and publish.
+    //
+    // Only while a filter of this story's is active; otherwise semantic zoom
+    // is nobody's business but ADR-0006's, and this must not add an event to
+    // the ordinary pan-and-zoom path.
+    if (this.scopeId !== null || this.connectedOnly) {
+      this.invalidateVisible();
+      this.reconcileInteraction();
+      this.emitScope(null);
     }
   }
 

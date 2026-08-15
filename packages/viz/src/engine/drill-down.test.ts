@@ -379,6 +379,36 @@ describe("AC-6 — interaction state never outlives the node it points at", () =
     expect(engine.getHovered()).toBeNull();
   });
 
+  it("drops a selected file when its module collapses under it", () => {
+    // Auto-review finding: unfold transitions change which nodes the scene can
+    // place, and connected-only judges connectivity on exactly that — but a
+    // module crossing the zoom threshold published nothing, so a file could
+    // stay selected after it left the frame.
+    canvas = document.createElement("canvas");
+    document.body.append(canvas);
+    engine = new CanvasGraphEngine({ canvas, reducedMotion: true });
+    engine.load(loadContractFixture("synthetic-100x2000"));
+    run(5);
+
+    const module = engine.nodes.find((node) => node.kind === "module")!;
+    void engine.flyTo(module.id, { durationMs: 0, zoom: UNFOLD_ZOOM + 0.5 });
+    run(5);
+    engine.setConnectedOnly(true);
+
+    const member = scene().nodes.find(
+      (item) => item.node.kind === "file" && item.node.parent === module.id,
+    );
+    if (!member) return; // nothing unfolded here; the assertion has no subject
+    engine.setSelected(member.node.id);
+    expect(engine.getSelected()?.id).toBe(member.node.id);
+
+    // Zoom back out: the module collapses and the file leaves the frame.
+    engine.setCamera({ k: 1 });
+    run(3);
+
+    expect(engine.getSelected()).toBeNull();
+  });
+
   it("clears isolate even when there is no selection to clear with it", () => {
     // Ninth Codex pass: isolate was only dropped as a side effect of removing
     // the selection, but `setIsolated` is a public operation independent of
@@ -566,9 +596,12 @@ describe("AC-3 — connected-only", () => {
     );
   });
 
-  it("reports zero hidden when no filter is active", () => {
+  it("reports zero hidden, and everything visible, with no filter active", () => {
     settledEngine();
-    expect(engine.hiddenCount()).toEqual({ byScope: 0, byDegree: 0 });
+    const counts = engine.hiddenCount();
+    expect(counts.byScope).toBe(0);
+    expect(counts.byDegree).toBe(0);
+    expect(counts.visible).toBe(engine.nodes.length);
   });
 });
 

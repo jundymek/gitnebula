@@ -295,6 +295,14 @@ export interface GraphEngine {
   hiddenCount(): {
     readonly byScope: number;
     readonly byDegree: number;
+    /**
+     * How many nodes actually survive every filter and can be drawn right now.
+     * Reported rather than left to the caller to subtract: the survivors are
+     * what is left after scope, connected-only, story 5.3's layers AND
+     * semantic zoom, and a caller doing the arithmetic from the two counts
+     * above would silently miss the last two.
+     */
+    readonly visible: number;
   };
 
   // ---- export (story 3.5) ----------------------------------------------

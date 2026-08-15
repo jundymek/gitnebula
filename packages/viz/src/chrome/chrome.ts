@@ -429,7 +429,11 @@ export function connectEngine(
     scopeId: engine.getScope(),
     connectedOnly: engine.getConnectedOnly(),
     hiddenByDegree: scopeCounts.byDegree,
-    scopeVisibleCount: engine.nodes.length - scopeCounts.byScope,
+    // Taken from the engine, not derived by subtraction: nodes also leave the
+    // frame through the layer filter and through semantic zoom, so
+    // `nodes.length - byScope` would overstate what is on screen and the empty
+    // state would stay shut over an empty map.
+    scopeVisibleCount: scopeCounts.visible,
   });
   handle.layerFilter.setLayers(layers);
   handle.layerFilter.setHidden(hidden);
