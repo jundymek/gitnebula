@@ -20,7 +20,7 @@ all of Epic 5 merged.
       is what the next release ships.
 - [x] `npx gitnebula ../some/other/repo` — verified in the equivalent form
       `node packages/cli/dist/bin/gitnebula.js <clean> --no-serve`:
-      `406 nodes, 492 edges, 179 co-change pairs … in 0.30s`, which is the
+      `409 nodes, 493 edges, 186 co-change pairs … in 0.28s`, which is the
       transcript in the README — the same run every figure on the page comes from.
 - [x] `npx gitnebula https://github.com/…` — clone-and-analyze against
       `https://github.com/jundymek/gitnebula`: `324 nodes, 338 edges, 115
@@ -55,9 +55,16 @@ all of Epic 5 merged.
       view switch reports `[["2d","false"],["3d","true"]]` on that URL, so the
       deep link selects 3D rather than falling back.
 - [x] **"nearly half the files carry no import edge"** — measured on that same
-      document: 189 of 400 files, 47%.
-- [x] **"346 of 406 nodes have no co-change partner"** — measured on the same
-      document.
+      document: 191 of 403 files, 47%.
+- [x] **"around 85% of the files have no co-change partner"** — measured over
+      **file** nodes: 345 of 403 on this head, 86%. Two corrections behind that one
+      sentence. It first said "346 of 406", which was the count over *all* nodes
+      including modules, published under the word "files" — story 5.6's owner
+      caught the mismatched denominator on her own fresh-clone run. Corrected to
+      "344 of 400", it then moved to 342 within the hour, because her merge and
+      mine both changed the history the count is taken from. It is now a ratio,
+      which is what the sentence actually means and what survives the next
+      commit.
 - [x] **`chrome/chrome.ts` and `styles.css` keep changing together with no
       import between them** — the pair is in `cochanges` (9 shared commits at
       the time of writing) and there is **no** edge between them in `edges`.
@@ -79,6 +86,33 @@ all of Epic 5 merged.
 - [x] **The 2D unfold threshold (1.8×) and ⌘K search** — re-checked against
       `engine/constants.ts` and `chrome/search.ts`; both unchanged by Epic 5 and
       both still stated correctly.
+
+- [x] **The figure table was wrong twice, in opposite directions, and both are
+      recorded rather than quietly fixed.** First it was incomplete: the pass
+      that introduced it updated three of the four places and left the story
+      docs' audit row behind — the list is needed precisely because whoever has
+      just written it will still miss an entry. Then it was *too* eager: the
+      recipe's "what was recorded" row is provenance for an immutable GIF, not a
+      copy of the current figures, and syncing it to a later run made the
+      metadata describe a document the video does not show. That row is now
+      pinned at the counts the committed take was recorded from (179 pairs)
+      while the README quotes the later run (186), and the table carries a
+      column saying which is which. Codex found both — and then a third: adding
+      the pin column split one row into two, so the prose still said "all four
+      places" over a table listing five mutable rows. Corrected by counting the
+      rows rather than re-reading the sentence.
+
+- [x] **The warning block was observed on the merged head, not predicted.** The
+      README's previous sentence counted five warning lines and named "a file
+      read as binary" among the kinds. Story 5.10 (#78) removed the NUL byte in
+      `layout.ts` that produced that line, so I re-ran on a fresh clone of the
+      merged head and read the block: **four** lines — `data-blob`,
+      `external-import`, `path-outside-universe`, `bulk-commit-skipped`. Neither
+      the five I had written nor the six the supervisor saw on his worktree, and
+      two of the four were kinds I had never named. `layout.ts` itself now
+      reports `loc: 388` where it reported 0, confirmed on the same run. The
+      transcript now shows the block whole, so nothing about it is elided and
+      nothing about it is counted in prose.
 
 ## The repository's own checks
 

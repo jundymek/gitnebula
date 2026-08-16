@@ -14,7 +14,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 179 co-change pairs, the same run the README quotes) |
+| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 179 co-change pairs — the document this take was recorded from, which is **not** the later run the README transcript quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 39 s of WebM |
@@ -28,7 +28,7 @@ carries build output, generated fixtures and whatever scratch files the current
 branch happens to have, and every one of them becomes a node on the map. The
 first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
 recipe below clones the repository into a temp directory for exactly this
-reason, which is also why the README's sample run reports 406 nodes where the
+reason, which is also why the README's sample run reports 409 nodes where the
 same command in a live worktree reports more.
 
 ## The scripted sequence
@@ -152,6 +152,65 @@ against a fresh `analysis.json`: the node and file counts in the header, the
 names in the start-here list, and whether the 3D beat unfolds anything. All
 three of those changed between takes, and none of them would have failed a
 test.
+
+### The figures move too, and they live in four places
+
+The numbers quoted from a run — node, edge and co-change counts, the skipped
+import count, the "no partner" and "no import edge" ratios — change with every
+commit that adds or removes a file. They have been re-measured four times
+during this epic, twice because someone else's merge moved them.
+
+Take them from **one** run of a fresh clone and update **the five mutable rows
+below** in the same pass, or they will disagree with each other. The sixth row
+is pinned and is explained under the table — it is the one place where copying
+the fresh figure in is the mistake:
+
+| where | what it carries | on a refresh |
+| --- | --- | --- |
+| `README.md` quickstart | the pasted transcript, warning block included | update |
+| `README.md` blast-radius paragraph | the files-with-no-partner share, as a ratio rather than a count | update |
+| `README.md` connected-only bullet | the files-with-no-import-edge share | update |
+| `docs/recording-demo.md` clean-clone note | the node count a visitor's clone reports | update |
+| `docs/dev/epic-5/5.8-repo-docs-refresh/` | the same figures, as the record of what was verified | update |
+| `docs/recording-demo.md` "what was recorded" row | the counts of the document **the committed GIF was recorded from** | **pin — do not sync** |
+
+**The last row is provenance, not a copy.** It describes an immutable artifact:
+the GIF in the repository was recorded against one specific document, and that
+document's counts do not change when someone later re-measures the repository.
+Synchronising it makes the metadata describe a run the video does not show. It
+changes only when the GIF is re-recorded, and then both change together. This
+distinction was got wrong once here — the row was synced to a later run while the
+asset stayed put — and Codex caught it; the difference between "figures about the
+repository now" and "figures about what is in this file" is worth the extra
+column.
+
+**Mind the denominator.** The document carries modules as well as files, so a
+count over `nodes` is not a count over `files` — this repository has 406 nodes
+and 400 files, and a sentence about files that quotes the node total is wrong by
+six even when the arithmetic is right. Measure over `kind === "file"` when the
+sentence says "files".
+
+**Describe the tool, not the run.** The README's prose used to say the run
+printed a particular number of warning lines and name "a file read as binary"
+among them. Both were true of the document in front of the author and false of
+the tool one merge later, when story 5.10 removed the NUL byte that produced
+that line — the block went from five kinds to four, and two of the four had
+never been named. The prose now states the invariant instead: one line per kind
+skipped, each counted, with the block itself as the authority. That sentence
+stays true when a defect is fixed, which is the test worth applying before
+writing any figure into prose.
+
+**Exact counts belong in the transcript; prose wants a ratio.** A pasted
+terminal block is understood to be one moment and can carry exact numbers. A
+sentence in the body reads as a standing fact about the repository, and an exact
+count there is stale the next time anyone commits — the co-change total moved
+four times during this story alone, twice from merges of the very PRs updating
+it. That is not bad luck, it is self-reference: co-change is computed from files
+changed together, so **the commit that corrects the figure is itself a shared-
+history event that moves it.** An exact count of co-change data can never be
+correct in the commit that writes it down. "Around 85% of files have no co-change partner" survives that; "344 of 400"
+does not, and re-measuring it is a treadmill rather than a fix. Keep the exact
+figures where a reader can see they are a snapshot.
 
 ### Keeping the asset small
 
