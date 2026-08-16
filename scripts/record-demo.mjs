@@ -200,7 +200,7 @@ async function main() {
   if ((await blastShow.count()) > 0 && (await blastShow.isVisible())) {
     await wait(1_400);
     await blastShow.click();
-    await wait(2_000);
+    await wait(1_800);
     await blastShow.click();
     await wait(500);
   }
@@ -259,7 +259,7 @@ async function main() {
   //    frame, and the chrome states how many went (5.4, UX-DR14).
   const connected = page.locator("#scope-bar .scope-bar-connected");
   await connected.click();
-  await wait(1_700);
+  await wait(1_500);
   await connected.click();
   await wait(600);
 
@@ -285,14 +285,14 @@ async function main() {
   const threeD = page.locator('#view-switch button[data-view="3d"]');
   if ((await threeD.count()) > 0 && !(await threeD.isDisabled())) {
     await threeD.click();
-    await wait(3_600);
+    await wait(2_600);
     await page.locator('#view-switch button[data-view="2d"]').click();
     await wait(1_200);
   }
 
   // 10. Heatmap mode — the same map coloured by churn instead of by layer.
   await page.locator("#mode-heat").click();
-  await wait(2_200);
+  await wait(1_900);
 
   // 11. PNG export — the button reports its own progress.
   const download = page.waitForEvent("download", { timeout: 30_000 });
