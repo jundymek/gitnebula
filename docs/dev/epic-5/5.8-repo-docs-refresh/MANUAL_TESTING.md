@@ -87,13 +87,17 @@ all of Epic 5 merged.
       `engine/constants.ts` and `chrome/search.ts`; both unchanged by Epic 5 and
       both still stated correctly.
 
-- [x] **The four-places table was verified by using it, and it caught me.** The
-      pass that introduced that table to `docs/recording-demo.md` updated three
-      of the four places and left the story docs' audit row at the previous
-      figure; Codex found the inconsistency. Recorded rather than quietly fixed,
-      because it is the argument for the table: the list is needed precisely
-      because someone who has just written it will still miss an entry. Final
-      sweep greps one figure across all four files and they agree.
+- [x] **The figure table was wrong twice, in opposite directions, and both are
+      recorded rather than quietly fixed.** First it was incomplete: the pass
+      that introduced it updated three of the four places and left the story
+      docs' audit row behind — the list is needed precisely because whoever has
+      just written it will still miss an entry. Then it was *too* eager: the
+      recipe's "what was recorded" row is provenance for an immutable GIF, not a
+      copy of the current figures, and syncing it to a later run made the
+      metadata describe a document the video does not show. That row is now
+      pinned at the counts the committed take was recorded from (179 pairs)
+      while the README quotes the later run (186), and the table carries a
+      column saying which is which. Codex found both.
 
 ## The repository's own checks
 

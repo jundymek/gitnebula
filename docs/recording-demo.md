@@ -14,7 +14,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 186 co-change pairs, the same run the README quotes) |
+| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 179 co-change pairs — the document this take was recorded from, which is **not** the later run the README transcript quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 39 s of WebM |
@@ -163,13 +163,24 @@ during this epic, twice because someone else's merge moved them.
 Take them from **one** run of a fresh clone and update all four places in the
 same pass, or they will disagree with each other:
 
-| where | what it carries |
-| --- | --- |
-| `README.md` quickstart | the pasted transcript, and the skipped-import count in the sentence below it |
-| `README.md` blast-radius paragraph | the files-with-no-partner share, as a ratio rather than a count |
-| `README.md` connected-only bullet | the files-with-no-import-edge share |
-| `docs/recording-demo.md` (this file) | the "what was recorded" row, and the node count in the clean-clone note |
-| `docs/dev/epic-5/5.8-repo-docs-refresh/` | the same figures, as the record of what was verified |
+| where | what it carries | on a refresh |
+| --- | --- | --- |
+| `README.md` quickstart | the pasted transcript, and the skipped-import count in the sentence below it | update |
+| `README.md` blast-radius paragraph | the files-with-no-partner share, as a ratio rather than a count | update |
+| `README.md` connected-only bullet | the files-with-no-import-edge share | update |
+| `docs/recording-demo.md` clean-clone note | the node count a visitor's clone reports | update |
+| `docs/dev/epic-5/5.8-repo-docs-refresh/` | the same figures, as the record of what was verified | update |
+| `docs/recording-demo.md` "what was recorded" row | the counts of the document **the committed GIF was recorded from** | **pin — do not sync** |
+
+**The last row is provenance, not a copy.** It describes an immutable artifact:
+the GIF in the repository was recorded against one specific document, and that
+document's counts do not change when someone later re-measures the repository.
+Synchronising it makes the metadata describe a run the video does not show. It
+changes only when the GIF is re-recorded, and then both change together. This
+distinction was got wrong once here — the row was synced to a later run while the
+asset stayed put — and Codex caught it; the difference between "figures about the
+repository now" and "figures about what is in this file" is worth the extra
+column.
 
 **Mind the denominator.** The document carries modules as well as files, so a
 count over `nodes` is not a count over `files` — this repository has 406 nodes
