@@ -1,20 +1,24 @@
 #!/usr/bin/env node
-// The automated check behind story 5.9. It proves three things, and is wired
-// into the root `pnpm test` so it cannot rot unnoticed:
+// The repository's tooling checks — the things that are true of the workspace
+// rather than of any one package. Wired into the root `pnpm test` so they
+// cannot rot unnoticed; run them alone with `pnpm test:tooling`.
 //
 //   1. a workspace filter that matches no project FAILS (the `.npmrc` setting);
 //   2. the canonical runner names the filter that matched nothing;
 //   3. CLAUDE.md's canonical command table and the workspace agree, in both
 //      directions, and every command in it has the one literal form a later
-//      spec can be checked against.
+//      spec can be checked against;
+//   4. no tracked text file carries a literal NUL byte (story 5.10).
 //
-// Run it directly with `pnpm test:tooling`.
+// 1–3 are story 5.9's. 4 lives here rather than in an entry point of its own
+// because a second entry point is a second thing to remember to run.
 
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { findNulBytes, formatFinding } from "./nul-sweep.mjs";
 import { workspacePackages } from "./pkg-test.mjs";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -123,6 +127,16 @@ if (!table) {
     );
   }
 }
+
+// 4. No tracked text file carries a literal NUL byte (story 5.10). The finding
+//    names the file, the line and the byte offset, because the byte renders as
+//    nothing in a diff, an editor and a code review alike.
+const nulFindings = findNulBytes(REPO_ROOT);
+check(
+  "no tracked text file carries a NUL byte",
+  nulFindings.length === 0,
+  nulFindings.map(formatFinding).join("\n       "),
+);
 
 if (failures.length > 0) {
   process.stderr.write(`\nverify-test-commands: ${failures.length} failed\n`);

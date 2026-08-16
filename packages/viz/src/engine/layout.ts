@@ -220,8 +220,8 @@ export class ModuleLayout {
  * `setup.py → fp/proxy.py` to `setup.py → fp/` settles it beside the module it
  * actually imports, which is the whole point of drawing it (story 4.7).
  *
- * Deterministic by construction: contract order, deduplicated by a stable key,
- * self-links (two files inside one module) dropped.
+ * Deterministic by construction: contract order, deduplicated by a nested map
+ * that needs no separator, self-links (two files inside one module) dropped.
  */
 function topLevelLinks(graph: Graph): { source: string; target: string }[] {
   const topLevelIdOf = (index: number): string | null => {
@@ -232,12 +232,25 @@ function topLevelLinks(graph: Graph): { source: string; target: string }[] {
   };
 
   const links: { source: string; target: string }[] = [];
-  const seen = new Set<string>();
+  // Dedupe through a nested map rather than a joined key. A composite key is
+  // only sound if its separator cannot occur in either half, and the halves
+  // are node ids — paths, which may legitimately contain any byte but NUL and
+  // `/`. That is why this was a literal NUL until story 5.10, and why no
+  // printable replacement would have been sound. Nesting removes the question:
+  // the two halves never share a string, so there is nothing to separate.
+  // `topLevelLinks3D` in layout3d.ts is the same shape, for the same reason.
+  const seen = new Map<string, Set<string>>();
   const add = (source: string, target: string): void => {
+    // Self-links first: dropped before the map is consulted, so a module's two
+    // files can never enter as an edge from a node to itself.
     if (source === target) return;
-    const key = `${source} ${target}`;
-    if (seen.has(key)) return;
-    seen.add(key);
+    let targets = seen.get(source);
+    if (targets === undefined) {
+      targets = new Set<string>();
+      seen.set(source, targets);
+    }
+    if (targets.has(target)) return;
+    targets.add(target);
     links.push({ source, target });
   };
 
