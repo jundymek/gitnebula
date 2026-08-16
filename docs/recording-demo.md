@@ -14,10 +14,10 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` rebased onto all of Epic 5 including PR #68, gitnebula analysing a **fresh clone** of its own repository (399 nodes, 480 edges, 175 co-change pairs — the same run the README quotes) |
+| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 179 co-change pairs, the same run the README quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
-| Raw length | 41 s of WebM |
+| Raw length | 39 s of WebM |
 | Published asset | 720 px wide, 8 fps, 64-colour palette, no dithering — 4.1 MiB |
 
 The committed GIF is the ffmpeg encode of that WebM; the WebM itself is not
@@ -28,7 +28,7 @@ carries build output, generated fixtures and whatever scratch files the current
 branch happens to have, and every one of them becomes a node on the map. The
 first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
 recipe below clones the repository into a temp directory for exactly this
-reason, which is also why the README's sample run reports 399 nodes where the
+reason, which is also why the README's sample run reports 406 nodes where the
 same command in a live worktree reports more.
 
 ## The scripted sequence
@@ -135,6 +135,23 @@ ffmpeg -y -i /tmp/gitnebula-demo/demo.webm \
 
 Overridable inputs: `DEMO_URL`, `DEMO_OUT`, `DEMO_MODULE` (default `packages/`)
 and `DEMO_LAYER` (default `test`, the layer the filter beat switches off).
+
+### The take is only as current as the code under it
+
+This demo has been re-recorded three times, and twice because the map changed
+under it rather than because the recording was faulty. The second re-record
+followed PR #68; the third followed #72, #73 and #74, which between them
+changed the start-here ranking, removed a 40,655-line generated fixture from
+the map and fixed what the 3D view draws when a module is unfolded. A take made
+before those is not wrong in its own terms — it is a faithful recording of a
+product that no longer exists.
+
+**So the check is not "does the recorder still run", it is "does the map in the
+frames match the map the code now draws".** Pull the frames and read them
+against a fresh `analysis.json`: the node and file counts in the header, the
+names in the start-here list, and whether the 3D beat unfolds anything. All
+three of those changed between takes, and none of them would have failed a
+test.
 
 ### Keeping the asset small
 

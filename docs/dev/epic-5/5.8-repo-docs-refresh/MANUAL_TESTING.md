@@ -20,7 +20,7 @@ all of Epic 5 merged.
       is what the next release ships.
 - [x] `npx gitnebula ../some/other/repo` — verified in the equivalent form
       `node packages/cli/dist/bin/gitnebula.js <clean> --no-serve`:
-      `399 nodes, 480 edges, 175 co-change pairs … in 0.36s`, which is the
+      `406 nodes, 492 edges, 179 co-change pairs … in 0.30s`, which is the
       transcript in the README — the same run every figure on the page comes from.
 - [x] `npx gitnebula https://github.com/…` — clone-and-analyze against
       `https://github.com/jundymek/gitnebula`: `324 nodes, 338 edges, 115
@@ -55,8 +55,8 @@ all of Epic 5 merged.
       view switch reports `[["2d","false"],["3d","true"]]` on that URL, so the
       deep link selects 3D rather than falling back.
 - [x] **"nearly half the files carry no import edge"** — measured on that same
-      document: 184 of 393 files, 47%.
-- [x] **"342 of 399 nodes have no co-change partner"** — measured on the same
+      document: 189 of 400 files, 47%.
+- [x] **"346 of 406 nodes have no co-change partner"** — measured on the same
       document.
 - [x] **`chrome/chrome.ts` and `styles.css` keep changing together with no
       import between them** — the pair is in `cochanges` (9 shared commits at
@@ -89,7 +89,7 @@ all of Epic 5 merged.
 
 ## The demo
 
-- [x] The recorder runs end to end against a served map: 41 s of WebM, encoded
+- [x] The recorder runs end to end against a served map: 39 s of WebM, encoded
       by the documented ffmpeg command to a **4.1 MiB** GIF — inside the ~5 MB
       ceiling `docs/recording-demo.md` sets, though **larger** than the 3.7 MiB
       asset it replaces: the tour is longer and the 3D rotation is expensive
@@ -117,6 +117,15 @@ all of Epic 5 merged.
       shows the graph in perspective before returning to 2D.
 - [x] **Recorded from a clean clone** made by the documented recipe, so no
       worktree scratch file is on the map. The committed GIF is that take.
+- [x] **Re-recorded a third time, after #72, #73 and #74 merged.** Frames
+      re-read against a fresh `analysis.json`: the header reports 400 files
+      (the 40,655-line generated fixture #72 removed is gone, and `packages/`
+      is `backend` again rather than `test`), the start-here list now leads with
+      `engine.ts — 14 importers · 1,694 lines` under #73's ranking instead of
+      the four barrels and a fixture helper the old take showed, and the 3D beat
+      unfolds members — so it exercises the layout #74 fixed rather than sitting
+      below the threshold as the previous take did. The panel beat now opens on
+      `engine.ts`, which is a better subject than the barrel it used to pick.
 - [x] **Re-recorded after PR #68 merged**, against a build of the corrected
       3D engine. The previous take predated it by eight minutes. Its 3D frames
       showed modules only — the camera sits below `UNFOLD_ZOOM` at that beat, so
