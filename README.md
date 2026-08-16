@@ -98,11 +98,19 @@ on your PATH.
 **The map opens on an answer.** Once the layout settles, a **start-here** panel
 names a reading order in three categories, computed from the graph alone:
 
-| category                   | what it holds                                          |
-| -------------------------- | ------------------------------------------------------ |
-| **core**                   | the files everything else imports, most-imported first |
-| **entry points**           | files nobody imports that import plenty — the doors    |
-| **tests as documentation** | the test files that exercise the most of the codebase  |
+| category                   | what it holds                                                    |
+| -------------------------- | ---------------------------------------------------------------- |
+| **core**                   | the code the rest of the repository leans on — importers × lines |
+| **entry points**           | files nobody imports that import plenty — the doors              |
+| **tests as documentation** | the test files that exercise the most of the codebase            |
+
+Core multiplies the two numbers on purpose. Ranking by importers alone promotes
+whatever everything happens to touch: on this repository most of the five slots
+went to small, ubiquitous files — a test-fixture helper, an error enum, a
+re-export barrel — while the seventeen-hundred-line engine that actually
+answers "what does this do" fell outside the list entirely. A file worth
+reading first is one a lot of code depends on **and** that has something in it,
+so each row shows both numbers, e.g. `14 importers · 1,694 lines`.
 
 Pick a row and the camera flies to that file and opens its panel. Dismiss the
 panel to explore on your own; `◎ start here` in the header brings it back
