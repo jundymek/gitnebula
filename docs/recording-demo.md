@@ -28,7 +28,7 @@ carries build output, generated fixtures and whatever scratch files the current
 branch happens to have, and every one of them becomes a node on the map. The
 first take of this cut had `plan.md` and an `.intent-acks/` module in frame. The
 recipe below clones the repository into a temp directory for exactly this
-reason, which is also why the README's sample run reports 406 nodes where the
+reason, which is also why the README's sample run reports 409 nodes where the
 same command in a live worktree reports more.
 
 ## The scripted sequence
@@ -167,7 +167,7 @@ the fresh figure in is the mistake:
 
 | where | what it carries | on a refresh |
 | --- | --- | --- |
-| `README.md` quickstart | the pasted transcript, and the skipped-import count in the sentence below it | update |
+| `README.md` quickstart | the pasted transcript, warning block included | update |
 | `README.md` blast-radius paragraph | the files-with-no-partner share, as a ratio rather than a count | update |
 | `README.md` connected-only bullet | the files-with-no-import-edge share | update |
 | `docs/recording-demo.md` clean-clone note | the node count a visitor's clone reports | update |
@@ -189,6 +189,16 @@ count over `nodes` is not a count over `files` — this repository has 406 nodes
 and 400 files, and a sentence about files that quotes the node total is wrong by
 six even when the arithmetic is right. Measure over `kind === "file"` when the
 sentence says "files".
+
+**Describe the tool, not the run.** The README's prose used to say the run
+printed a particular number of warning lines and name "a file read as binary"
+among them. Both were true of the document in front of the author and false of
+the tool one merge later, when story 5.10 removed the NUL byte that produced
+that line — the block went from five kinds to four, and two of the four had
+never been named. The prose now states the invariant instead: one line per kind
+skipped, each counted, with the block itself as the authority. That sentence
+stays true when a defect is fixed, which is the test worth applying before
+writing any figure into prose.
 
 **Exact counts belong in the transcript; prose wants a ratio.** A pasted
 terminal block is understood to be one moment and can carry exact numbers. A

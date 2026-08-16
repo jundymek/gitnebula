@@ -29,27 +29,31 @@ Run it inside a git repository. gitnebula scans the tree, parses imports, reads
 ✔ scan (0.08s)
 ▸ deps
 ▸ githist
-✔ githist (0.07s)
-✔ deps (0.19s)
+✔ githist (0.06s)
+✔ deps (0.18s)
 ▸ assemble
 ✔ assemble (0.00s)
 ▸ enrich
 ✔ enrich (0.00s)
 ▸ emit
 ✔ emit (0.00s)
-  ! deps: external-import ×347 (e.g. @eslint/js in eslint.config.js)
-analysis.json — 406 nodes, 492 edges, 186 co-change pairs, history over the last 90 days (--window-days), in 0.29s
+  ! scan: data-blob ×1 (e.g. packages/contract/fixtures/synthetic-100x2000.json)
+  ! deps: external-import ×352 (e.g. @eslint/js in eslint.config.js)
+  ! githist: path-outside-universe ×275 (e.g. docs/assets/demo.gif)
+  ! githist: bulk-commit-skipped ×1 (e.g. 72fea57aecbe074667ec01c7d7cb95ec9bc242a1)
+analysis.json — 409 nodes, 493 edges, 186 co-change pairs, history over the last 90 days (--window-days), in 0.28s
 serving http://127.0.0.1:4137/ — press Ctrl+C to stop
 ```
 
-That is a real run of gitnebula over a fresh clone of its own repository,
-abridged in two ways it is worth naming: the machine-specific path prefix is
-trimmed off the summary line, and this run printed **five** warning lines where
-one is shown. Everything the analyzers skip is counted and named there — an
-import that resolves outside the repository, a file read as binary, a generated
-data blob — so nothing is dropped silently, and the run above skipped 347
-external imports and said so. If port 4137 is busy the server takes the next
-free one and prints the URL it actually bound.
+That is a real run of gitnebula over a fresh clone of its own repository, with
+only the machine-specific path prefix trimmed off the summary line. The warning
+block is whole: the analyzers print **one line per kind of thing they skipped,
+each with a count and an example**, so anything left off the map is reported
+rather than merely absent. What appears there depends on the repository — an
+import that resolves outside it, a generated data blob, a file that cannot be
+read as text, a commit too large to attribute — and that block, not this page,
+is the authority on what a given run did. If port 4137 is busy the server takes
+the next free one and prints the URL it actually bound.
 
 There is nothing to sign up for, nothing to configure and no API key. Your code
 never leaves the machine.

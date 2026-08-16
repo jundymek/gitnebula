@@ -29,7 +29,7 @@ The audit was a line-by-line pass over the old README against the merged epic.
 | "PNG export — a 2× re-render of exactly what is on screen." | Still true, and now explicitly includes the active filters. | **5.3** (AC-5) |
 | Search described as fly-to-and-open only. | A result outside the active scope leaves the scope, flies there, says so, and offers the way back. | **5.4** (AC-5) |
 | "Files … over a 90-day window" with no account of a quiet repository. | The heatmap legend states the near-uniform case, so a flat heatmap reads as data rather than as a broken renderer. | **5.5** (AC-4) |
-| The sample run's numbers (295 nodes, 360 edges, 60 co-change pairs, 0.25 s) and its summary line. | Replaced by a real run over a fresh clone of the merged epic: 406 nodes, 492 edges, 186 co-change pairs, and the summary line now names the analysis window. | **5.5** (AC-5), plus history since 4.3 |
+| The sample run's numbers (295 nodes, 360 edges, 60 co-change pairs, 0.25 s) and its summary line. | Replaced by a real run over a fresh clone of the merged epic: 409 nodes, 493 edges, 186 co-change pairs, and the summary line now names the analysis window. | **5.5** (AC-5), plus history since 4.3 |
 | Root files were absent from the map and from the README's account of it. | Files in the repository root are drawn; the README says so. | **4.7** (pre-epic, never documented) |
 | "plus the files that keep changing together" — one clause, describing story 3.4's top-three metric row. | Co-change is a first-class **blast radius** section with shared-commit counts, a `show on map` toggle, and an empty state naming the ≥ 3 threshold; 3.4's metric row is folded into it and no longer exists. | **5.6** |
 | The map is two-dimensional, stated nowhere because there was no alternative. | A `3D` view sits behind the same `GraphEngine` interface, linkable with `?view=3d`, with 2D still the default and still faster. | **5.7** |
@@ -61,7 +61,7 @@ heatmap → PNG export — and
 One recipe change worth its own line: **record against a clean clone.** The
 first take of this cut had `plan.md` and an `.intent-acks/` module on the map,
 because the recorder was pointed at a live worktree. The recipe now clones into
-a temp directory first, which is also why the README's sample run reports 406
+a temp directory first, which is also why the README's sample run reports 409
 nodes where the same command in a worktree reports more.
 
 A second take was discarded rather than shipped: it came from a stale server
