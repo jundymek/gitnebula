@@ -66,6 +66,28 @@ npx gitnebula --window-days 365       # widen the git history window (default 90
 Optional `.gitnebula.yml` in the repository root sets `excludes`, `windowDays`,
 `hotspotThreshold` and `layers`; command-line flags win over the file.
 
+### What the map leaves out
+
+Dependency trees, build output, lockfiles, test snapshots and binary assets are
+excluded by default — machine-written files that are enormous and say nothing
+about architecture.
+
+One rule goes by shape rather than by name, because generated files are not
+named predictably: **a data document (`.json`, `.yml`, `.toml`, `.ini`, `.xml`)
+longer than 5,000 lines is treated as a generated blob and left off the map.**
+Source is never dropped, however long it is, and a data file below that size
+stays — `package.json` and a CI workflow are configuration a reader recognizes.
+The threshold is far above anything maintained by hand: in this repository the
+largest hand-written data file is 229 lines and the largest source file 1,694,
+while the generated performance fixture that prompted the rule is 40,655.
+
+Nothing disappears silently. Every drop is counted and named in the run
+summary, so a file left off the map is reported rather than merely absent:
+
+```
+! scan: data-blob ×1 (e.g. packages/contract/fixtures/synthetic-100x2000.json)
+```
+
 `npx` fetches the published package, so there is nothing to install and nothing
 left behind. To keep it around, `npm install -g gitnebula` and run `gitnebula`.
 Node.js ≥ 20.19 is the only requirement; git is read through the `git` already
