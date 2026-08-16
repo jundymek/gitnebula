@@ -143,7 +143,7 @@ Idle auto-rotation runs until the reader rotates by hand, and never runs under
 | AC-5 degrades to 2D with a stated reason | `view3d.test.ts`; `view-switch.test.ts` |
 | AC-6 reduced motion: no auto-rotation, no entry animation | `engine3d.test.ts` "AC-6" block |
 | AC-7 ADR | [ADR-0007](../../../adr/0007-3d-view-behind-the-graphengine-seam.md) |
-| AC-8 human review | [MANUAL_TESTING.md](MANUAL_TESTING.md), left unticked |
+| AC-8 human review | [MANUAL_TESTING.md](MANUAL_TESTING.md). **Failed first review**; cause was a numerical divergence, not density — see PERFORMANCE.md §3 and `engine/occlusion3d.test.ts`, which is the number AC-8 lacked |
 
 Headline result for AC-3: **3D holds the 55 fps floor to ~840 drawn nodes and
 degrades between 840 and 1,260**, reaching 28 fps sustained at the full 2,100.

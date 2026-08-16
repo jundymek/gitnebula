@@ -43,8 +43,28 @@ floor and the node count at which it degrades. **3D takes the second option.**
 
 | phase | drawn nodes | sustained fps (worst 1 s) | avg fps | median frame | p95 frame | vs 55 fps floor |
 | --- | --- | --- | --- | --- | --- | --- |
-| `b-frozen-pan-zoom` (folded) | ~100 | **118** | 119.9 | 8.3 ms | 9.1 ms | holds |
-| `c-unfold-pan` (unfolded) | ~2,100 | **28** | 47.3 | 24.7 ms | 33.4 ms | **below** |
+| `b-frozen-pan-zoom` (folded) | ~100 | **117** | 119.8 | 8.3 ms | 9.2 ms | holds |
+| `c-unfold-pan` (unfolded) | ~2,100 | **22** | 37.1 | 32.7 ms | 41.8 ms | **below** |
+
+**This is a regression against the first measurement of this story, and it is
+the price of §3's readability work.** Before the layout was stabilised and
+flattened, the same phase sustained 28–29 fps; it now sustains 22. The cause is
+the same one that improves the picture: filling the frame means a tighter
+camera, larger discs, more covered pixels, more fill-rate per frame. The frozen
+phase is untouched, because nothing there changed about how much of the screen
+the nodes cover.
+
+| | frozen | unfolded |
+| --- | --- | --- |
+| before the AC-8 work | 118 fps | 28 fps |
+| after | 117 fps | **22 fps** |
+
+The maintainer is the one who gets to weigh 28 → 22 fps against a map whose
+files are separated instead of piled, so both numbers are here rather than only
+the flattering one. The degradation knee is unmoved — still between 840 and
+1,260 drawn nodes — because that curve is measured at a fixed camera, where the
+flattening changes the shape of the cloud but not how many discs land on a
+pixel.
 
 2D, same fixture, same run, for comparison:
 
@@ -66,11 +86,11 @@ different density.
 
 | drawn nodes | sustained fps (worst 1 s) | avg fps | p95 frame | vs 55 fps floor |
 | --- | --- | --- | --- | --- |
-| 420 | 120 | 120.0 | 9.00 ms | holds |
-| 840 | 87 | 86.5 | 17.30 ms | holds |
-| 1,260 | 48 | 54.3 | 25.10 ms | **below** |
-| 1,680 | 36 | 39.9 | 33.40 ms | **below** |
-| 2,100 | 28 | 32.0 | 41.70 ms | **below** |
+| 420 | 120 | 119.9 | 9.20 ms | holds |
+| 840 | 74 | 80.7 | 17.30 ms | holds |
+| 1,260 | 49 | 55.4 | 25.20 ms | **below** |
+| 1,680 | 35 | 41.9 | 33.30 ms | **below** |
+| 2,100 | 29 | 32.2 | 34.20 ms | **below** |
 
 > **3D holds the 55 fps floor up to roughly 840 drawn nodes, and degrades
 > between 840 and 1,260.**
@@ -142,7 +162,131 @@ and would have needed a genuine fallback path as well.
 The budget itself is enforced by `packages/cli` (`describeViewerSize`,
 `VIEWER_GZIP_BUDGET_BYTES`), whose 17 tests pass on this branch.
 
-## 3. Known lever, not taken
+## 3. Occlusion — AC-8's missing number
+
+AC-8 asked whether depth separates clusters that overlap in the plane. It was
+the only criterion in this story with no measurement behind it, and it is the
+one that failed review: the maintainer ran the 3D view and reported a dense
+blur where everything blended together.
+
+**Metric.** The share of drawn node discs whose projected area is more than
+half covered by a nearer disc, sampled at 96 deterministic points per disc,
+walked farthest-first — the order the renderer paints in, so "nearer" means
+"on top". Committed as `packages/viz/src/engine/occlusion3d.test.ts`, with a
+self-check on cases whose answer is known by hand and a 2D control.
+
+### Reproduce
+
+```bash
+pnpm --filter @gitnebula/viz test -- occlusion3d
+# against a real repository rather than the fixture:
+node packages/cli/dist/bin/gitnebula.js . --no-serve -o /tmp/self.json
+```
+
+### What the review found, and why
+
+Measured on **this repository** (456 nodes, 7 modules), scoped to `packages/`
+(253 files), each view at its own `fit`:
+
+| | drawn | buried > 50 % |
+| --- | --- | --- |
+| 2D | 254 / 254 | **0.0 %** |
+| 3D, before | **60 / 254** | 51.7 % |
+| 3D, after the stability fix | **254 / 254** | **17.7 %** |
+| 3D, after the frame work too | **254 / 254** | **22.0 %** |
+
+The first column is the finding. 3D drew 60 of 254 files because the other 194
+had **diverged to ~1e13 world units** — `MemberLayout3D` was numerically
+unstable on a large module. What looked like a density problem was a layout
+that had thrown most of the module off the number line; the "dense blur" was
+the residue that happened to land near the camera. Three causes, all fixed:
+repulsion floored the *squared* distance rather than the distance, damping
+retained far more velocity than the 2D layout (0.86 / 0.8 against 0.55 / 0.5),
+and there was no collision term at all where 2D has `forceCollide` at both
+levels.
+
+### Across module sizes, not just the one that broke
+
+`packages/` at 253 files is the case that diverged, so it is the case the fix
+was tuned against — which is exactly why it is not the only one measured. Every
+module of this repository, each scoped and fitted on its own:
+
+| module | files | drawn | buried > 50 % (3D) | 2D |
+| --- | --- | --- | --- | --- |
+| `packages/` | 253 | 254 / 254 | 22.0 % | 0.0 % |
+| `docs/` | 127 | 128 / 128 | 10.9 % | 0.0 % |
+| `test-fixtures/` | 39 | 40 / 40 | 7.5 % | 0.0 % |
+| `scripts/` | 4 | 5 / 5 | 0.0 % | 0.0 % |
+| `.github/` | 2 | 3 / 3 | 0.0 % | 0.0 % |
+| `reference/` | 1 | 2 / 2 | **50.0 %** | 0.0 % |
+
+Occlusion falls with module size, as it should, and **every node reaches the
+frame at every size** — the column that was 60 / 254 before the layout was
+stabilised.
+
+`reference/` looks alarming and is not: it holds one file, so its module disc
+covering that file is one buried node out of two. At n = 2 the metric has no
+resolution, and a module drawn over its own single member is the encoding
+working rather than failing. Recorded rather than filtered out, because a
+threshold that quietly excluded inconvenient cases would not be a measurement.
+
+### Member spacing, chosen by measurement
+
+`MEMBER_COLLIDE_PADDING_3D`, on `packages/`:
+
+| padding | 1.2 | 6 | 12 | **18** |
+| --- | --- | --- | --- | --- |
+| buried > 50 % | 63.4 % | 51.6 % | 29.9 % | **17.7 %** |
+
+Far larger than the 2D value of 1.2 because in 2D the plane *is* the screen, so
+collision separates exactly what the eye sees. In perspective a ball of N
+members projects onto a disc and readability goes as `N · (r / R)²`; at 1.2 a
+253-file module settled into a ball 38 units across whose members' own discs
+summed to more than the ball's projected area — overlap was guaranteed by
+geometry before a frame was drawn.
+
+### Using the frame
+
+The maintainer's second note was that the map sat squeezed in a corner.
+Measured: the cloud filled **28 % of the width against 69 % of the height**.
+Two causes, both addressed:
+
+- `fit` sized the **bounding sphere**, whose silhouette is a circle inscribed
+  in the *shorter* viewport axis — so a 16:10 canvas can never use its width.
+  It now takes one correction step onto the silhouette the cloud actually
+  casts.
+- The cloud was a **ball**, and a ball projects to a circle. It is now
+  flattened about Y into a disc (`GRAVITY_Y_3D`), which also keeps its
+  silhouette stable under idle rotation, since yaw is the axis that turns.
+
+| | width used | height used | buried |
+| --- | --- | --- | --- |
+| before | 28 % | 69 % | 22.8 % |
+| after | **62 %** | **95 %** | 28.5 % |
+
+**The trade is real and is recorded rather than argued away:** filling the
+frame means a tighter camera, which means larger discs, which means more
+overlap. Flattening harder fills more and costs more — at `GRAVITY_Y_3D = 4`
+the map reaches 89 % of the width at 34.3 % buried and starts pushing nodes
+past the padding.
+
+### The guarantee that changed
+
+Sphere-fit never clipped at any orientation. Silhouette-fit sizes to the
+orientation `fit` was called at, so idle rotation can afterwards carry a corner
+past the edge — **measured worst case 45.9 px of 800, i.e. 5.7 %**, asserted at
+7 %. That is a deliberate trade of a guarantee for a usable frame, not an
+oversight.
+
+### The limit worth stating plainly
+
+3D will not reach 2D's 0 %. 2D collides in the projection plane, so its
+separation is exactly what the eye sees; a projected volume can always stack
+two nodes that share a line of sight, however well the layout is spread. The
+number to judge 3D by is whether it is low enough to read, not whether it
+matches the plane.
+
+## 4. Known lever, not taken
 
 The obvious optimisation is the renderer, not the layout: the per-node radial
 gradient dominates, and at 2,100 nodes most nodes project to a radius of a few
