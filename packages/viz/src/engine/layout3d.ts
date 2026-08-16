@@ -35,7 +35,7 @@ export const CHARGE_3D = -260;
 export const LINK_DISTANCE_3D = 70;
 export const LINK_STRENGTH_3D = 0.09;
 export const GRAVITY_3D = 0.012;
-export const DAMPING_3D = 0.86;
+export const DAMPING_3D = 0.55;
 export const ALPHA_DECAY_3D = 0.015;
 /** Below this the simulation has stopped doing useful work. */
 export const ALPHA_MIN_3D = 0.02;
@@ -46,12 +46,49 @@ export const SETTLE_FRAME_CAP_3D = 1800;
 /** Initial scatter radius grows with the node count so density stays sane. */
 export const SCATTER_RADIUS_PER_NODE_3D = 26;
 
+/**
+ * Minimum clear space between two node surfaces, in world units. Mirrors the
+ * 2D layout's `COLLIDE_PADDING` / `MEMBER_COLLIDE_PADDING`.
+ *
+ * The 2D layout has had `forceCollide` since 2.5 and this had none. Collision
+ * earns its place here as a **stabiliser** rather than as a separator: it is
+ * what stops a spawn cluster from becoming a pile that repulsion then has to
+ * resolve from a near-singularity.
+ */
+export const COLLIDE_PADDING_3D = 8;
+/**
+ * Member spacing, far larger than the 2D layout's 1.2, and deliberately so.
+ *
+ * In 2D the plane IS the screen, so collision separates exactly what the eye
+ * sees and 1.2 is enough. In perspective the cloud is projected, and a ball of
+ * N members projects onto a disc: readability depends on how much of that disc
+ * the members cover, which goes as N * (r / R)^2. At 1.2 a 253-file module
+ * settled into a ball 38 units across, whose members own discs summed to more
+ * than the ball projected area - overlap was guaranteed by geometry before a
+ * single frame was drawn.
+ *
+ * Chosen by measurement rather than by eye. On this repository packages/ (253
+ * files), the share of node discs more than half hidden falls 63.4 -> 51.6 ->
+ * 29.9 -> 17.7 percent at paddings 1.2, 6, 12 and 18.
+ */
+export const MEMBER_COLLIDE_PADDING_3D = 18;
+
+/**
+ * Hard ceiling on how far a node may travel in one tick, in world units.
+ *
+ * A backstop, not a tuning knob: with it, a bad configuration settles badly;
+ * without it, a bad configuration leaves the number line. A 253-member module
+ * on this repository reached coordinates of 4e13 before this existed, which
+ * renders as nothing at all.
+ */
+export const MAX_STEP_3D = 24;
+
 /** Member-wake tuning — tighter and faster, as the 2D member wake is. */
 export const MEMBER_CHARGE_3D = -30;
 export const MEMBER_LINK_DISTANCE_3D = 16;
 export const MEMBER_LINK_STRENGTH_3D = 0.25;
-export const MEMBER_PULL_3D = 0.12;
-export const MEMBER_DAMPING_3D = 0.8;
+export const MEMBER_PULL_3D = 0.03;
+export const MEMBER_DAMPING_3D = 0.5;
 export const MEMBER_ALPHA_DECAY_3D = 0.05;
 export const MEMBER_SPAWN_RADIUS_3D = 12;
 export const MEMBER_SETTLE_FRAME_CAP_3D = 240;
@@ -158,6 +195,8 @@ interface Forces3D {
   readonly gravity: number;
   readonly damping: number;
   readonly alphaDecay: number;
+  /** Clear space kept between two node surfaces. */
+  readonly collidePadding: number;
 }
 
 const ORIGIN = { x: 0, y: 0, z: 0 };
@@ -188,13 +227,26 @@ function tick3D(
       const dz = b.z - a.z;
       // Softened at close range: two coincident nodes would otherwise divide
       // by ~0 and be thrown to opposite ends of the world in one tick.
-      const d2 = Math.max(1, dx * dx + dy * dy + dz * dz);
-      const d = Math.sqrt(d2);
+      // Floor the **distance**, not the denominator.
+      //
+      // `Math.max(1, d2)` bounded the divisor but not the force: at d ~ 1 the
+      // charge term is at its maximum, and a spawn cluster puts a large share
+      // of all pairs there at once, every tick. On a 253-file module that
+      // summed into a runaway — measured at 4e13 world units, i.e. a module
+      // that renders as nothing. Flooring at the pair's own touching distance
+      // makes the closest interesting case "just touching" rather than
+      // "coincident", which is the physically meaningful bound.
+      const touching = a.radius + b.radius + forces.collidePadding;
+      const raw = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      const d = Math.max(touching, raw, 1e-6);
+      const d2 = d * d;
       // Charge scales with size, so a big module clears more space around it.
       const f = (forces.charge * alpha * (a.radius + b.radius) * 0.12) / d2;
-      const fx = (dx / d) * f;
-      const fy = (dy / d) * f;
-      const fz = (dz / d) * f;
+      // Direction from the real separation; magnitude from the floored one.
+      const unit = raw > 1e-6 ? raw : 1;
+      const fx = (dx / unit) * f;
+      const fy = (dy / unit) * f;
+      const fz = (dz / unit) * f;
       a.vx += fx;
       a.vy += fy;
       a.vz += fz;
@@ -230,9 +282,74 @@ function tick3D(
     node.vx *= forces.damping;
     node.vy *= forces.damping;
     node.vz *= forces.damping;
+    // Backstop. A tick that wants to move a node further than this is not a
+    // layout, it is a divergence, and clamping keeps it recoverable instead of
+    // unbounded. Direction is preserved so a clamped step still points the
+    // right way.
+    const step = Math.sqrt(
+      node.vx * node.vx + node.vy * node.vy + node.vz * node.vz,
+    );
+    if (step > MAX_STEP_3D) {
+      const scale = MAX_STEP_3D / step;
+      node.vx *= scale;
+      node.vy *= scale;
+      node.vz *= scale;
+    }
     node.x += node.vx;
     node.y += node.vy;
     node.z += node.vz;
+  }
+
+  resolveCollisions(nodes, forces.collidePadding);
+}
+
+/**
+ * Push overlapping nodes apart, on positions, after integration.
+ *
+ * Position-based and applied last, which is where d3's `forceCollide` sits and
+ * for the same reason: a spring stiff enough to guarantee separation at this
+ * density oscillates, and one soft enough to be stable does not separate. It
+ * deliberately does **not** touch velocities — feeding the correction back
+ * into momentum is what turns a separation pass into an energy source.
+ *
+ * Two passes damp the ping-pong where a node is pushed out of one neighbour
+ * and into the next. It does not decay with alpha: "two solids may not occupy
+ * the same space" is an invariant of the settled map, not a phase of reaching
+ * it.
+ */
+function resolveCollisions(
+  nodes: readonly LayoutNode3D[],
+  padding: number,
+): void {
+  const n = nodes.length;
+  for (let pass = 0; pass < 2; pass++) {
+    for (let i = 0; i < n; i++) {
+      const a = nodes[i]!;
+      for (let j = i + 1; j < n; j++) {
+        const b = nodes[j]!;
+        const dx = b.x - a.x;
+        const dy = b.y - a.y;
+        const dz = b.z - a.z;
+        const wanted = a.radius + b.radius + padding;
+        const d2 = dx * dx + dy * dy + dz * dz;
+        if (d2 >= wanted * wanted) continue;
+        const d = Math.sqrt(d2);
+        if (d < 1e-6) {
+          // Coincident centres have no axis to separate along. Nudge along x
+          // deterministically so the next pass has one (AD-6 untouched).
+          a.x -= wanted / 4;
+          b.x += wanted / 4;
+          continue;
+        }
+        const push = (wanted - d) / 2 / d;
+        a.x -= dx * push;
+        a.y -= dy * push;
+        a.z -= dz * push;
+        b.x += dx * push;
+        b.y += dy * push;
+        b.z += dz * push;
+      }
+    }
   }
 }
 
@@ -243,6 +360,7 @@ const MODULE_FORCES: Forces3D = {
   gravity: GRAVITY_3D,
   damping: DAMPING_3D,
   alphaDecay: ALPHA_DECAY_3D,
+  collidePadding: COLLIDE_PADDING_3D,
 };
 
 const MEMBER_FORCES: Forces3D = {
@@ -252,6 +370,7 @@ const MEMBER_FORCES: Forces3D = {
   gravity: MEMBER_PULL_3D,
   damping: MEMBER_DAMPING_3D,
   alphaDecay: MEMBER_ALPHA_DECAY_3D,
+  collidePadding: MEMBER_COLLIDE_PADDING_3D,
 };
 
 /**

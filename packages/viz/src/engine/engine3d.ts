@@ -504,8 +504,18 @@ export class Nebula3DEngine implements GraphEngine {
    */
   private fitTarget(paddingPx: number = FIT_PADDING_PX): CameraState {
     const layout = this.layout;
-    const bounds = layout ? bounds3D(layout.nodes) : null;
-    if (!bounds || !layout) return IDENTITY_CAMERA;
+    if (!layout) return IDENTITY_CAMERA;
+    // Everything that is actually drawn, not just the top level. An unfolded
+    // module's files are on screen and can reach well outside their module's
+    // own position, so framing the module layout alone left them outside the
+    // viewport: measured on this repository, scoping to `packages/` drew 60 of
+    // its 254 files because the other 194 were off-frame.
+    const framed = [
+      ...layout.nodes,
+      ...[...this.memberLayouts.values()].flatMap((wake) => wake.nodes),
+    ];
+    const bounds = bounds3D(framed);
+    if (!bounds) return IDENTITY_CAMERA;
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -523,7 +533,7 @@ export class Nebula3DEngine implements GraphEngine {
     // 620 px available; the real one is both correct at every orientation and
     // tight.
     let radius = 0;
-    for (const node of layout.nodes) {
+    for (const node of framed) {
       const reach =
         Math.hypot(node.x - cx, node.y - cy, node.z - cz) + node.radius;
       if (reach > radius) radius = reach;
