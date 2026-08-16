@@ -112,6 +112,16 @@ development_status:
   # exists so that a merged PR for it cannot stop sprint-status.sh with a key
   # the file does not carry.
   5.10-viz-nul-separator: backlog
+  # 5.11 and 5.12 were written by their own agents on 2026-08-16, from defects the
+  # maintainer found in his own pass over the running map: start-here ranked by
+  # in-degree surfaced barrels rather than the code that explains the repository,
+  # and one 40,655-line generated fixture dominated the map and dragged
+  # packages/ into layer `test`. Both merged into the epic (PRs #73 and #72), so
+  # both read done. Written by hand rather than by measurement because each
+  # landed from a branch named for its author's earlier story, which is the one
+  # case sprint-status.sh cannot derive.
+  5.11-viz-start-here-ranking: done
+  5.12-scanner-data-blob: done
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
