@@ -157,11 +157,13 @@ test.
 
 The numbers quoted from a run — node, edge and co-change counts, the skipped
 import count, the "no partner" and "no import edge" ratios — change with every
-commit that adds or removes a file. They have been re-measured three times
+commit that adds or removes a file. They have been re-measured four times
 during this epic, twice because someone else's merge moved them.
 
-Take them from **one** run of a fresh clone and update all four places in the
-same pass, or they will disagree with each other:
+Take them from **one** run of a fresh clone and update **the five mutable rows
+below** in the same pass, or they will disagree with each other. The sixth row
+is pinned and is explained under the table — it is the one place where copying
+the fresh figure in is the mistake:
 
 | where | what it carries | on a refresh |
 | --- | --- | --- |

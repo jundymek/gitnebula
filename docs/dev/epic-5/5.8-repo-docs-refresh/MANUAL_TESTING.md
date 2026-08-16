@@ -97,7 +97,10 @@ all of Epic 5 merged.
       metadata describe a document the video does not show. That row is now
       pinned at the counts the committed take was recorded from (179 pairs)
       while the README quotes the later run (186), and the table carries a
-      column saying which is which. Codex found both.
+      column saying which is which. Codex found both — and then a third: adding
+      the pin column split one row into two, so the prose still said "all four
+      places" over a table listing five mutable rows. Corrected by counting the
+      rows rather than re-reading the sentence.
 
 ## The repository's own checks
 
