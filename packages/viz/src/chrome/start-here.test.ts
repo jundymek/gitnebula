@@ -38,7 +38,12 @@ describe("start-here panel — the three lists", () => {
     expect(first.querySelector(".sh-path")?.textContent).toBe(
       "langgraph/typing.py",
     );
-    expect(first.querySelector(".sh-metric")?.textContent).toBe("7 imports");
+    // Story 5.11: core ranks on `imports × lines`, so the row prints both
+    // numbers. Printing only one would leave the reader unable to see why a
+    // file with fewer importers sits above one with more.
+    expect(first.querySelector(".sh-metric")?.textContent).toBe(
+      "7 importers · 40 lines",
+    );
   });
 
   it("gives every entry an authored accessible name", () => {
@@ -46,7 +51,7 @@ describe("start-here panel — the three lists", () => {
     // an empty name in the accessibility tree, so the name is authored.
     const { element } = panelFor();
     expect(element.querySelector(".sh-entry")?.getAttribute("aria-label")).toBe(
-      "langgraph/typing.py, 7 imports",
+      "langgraph/typing.py, 7 importers · 40 lines",
     );
   });
 

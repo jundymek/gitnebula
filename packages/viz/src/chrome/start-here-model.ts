@@ -5,11 +5,29 @@
  *
  * Three categories, disjoint by construction:
  *
- * | category  | members                                   | ranked by      |
- * | --------- | ----------------------------------------- | -------------- |
- * | core      | non-test files that others import         | in-degree desc |
- * | entry     | non-test files nobody imports, that import| out-degree desc|
- * | tests     | files in the `test` layer                 | out-degree desc|
+ * | category  | members                                   | ranked by       |
+ * | --------- | ----------------------------------------- | --------------- |
+ * | core      | non-test files that others import         | imports × lines |
+ * | entry     | non-test files nobody imports, that import| out-degree desc |
+ * | tests     | files in the `test` layer                 | out-degree desc |
+ *
+ * **Why core is not ranked by in-degree** (story 5.11, superseding 5.1's
+ * AC-1). In-degree measures *ubiquity*, and in a workspace with barrel
+ * exports ubiquity concentrates precisely in the files that teach a newcomer
+ * nothing. Measured on this repository under the old rule, four of core's top
+ * five were barrels or leaves — `contract/src/index.ts` (38 lines, 57
+ * importers), `engine/index.ts`, `errors.ts`, a test-fixture helper — about
+ * 340 lines between them, most of it `export * from`. `engine/engine.ts`,
+ * 1,694 lines and the heart of the product, ranked ninth and never appeared.
+ * Reading all five told you this repository re-exports things.
+ *
+ * The rule is now **how many files import it, times how much code it holds**,
+ * so a file has to be both depended upon and substantial. Checked against
+ * three real repositories rather than tuned on one; on the other two it drops
+ * a 2-line and a 3-line `index.ts` from the list and surfaces the actual data
+ * layer instead. `loc` is a contract field and in-degree is a count of
+ * contract edges, so this is still selecting and sorting what the pipeline
+ * computed (AD-1) — a sort key, not a new aggregation.
  *
  * Three rules this module exists to hold:
  *
@@ -33,6 +51,8 @@
 
 import type { AnalysisDocument, Layer, NodeKind } from "@gitnebula/contract";
 
+import { formatInteger } from "./format.js";
+
 /** How many entries of each category the panel shows. */
 export const START_HERE_LIMIT = 5;
 
@@ -49,9 +69,17 @@ export interface StartHereEntry {
   readonly layer: Layer;
   readonly inDegree: number;
   readonly outDegree: number;
-  /** The ranking number for this category (in- or out-degree). */
+  /** Lines of code, from the contract — half of core's ranking (5.11). */
+  readonly loc: number;
+  /**
+   * The score this category ranked by: out-degree for entry points and tests,
+   * `imports × lines` for core.
+   *
+   * Deliberately not printed on its own. `221` means nothing to a reader; the
+   * two numbers it is made of do, which is what `metricLabel` shows.
+   */
   readonly metric: number;
-  /** What that number means, printed beside it. */
+  /** What earned the row its place, in the reader's terms. */
   readonly metricLabel: string;
 }
 
@@ -140,6 +168,7 @@ export function buildStartHereModel(
         name: basename(node.path),
         kind: node.kind,
         layer: node.layer,
+        loc: node.loc,
         inDegree: degree.in,
         outDegree: degree.out,
       };
@@ -151,8 +180,17 @@ export function buildStartHereModel(
     .filter((file) => file.inDegree > 0)
     .map((file) => ({
       ...file,
-      metric: file.inDegree,
-      metricLabel: label(file.inDegree, "import"),
+      // Story 5.11: depended upon AND substantial. Either factor alone picks
+      // the wrong files — in-degree alone crowns barrels, size alone crowns
+      // whatever happens to be longest whether or not anything reads it.
+      metric: file.inDegree * file.loc,
+      // `importers`, not `imports`. The other two categories rank on
+      // out-degree and print "13 imports" meaning "it imports 13 files";
+      // core's number is the opposite direction, and one word doing both jobs
+      // in one panel is a reading error waiting to happen. It mattered less
+      // when core printed a single number; it matters now that the row prints
+      // two and the reader is being asked to see why they are multiplied.
+      metricLabel: `${label(file.inDegree, "importer")} · ${label(file.loc, "line")}`,
     }))
     .sort(byMetricThenId);
 
@@ -180,7 +218,11 @@ export function buildStartHereModel(
       category({
         key: "core",
         title: "core",
-        blurb: "the files the rest of the repository imports",
+        // The blurb states the rule, because the ordering is a product of two
+        // numbers and a reader who only saw one of them would think the list
+        // was sorted wrong. "Most imported" would be the honest description of
+        // a list this deliberately is not.
+        blurb: "the most code that the rest of the repository depends on",
         ranking: core,
         empty: {
           cause: "no file in this repository is imported by another one",
@@ -229,7 +271,14 @@ function category(input: {
   };
 }
 
-/** `1 import` / `6 imports` — the unit the number is counted in. */
+/**
+ * `1 import` / `6 imports` / `1,694 lines` — the unit the number is counted in.
+ *
+ * Grouped through the same `formatInteger` the detail panel's `loc` row uses,
+ * so the two places this repository prints a line count agree. Display only:
+ * nothing sorts on this string, so the ranking stays machine-independent
+ * (NFR-12).
+ */
 function label(count: number, unit: string): string {
-  return `${count} ${unit}${count === 1 ? "" : "s"}`;
+  return `${formatInteger(count)} ${unit}${count === 1 ? "" : "s"}`;
 }
