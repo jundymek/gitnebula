@@ -38,17 +38,18 @@ Run it inside a git repository. gitnebula scans the tree, parses imports, reads
 ▸ emit
 ✔ emit (0.00s)
   ! deps: external-import ×347 (e.g. @eslint/js in eslint.config.js)
-analysis.json — 406 nodes, 492 edges, 179 co-change pairs, history over the last 90 days (--window-days), in 0.30s
+analysis.json — 406 nodes, 492 edges, 181 co-change pairs, history over the last 90 days (--window-days), in 0.29s
 serving http://127.0.0.1:4137/ — press Ctrl+C to stop
 ```
 
-That is a real run of gitnebula over a fresh clone of its own repository, with
-the machine-specific path prefix trimmed off the summary line. Anything the
-analyzers had to skip — a binary file, an import that resolves outside the
-repository — is summarised as a warning line before the last one, so nothing
-fails silently; the run above skipped 347 external imports and said so. If port
-4137 is busy the server takes the next free one and prints the URL it actually
-bound.
+That is a real run of gitnebula over a fresh clone of its own repository,
+abridged in two ways it is worth naming: the machine-specific path prefix is
+trimmed off the summary line, and this run printed **five** warning lines where
+one is shown. Everything the analyzers skip is counted and named there — an
+import that resolves outside the repository, a file read as binary, a generated
+data blob — so nothing is dropped silently, and the run above skipped 347
+external imports and said so. If port 4137 is busy the server takes the next
+free one and prints the URL it actually bound.
 
 There is nothing to sign up for, nothing to configure and no API key. Your code
 never leaves the machine.
@@ -130,7 +131,7 @@ you: in this repository `chrome/chrome.ts` and `styles.css` keep changing
 together and there is no import between them, because a stylesheet is not an
 import. `show on map` marks that set on the canvas — a mark on those nodes, not
 a line between them, because co-change is not a dependency. Most files have no
-partners at all (346 of 406 here), so the section names its cause rather than
+partners at all (344 of its 400 files here), so the section names its cause rather than
 showing an empty box, and points at `--window-days` as the lever.
 
 **Then narrow the map.** Three levers, each of which _removes_ nodes rather

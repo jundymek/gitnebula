@@ -14,7 +14,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 179 co-change pairs, the same run the README quotes) |
+| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 181 co-change pairs, the same run the README quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 39 s of WebM |
@@ -152,6 +152,30 @@ against a fresh `analysis.json`: the node and file counts in the header, the
 names in the start-here list, and whether the 3D beat unfolds anything. All
 three of those changed between takes, and none of them would have failed a
 test.
+
+### The figures move too, and they live in four places
+
+The numbers quoted from a run — node, edge and co-change counts, the skipped
+import count, the "no partner" and "no import edge" ratios — change with every
+commit that adds or removes a file. They have been re-measured three times
+during this epic, twice because someone else's merge moved them.
+
+Take them from **one** run of a fresh clone and update all four places in the
+same pass, or they will disagree with each other:
+
+| where | what it carries |
+| --- | --- |
+| `README.md` quickstart | the pasted transcript, and the skipped-import count in the sentence below it |
+| `README.md` blast-radius paragraph | the files-with-no-partner ratio |
+| `README.md` connected-only bullet | the files-with-no-import-edge share |
+| `docs/recording-demo.md` (this file) | the "what was recorded" row, and the node count in the clean-clone note |
+| `docs/dev/epic-5/5.8-repo-docs-refresh/` | the same figures, as the record of what was verified |
+
+**Mind the denominator.** The document carries modules as well as files, so a
+count over `nodes` is not a count over `files` — this repository has 406 nodes
+and 400 files, and a sentence about files that quotes the node total is wrong by
+six even when the arithmetic is right. Measure over `kind === "file"` when the
+sentence says "files".
 
 ### Keeping the asset small
 
