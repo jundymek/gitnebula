@@ -125,4 +125,19 @@ describe("fit is self-consistent with what its camera keeps", () => {
       expect([...engine.unfoldedModules()].sort()).toEqual(settled);
     }
   });
+
+  it("a cancelled fit leaves the camera the reader took", () => {
+    // fit corrects the frame after arriving. Cancelling it means the reader
+    // panned or zoomed mid-flight, and correcting afterwards would discard the
+    // interaction that did the cancelling.
+    engine = build();
+    engine.setCamera({ k: 1 });
+    void engine.fit({ durationMs: 600 });
+    // Take the camera by hand while the flight is in the air.
+    engine.setCamera({ k: 5 });
+    const taken = engine.getCamera().k;
+    // Drive past where the flight would have landed.
+    for (let i = 0; i < 60; i++) engine.frame(1000 + i * 16);
+    expect(engine.getCamera().k).toBeCloseTo(taken, 5);
+  });
 });

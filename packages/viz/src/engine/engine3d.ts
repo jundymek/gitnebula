@@ -493,8 +493,11 @@ export class Nebula3DEngine implements GraphEngine {
       this.settleFit(options.paddingPx);
       return Promise.resolve();
     }
-    return this.animateCameraTo(target, durationMs).then(() => {
-      this.settleFit(options.paddingPx);
+    return this.animateCameraTo(target, durationMs).then((arrived) => {
+      // Only on arrival. A cancelled fit means the reader took the camera —
+      // panned, zoomed, or searched — and correcting the frame afterwards
+      // would throw away the very interaction that cancelled it.
+      if (arrived) this.settleFit(options.paddingPx);
     });
   }
 
