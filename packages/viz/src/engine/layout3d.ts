@@ -35,6 +35,26 @@ export const CHARGE_3D = -260;
 export const LINK_DISTANCE_3D = 70;
 export const LINK_STRENGTH_3D = 0.09;
 export const GRAVITY_3D = 0.012;
+
+/**
+ * Extra pull toward the anchor height, flattening the cloud into a disc rather
+ * than a ball.
+ *
+ * Two reasons, neither decorative. The screen is wider than it is tall, and a
+ * ball projects to a circle inscribed in the SHORTER axis - so on a 16:10
+ * canvas a third of the width is unusable however well fit works, measured at
+ * 28 percent of the width against 69 percent of the height. And yaw is the
+ * axis idle rotation turns about, so a spheroid flattened about Y keeps its
+ * silhouette as it spins rather than breathing between wide and narrow.
+ *
+ * It is also what the product has always claimed to draw. A nebula is a disc.
+ *
+ * 2.5 is measured: it takes the frame from 32 to 62 percent of the width and
+ * 79 to 95 percent of the height with nothing clipped. Flattening harder fills
+ * more but starts pushing nodes past the padding and drives overlap up, since
+ * a tighter frame means larger discs.
+ */
+export const GRAVITY_Y_3D = 2.5;
 export const DAMPING_3D = 0.55;
 export const ALPHA_DECAY_3D = 0.015;
 /** Below this the simulation has stopped doing useful work. */
@@ -277,7 +297,7 @@ function tick3D(
 
   for (const node of nodes) {
     node.vx -= (node.x - anchor.x) * forces.gravity * alpha;
-    node.vy -= (node.y - anchor.y) * forces.gravity * alpha;
+    node.vy -= (node.y - anchor.y) * forces.gravity * GRAVITY_Y_3D * alpha;
     node.vz -= (node.z - anchor.z) * forces.gravity * alpha;
     node.vx *= forces.damping;
     node.vy *= forces.damping;

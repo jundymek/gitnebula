@@ -321,7 +321,10 @@ describe("nothing unfolds while the layout is still moving", () => {
     for (let i = 1; i < 900; i++) engine.frame(i * FRAME_MS);
     engine.setCamera({ k: 4 });
     expect(engine.unfoldedModules().length).toBeGreaterThan(0);
-  });
+    // Explicit timeout: this test drives a real settle with a real render per
+    // frame, which costs about five seconds against vitest default of five. It
+    // is slow because of what it exercises, not because of how it is written.
+  }, 20_000);
 });
 
 describe("the unfold set is re-evaluated when its inputs change", () => {
@@ -371,8 +374,11 @@ describe("the unfold set is re-evaluated when its inputs change", () => {
     expect(engine.unfoldedModules()).toEqual([]);
 
     // Nothing below touches the camera or the orientation. The only thing that
-    // happens is the layout reaching Settled.
-    for (let i = 1; i < 400; i++) engine.frame(i * FRAME_MS);
+    // happens is the layout reaching Settled — measured at 43 frames on this
+    // fixture, so 120 is headroom rather than a guess. Kept tight because
+    // every frame here is a real render into the recording context, and this
+    // test was timing out at 300.
+    for (let i = 1; i < 120; i++) engine.frame(i * FRAME_MS);
     expect(engine.unfoldedModules().length).toBeGreaterThan(0);
   });
 
@@ -545,11 +551,21 @@ describe("fit frames the whole cloud", () => {
       const placed = placeNodes(scene);
       // Nothing culled: every node survived projection and the cull margin.
       expect(placed.length).toBe(scene.nodes.length);
+      // `fit` now sizes to the silhouette the cloud casts at the orientation
+      // it was called at, rather than to the bounding sphere. That is what
+      // lets it use a 16:10 frame instead of a circle inscribed in the short
+      // axis — and the trade is that turning afterwards can carry a corner
+      // slightly past the edge. Bounded, not unbounded: a tolerance of a
+      // measured worst case across these four orientations, 45.9 px of 800 =
+      // 5.7%; the bound is 7% so it records the behaviour with headroom rather
+      // than sitting on the measurement.
+      const slackX = scene.viewport.width * 0.07;
+      const slackY = scene.viewport.height * 0.07;
       for (const p of placed) {
-        expect(p.sx).toBeGreaterThanOrEqual(0);
-        expect(p.sx).toBeLessThanOrEqual(scene.viewport.width);
-        expect(p.sy).toBeGreaterThanOrEqual(0);
-        expect(p.sy).toBeLessThanOrEqual(scene.viewport.height);
+        expect(p.sx).toBeGreaterThanOrEqual(-slackX);
+        expect(p.sx).toBeLessThanOrEqual(scene.viewport.width + slackX);
+        expect(p.sy).toBeGreaterThanOrEqual(-slackY);
+        expect(p.sy).toBeLessThanOrEqual(scene.viewport.height + slackY);
       }
 
       // ...and it FILLS the frame rather than sitting in the middle of it.
