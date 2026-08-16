@@ -87,6 +87,14 @@ all of Epic 5 merged.
       `engine/constants.ts` and `chrome/search.ts`; both unchanged by Epic 5 and
       both still stated correctly.
 
+- [x] **The four-places table was verified by using it, and it caught me.** The
+      pass that introduced that table to `docs/recording-demo.md` updated three
+      of the four places and left the story docs' audit row at the previous
+      figure; Codex found the inconsistency. Recorded rather than quietly fixed,
+      because it is the argument for the table: the list is needed precisely
+      because someone who has just written it will still miss an entry. Final
+      sweep greps one figure across all four files and they agree.
+
 ## The repository's own checks
 
 - [x] `pnpm lint` — exit 0 (ESLint + Prettier).
