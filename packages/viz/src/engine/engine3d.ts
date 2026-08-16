@@ -490,9 +490,42 @@ export class Nebula3DEngine implements GraphEngine {
     const durationMs = options.durationMs ?? FIT_DURATION_MS;
     if (this.reducedMotion || durationMs <= 0) {
       this.setCamera(target);
+      this.settleFit(options.paddingPx);
       return Promise.resolve();
     }
-    return this.animateCameraTo(target, durationMs).then(() => undefined);
+    return this.animateCameraTo(target, durationMs).then(() => {
+      this.settleFit(options.paddingPx);
+    });
+  }
+
+  /**
+   * Re-fit until the frame stops changing what it has to frame.
+   *
+   * Fitting a 3D map is a fixed-point problem, not a calculation: the frame
+   * depends on which modules are unfolded, and which modules are unfolded
+   * depends on the frame. Applying a camera can unfold modules that were not
+   * in view when it was computed — whose member clouds the camera was then
+   * never sized for — or collapse ones it was sized for.
+   *
+   * Four rounds of review each found a different case of that one circularity,
+   * which is the signal that the cases were never the problem. So this stops
+   * predicting and iterates instead: apply, see what the map became, fit that,
+   * repeat until the unfolded set holds still.
+   *
+   * Bounded at two extra passes. Convergence is not guaranteed in principle —
+   * a module could sit exactly on the threshold and flip forever — and a fit
+   * that oscillates should end on a real frame rather than spin. In practice
+   * the second pass is already stable.
+   */
+  private settleFit(paddingPx?: number): void {
+    for (let pass = 0; pass < 2; pass++) {
+      const before = this.unfoldedModules().length;
+      const corrected = this.fitTarget(paddingPx);
+      // `setCamera` is what reconciles the unfold set, so the comparison has
+      // to happen across it rather than before it.
+      this.setCamera(corrected);
+      if (this.unfoldedModules().length === before) return;
+    }
   }
 
   /**

@@ -108,4 +108,21 @@ describe("fit is self-consistent with what its camera keeps", () => {
     expect(b.w).toBeCloseTo(a.w, 2);
     expect(b.h).toBeCloseTo(a.h, 2);
   });
+
+  it("converges: the unfolded set is stable once fit returns", () => {
+    // The invariant that closes the family. Fitting is a fixed point - the
+    // frame decides what unfolds, and what unfolds decides the frame - so the
+    // guarantee is not about any single case but about the map holding still
+    // when fit returns. Four review rounds each found a different case of the
+    // one circularity; this asserts the property they were all instances of.
+    engine = build();
+    for (const k of [1, 2, 4, 6]) {
+      engine.setCamera({ k });
+      void engine.fit({ durationMs: 0 });
+      const settled = [...engine.unfoldedModules()].sort();
+      // A further fit must change nothing: neither the frame nor what it frames.
+      void engine.fit({ durationMs: 0 });
+      expect([...engine.unfoldedModules()].sort()).toEqual(settled);
+    }
+  });
 });
