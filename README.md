@@ -38,7 +38,7 @@ Run it inside a git repository. gitnebula scans the tree, parses imports, reads
 ▸ emit
 ✔ emit (0.00s)
   ! deps: external-import ×347 (e.g. @eslint/js in eslint.config.js)
-analysis.json — 406 nodes, 492 edges, 181 co-change pairs, history over the last 90 days (--window-days), in 0.29s
+analysis.json — 406 nodes, 492 edges, 186 co-change pairs, history over the last 90 days (--window-days), in 0.29s
 serving http://127.0.0.1:4137/ — press Ctrl+C to stop
 ```
 
@@ -131,7 +131,7 @@ you: in this repository `chrome/chrome.ts` and `styles.css` keep changing
 together and there is no import between them, because a stylesheet is not an
 import. `show on map` marks that set on the canvas — a mark on those nodes, not
 a line between them, because co-change is not a dependency. Most files have no
-partners at all (344 of its 400 files here), so the section names its cause rather than
+partners at all — around 85% of the files in this repository — so the section names its cause rather than
 showing an empty box, and points at `--window-days` as the lever.
 
 **Then narrow the map.** Three levers, each of which _removes_ nodes rather

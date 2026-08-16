@@ -20,7 +20,7 @@ all of Epic 5 merged.
       is what the next release ships.
 - [x] `npx gitnebula ../some/other/repo` — verified in the equivalent form
       `node packages/cli/dist/bin/gitnebula.js <clean> --no-serve`:
-      `406 nodes, 492 edges, 181 co-change pairs … in 0.29s`, which is the
+      `406 nodes, 492 edges, 186 co-change pairs … in 0.29s`, which is the
       transcript in the README — the same run every figure on the page comes from.
 - [x] `npx gitnebula https://github.com/…` — clone-and-analyze against
       `https://github.com/jundymek/gitnebula`: `324 nodes, 338 edges, 115
@@ -56,12 +56,15 @@ all of Epic 5 merged.
       deep link selects 3D rather than falling back.
 - [x] **"nearly half the files carry no import edge"** — measured on that same
       document: 189 of 400 files, 47%.
-- [x] **"344 of its 400 files have no co-change partner"** — measured on the
-      same document, over **file** nodes. An earlier version of this line said
-      "346 of 406", which was the count over *all* nodes including modules,
-      published under the word "files". Story 5.6's owner caught the mismatched
-      denominator on her own fresh-clone run. The sentence and the measurement
-      now agree on the unit.
+- [x] **"around 85% of the files have no co-change partner"** — measured over
+      **file** nodes: 342 of 400 on this head. Two corrections behind that one
+      sentence. It first said "346 of 406", which was the count over *all* nodes
+      including modules, published under the word "files" — story 5.6's owner
+      caught the mismatched denominator on her own fresh-clone run. Corrected to
+      "344 of 400", it then moved to 342 within the hour, because her merge and
+      mine both changed the history the count is taken from. It is now a ratio,
+      which is what the sentence actually means and what survives the next
+      commit.
 - [x] **`chrome/chrome.ts` and `styles.css` keep changing together with no
       import between them** — the pair is in `cochanges` (9 shared commits at
       the time of writing) and there is **no** edge between them in `edges`.

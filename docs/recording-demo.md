@@ -14,7 +14,7 @@ Playwright, which is already a `viz` devDependency for the performance harness.
 
 | | |
 | --- | --- |
-| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 181 co-change pairs, the same run the README quotes) |
+| Recorded from | `story/5.8-repo-docs-refresh` rebased onto the epic at `9a115f1` — after #72 (data blobs off the map), #73 (the new start-here ranking) and #74 (the 3D member layout) — gitnebula analysing a **fresh clone** of its own repository (406 nodes, 492 edges, 186 co-change pairs, the same run the README quotes) |
 | Recorder | Playwright `recordVideo` (Chromium, headless), `scripts/record-demo.mjs` |
 | Capture resolution | 1280 × 720, `deviceScaleFactor: 1`, `colorScheme: dark` |
 | Raw length | 39 s of WebM |
@@ -166,7 +166,7 @@ same pass, or they will disagree with each other:
 | where | what it carries |
 | --- | --- |
 | `README.md` quickstart | the pasted transcript, and the skipped-import count in the sentence below it |
-| `README.md` blast-radius paragraph | the files-with-no-partner ratio |
+| `README.md` blast-radius paragraph | the files-with-no-partner share, as a ratio rather than a count |
 | `README.md` connected-only bullet | the files-with-no-import-edge share |
 | `docs/recording-demo.md` (this file) | the "what was recorded" row, and the node count in the clean-clone note |
 | `docs/dev/epic-5/5.8-repo-docs-refresh/` | the same figures, as the record of what was verified |
@@ -176,6 +176,18 @@ count over `nodes` is not a count over `files` — this repository has 406 nodes
 and 400 files, and a sentence about files that quotes the node total is wrong by
 six even when the arithmetic is right. Measure over `kind === "file"` when the
 sentence says "files".
+
+**Exact counts belong in the transcript; prose wants a ratio.** A pasted
+terminal block is understood to be one moment and can carry exact numbers. A
+sentence in the body reads as a standing fact about the repository, and an exact
+count there is stale the next time anyone commits — the co-change total moved
+four times during this story alone, twice from merges of the very PRs updating
+it. That is not bad luck, it is self-reference: co-change is computed from files
+changed together, so **the commit that corrects the figure is itself a shared-
+history event that moves it.** An exact count of co-change data can never be
+correct in the commit that writes it down. "Around 85% of files have no co-change partner" survives that; "344 of 400"
+does not, and re-measuring it is a treadmill rather than a fix. Keep the exact
+figures where a reader can see they are a snapshot.
 
 ### Keeping the asset small
 
