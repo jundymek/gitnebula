@@ -43,8 +43,28 @@ floor and the node count at which it degrades. **3D takes the second option.**
 
 | phase | drawn nodes | sustained fps (worst 1 s) | avg fps | median frame | p95 frame | vs 55 fps floor |
 | --- | --- | --- | --- | --- | --- | --- |
-| `b-frozen-pan-zoom` (folded) | ~100 | **118** | 119.9 | 8.3 ms | 9.1 ms | holds |
-| `c-unfold-pan` (unfolded) | ~2,100 | **28** | 47.3 | 24.7 ms | 33.4 ms | **below** |
+| `b-frozen-pan-zoom` (folded) | ~100 | **117** | 119.8 | 8.3 ms | 9.2 ms | holds |
+| `c-unfold-pan` (unfolded) | ~2,100 | **22** | 37.1 | 32.7 ms | 41.8 ms | **below** |
+
+**This is a regression against the first measurement of this story, and it is
+the price of §3's readability work.** Before the layout was stabilised and
+flattened, the same phase sustained 28–29 fps; it now sustains 22. The cause is
+the same one that improves the picture: filling the frame means a tighter
+camera, larger discs, more covered pixels, more fill-rate per frame. The frozen
+phase is untouched, because nothing there changed about how much of the screen
+the nodes cover.
+
+| | frozen | unfolded |
+| --- | --- | --- |
+| before the AC-8 work | 118 fps | 28 fps |
+| after | 117 fps | **22 fps** |
+
+The maintainer is the one who gets to weigh 28 → 22 fps against a map whose
+files are separated instead of piled, so both numbers are here rather than only
+the flattering one. The degradation knee is unmoved — still between 840 and
+1,260 drawn nodes — because that curve is measured at a fixed camera, where the
+flattening changes the shape of the cloud but not how many discs land on a
+pixel.
 
 2D, same fixture, same run, for comparison:
 
@@ -66,11 +86,11 @@ different density.
 
 | drawn nodes | sustained fps (worst 1 s) | avg fps | p95 frame | vs 55 fps floor |
 | --- | --- | --- | --- | --- |
-| 420 | 120 | 120.0 | 9.00 ms | holds |
-| 840 | 87 | 86.5 | 17.30 ms | holds |
-| 1,260 | 48 | 54.3 | 25.10 ms | **below** |
-| 1,680 | 36 | 39.9 | 33.40 ms | **below** |
-| 2,100 | 28 | 32.0 | 41.70 ms | **below** |
+| 420 | 120 | 119.9 | 9.20 ms | holds |
+| 840 | 74 | 80.7 | 17.30 ms | holds |
+| 1,260 | 49 | 55.4 | 25.20 ms | **below** |
+| 1,680 | 35 | 41.9 | 33.30 ms | **below** |
+| 2,100 | 29 | 32.2 | 34.20 ms | **below** |
 
 > **3D holds the 55 fps floor up to roughly 840 drawn nodes, and degrades
 > between 840 and 1,260.**
