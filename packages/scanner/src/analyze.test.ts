@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import type { Config } from "@gitnebula/contract";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { analyze } from "./analyze.js";
+import { analyze, DATA_BLOB_LOC_THRESHOLD } from "./analyze.js";
 import { DEFAULT_EXCLUDES } from "./excludes.js";
 
 const temporaryRoots: string[] = [];
@@ -418,5 +418,92 @@ describe("analyze — warnings (AD-7)", () => {
     const result = await analyze({ root }, makeConfig());
 
     expect(result.warnings).toEqual([]);
+  });
+});
+
+describe("analyze — generated data blobs", () => {
+  /** `lines` lines of JSON-ish text, so LOC is the number asked for. */
+  const dataLines = (lines: number): string =>
+    `${Array.from({ length: lines }, (_, index) => `  "k${index}": ${index},`).join("\n")}\n`;
+
+  it("drops a data document longer than the threshold and counts it", async () => {
+    const root = await buildTree({
+      "src/main.ts": "const a = 1;\n",
+      "fixtures/generated.json": dataLines(DATA_BLOB_LOC_THRESHOLD + 1),
+    });
+
+    const result = await analyze({ root }, makeConfig());
+
+    expect(result.nodes.map((node) => node.id)).not.toContain(
+      "fixtures/generated.json",
+    );
+    expect(result.warnings).toContainEqual({
+      code: "data-blob",
+      count: 1,
+      detail: "fixtures/generated.json",
+    });
+  });
+
+  it("keeps a data document at the threshold", async () => {
+    const root = await buildTree({
+      "src/main.ts": "const a = 1;\n",
+      "fixtures/big-but-not-a-blob.json": dataLines(DATA_BLOB_LOC_THRESHOLD),
+    });
+
+    const result = await analyze({ root }, makeConfig());
+
+    expect(result.nodes.map((node) => node.id)).toContain(
+      "fixtures/big-but-not-a-blob.json",
+    );
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("never drops source, however long — the rule is about data, not size", async () => {
+    const root = await buildTree({
+      "src/enormous.ts": `${"const a = 1;\n".repeat(DATA_BLOB_LOC_THRESHOLD + 10)}`,
+    });
+
+    const result = await analyze({ root }, makeConfig());
+
+    expect(result.nodes.map((node) => node.id)).toContain("src/enormous.ts");
+    expect(result.warnings).toEqual([]);
+  });
+
+  it("leaves the dropped blob out of module LOC, module layer and stats", async () => {
+    const blobLoc = DATA_BLOB_LOC_THRESHOLD + 500;
+    const root = await buildTree({
+      "pkg/src/main.ts": "const a = 1;\n",
+      // Same shape as this repository's own case: a generated fixture under a
+      // `fixtures/` directory, which the layer rules call `test`, large enough
+      // to decide its module's layer on its own.
+      "pkg/fixtures/synthetic.json": dataLines(blobLoc),
+    });
+
+    const result = await analyze({ root }, makeConfig());
+    const module = result.nodes.find((node) => node.kind === "module");
+
+    expect(module?.layer).toBe("backend");
+    expect(module?.loc).toBe(1);
+    expect(result.stats.loc).toBe(1);
+    expect(result.stats.files).toBe(1);
+    expect(Object.keys(result.stats.languages)).not.toContain("json");
+  });
+
+  it("is deterministic — two runs agree, blob and all", async () => {
+    const root = await buildTree({
+      "src/main.ts": "const a = 1;\n",
+      "fixtures/a.json": dataLines(DATA_BLOB_LOC_THRESHOLD + 1),
+      "fixtures/b.yaml": dataLines(DATA_BLOB_LOC_THRESHOLD + 1),
+    });
+
+    const first = await analyze({ root }, makeConfig());
+    const second = await analyze({ root }, makeConfig());
+
+    expect(JSON.stringify(first)).toBe(JSON.stringify(second));
+    expect(first.warnings).toContainEqual({
+      code: "data-blob",
+      count: 2,
+      detail: "fixtures/a.json",
+    });
   });
 });
