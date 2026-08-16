@@ -505,15 +505,37 @@ export class Nebula3DEngine implements GraphEngine {
   private fitTarget(paddingPx: number = FIT_PADDING_PX): CameraState {
     const layout = this.layout;
     if (!layout) return IDENTITY_CAMERA;
-    // Everything that is actually drawn, not just the top level. An unfolded
-    // module's files are on screen and can reach well outside their module's
-    // own position, so framing the module layout alone left them outside the
-    // viewport: measured on this repository, scoping to `packages/` drew 60 of
-    // its 254 files because the other 194 were off-frame.
+
+    // Which nodes to frame is a question with a circular answer: unfolded
+    // members widen the frame, a wider frame zooms out, and zooming out below
+    // `UNFOLD_ZOOM` collapses the very members that widened it — leaving the
+    // map framed for nodes that no longer exist, which is the "tiny map in a
+    // big empty canvas" this story was reopened for.
+    //
+    // Broken by asking twice. Frame the persistent layout first; only if that
+    // camera stays above the unfold threshold — so the wakes survive it — is
+    // it worth framing them too. A scope pins its module open regardless of
+    // zoom, so its wake always counts.
+    const persistent = this.fitFor(layout.nodes, paddingPx);
+    const wakesSurvive =
+      persistent.k >= UNFOLD_ZOOM ||
+      this.scopePin !== null ||
+      this.pinnedUnfolds.size > 0;
+    if (!wakesSurvive) return persistent;
+
     const framed = [
       ...layout.nodes,
       ...[...this.memberLayouts.values()].flatMap((wake) => wake.nodes),
     ];
+    return this.fitFor(framed, paddingPx);
+  }
+
+  /** The camera that frames exactly `nodes`, silhouette-corrected. */
+  private fitFor(
+    nodes: readonly LayoutNode3D[],
+    paddingPx: number,
+  ): CameraState {
+    const framed = nodes;
     const bounds = bounds3D(framed);
     if (!bounds) return IDENTITY_CAMERA;
     const cx = (bounds.minX + bounds.maxX) / 2;
