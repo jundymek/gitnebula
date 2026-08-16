@@ -90,4 +90,22 @@ describe("fit is self-consistent with what its camera keeps", () => {
     expect(after.w).toBeGreaterThan(0.4);
     expect(after.h).toBeGreaterThan(0.4);
   });
+
+  it("does not leave a discarded candidate's depth behind", () => {
+    // fitTarget evaluates several candidate frames and keeps one. An earlier
+    // version assigned the target depth inside the candidate calculation, so a
+    // discarded candidate left its z centre behind and the chosen camera was
+    // projected against a depth it was not solved for. The observable symptom
+    // is a frame that does not actually frame: same assertion, deliberately.
+    engine = build();
+    engine.setCamera({ k: 4 });
+    void engine.fit({ durationMs: 0 });
+    const a = fill(engine);
+    // Fitting again from the state fit just produced must be a no-op, which is
+    // only true if the committed depth matches the committed camera.
+    void engine.fit({ durationMs: 0 });
+    const b = fill(engine);
+    expect(b.w).toBeCloseTo(a.w, 2);
+    expect(b.h).toBeCloseTo(a.h, 2);
+  });
 });

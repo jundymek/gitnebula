@@ -516,6 +516,14 @@ export class Nebula3DEngine implements GraphEngine {
     // camera stays above the unfold threshold — so the wakes survive it — is
     // it worth framing them too. A scope pins its module open regardless of
     // zoom, so its wake always counts.
+    const commit = (fit: {
+      camera: CameraState;
+      targetZ: number;
+    }): CameraState => {
+      this.targetZ = fit.targetZ;
+      return fit.camera;
+    };
+
     const persistent = this.fitFor(layout.nodes, paddingPx);
 
     // Wakes held open by a scope or a flight survive any zoom; the rest live
@@ -536,25 +544,35 @@ export class Nebula3DEngine implements GraphEngine {
       [...layout.nodes, ...nodesOf(() => true)],
       paddingPx,
     );
-    if (withAll.k >= UNFOLD_ZOOM) return withAll;
+    if (withAll.camera.k >= UNFOLD_ZOOM) return commit(withAll);
 
     // Below the threshold only the held wakes remain, so frame exactly those.
-    if (held.size === 0) return persistent;
+    if (held.size === 0) return commit(persistent);
     const withHeld = this.fitFor(
       [...layout.nodes, ...nodesOf((id) => held.has(id))],
       paddingPx,
     );
-    return withHeld;
+    return commit(withHeld);
   }
 
-  /** The camera that frames exactly `nodes`, silhouette-corrected. */
+  /**
+   * The camera that frames exactly `nodes`, silhouette-corrected, **without
+   * touching engine state**.
+   *
+   * Purity matters here rather than being a style preference: `fitTarget`
+   * evaluates several candidate frames and discards all but one, and an
+   * earlier version assigned `this.targetZ` inside this method. A discarded
+   * candidate then left its depth behind, so the chosen camera's x/y/zoom was
+   * projected against a different z centre than the one it was solved for.
+   * The depth travels with the camera instead, and the caller commits it.
+   */
   private fitFor(
     nodes: readonly LayoutNode3D[],
     paddingPx: number,
-  ): CameraState {
+  ): { camera: CameraState; targetZ: number } {
     const framed = nodes;
     const bounds = bounds3D(framed);
-    if (!bounds) return IDENTITY_CAMERA;
+    if (!bounds) return { camera: IDENTITY_CAMERA, targetZ: this.targetZ };
     const cx = (bounds.minX + bounds.maxX) / 2;
     const cy = (bounds.minY + bounds.maxY) / 2;
     const cz = (bounds.minZ + bounds.maxZ) / 2;
@@ -603,8 +621,8 @@ export class Nebula3DEngine implements GraphEngine {
         FOCAL_LENGTH,
     );
     // Framing the cloud means looking at its centre in all three axes, not at
-    // the z = 0 slice of it.
-    this.targetZ = cz;
+    // the z = 0 slice of it. Returned rather than assigned — see the note on
+    // this method.
     const spherical: CameraState = {
       x: cx,
       y: cy,
@@ -627,21 +645,22 @@ export class Nebula3DEngine implements GraphEngine {
     // screen now is what a reader means by it. Idle rotation can afterwards
     // bring a corner slightly past the padding; that is the trade for using
     // the frame, and the margin below is what absorbs it.
-    const measured = this.projectedExtent(spherical, framed);
-    if (!measured) return spherical;
+    const measured = this.projectedExtent(spherical, framed, cz);
+    if (!measured) return { camera: spherical, targetZ: cz };
     const availableX = Math.max(1, this.viewport.width - paddingPx * 2);
     const availableY = Math.max(1, this.viewport.height - paddingPx * 2);
     const excess = Math.max(
       measured.width / availableX,
       measured.height / availableY,
     );
-    if (!Number.isFinite(excess) || excess <= 0) return spherical;
+    if (!Number.isFinite(excess) || excess <= 0) {
+      return { camera: spherical, targetZ: cz };
+    }
     // `excess > 1` pulls back, `< 1` moves closer. Distance scales with it, so
     // zoom scales inversely.
     return {
-      x: cx,
-      y: cy,
-      k: clampZoom(spherical.k / excess),
+      camera: { x: cx, y: cy, k: clampZoom(spherical.k / excess) },
+      targetZ: cz,
     };
   }
 
@@ -655,19 +674,14 @@ export class Nebula3DEngine implements GraphEngine {
   private projectedExtent(
     camera: CameraState,
     nodes: readonly LayoutNode3D[],
+    targetZ: number,
   ): { width: number; height: number } | null {
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const node of nodes) {
-      const p = project(
-        node,
-        camera,
-        this.orientation,
-        this.viewport,
-        this.targetZ,
-      );
+      const p = project(node, camera, this.orientation, this.viewport, targetZ);
       if (!p) continue;
       const r = node.radius * p.scale;
       if (p.x - r < minX) minX = p.x - r;
