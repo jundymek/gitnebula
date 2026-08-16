@@ -518,13 +518,17 @@ export class Nebula3DEngine implements GraphEngine {
    * the second pass is already stable.
    */
   private settleFit(paddingPx?: number): void {
+    const key = (): string => [...this.unfoldedModules()].sort().join(",");
     for (let pass = 0; pass < 2; pass++) {
-      const before = this.unfoldedModules().length;
+      // Identities, not the count. One module collapsing while another unfolds
+      // leaves the count unchanged and the set completely different, and
+      // exiting there would return a camera sized for a wake that is gone.
+      const before = key();
       const corrected = this.fitTarget(paddingPx);
       // `setCamera` is what reconciles the unfold set, so the comparison has
       // to happen across it rather than before it.
       this.setCamera(corrected);
-      if (this.unfoldedModules().length === before) return;
+      if (key() === before) return;
     }
   }
 

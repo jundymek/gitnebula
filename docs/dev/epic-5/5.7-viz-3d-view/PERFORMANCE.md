@@ -192,7 +192,8 @@ Measured on **this repository** (456 nodes, 7 modules), scoped to `packages/`
 | --- | --- | --- |
 | 2D | 254 / 254 | **0.0 %** |
 | 3D, before | **60 / 254** | 51.7 % |
-| 3D, after | **254 / 254** | **17.7 %** |
+| 3D, after the stability fix | **254 / 254** | **17.7 %** |
+| 3D, after the frame work too | **254 / 254** | **22.0 %** |
 
 The first column is the finding. 3D drew 60 of 254 files because the other 194
 had **diverged to ~1e13 world units** — `MemberLayout3D` was numerically
@@ -203,6 +204,31 @@ repulsion floored the *squared* distance rather than the distance, damping
 retained far more velocity than the 2D layout (0.86 / 0.8 against 0.55 / 0.5),
 and there was no collision term at all where 2D has `forceCollide` at both
 levels.
+
+### Across module sizes, not just the one that broke
+
+`packages/` at 253 files is the case that diverged, so it is the case the fix
+was tuned against — which is exactly why it is not the only one measured. Every
+module of this repository, each scoped and fitted on its own:
+
+| module | files | drawn | buried > 50 % (3D) | 2D |
+| --- | --- | --- | --- | --- |
+| `packages/` | 253 | 254 / 254 | 22.0 % | 0.0 % |
+| `docs/` | 127 | 128 / 128 | 10.9 % | 0.0 % |
+| `test-fixtures/` | 39 | 40 / 40 | 7.5 % | 0.0 % |
+| `scripts/` | 4 | 5 / 5 | 0.0 % | 0.0 % |
+| `.github/` | 2 | 3 / 3 | 0.0 % | 0.0 % |
+| `reference/` | 1 | 2 / 2 | **50.0 %** | 0.0 % |
+
+Occlusion falls with module size, as it should, and **every node reaches the
+frame at every size** — the column that was 60 / 254 before the layout was
+stabilised.
+
+`reference/` looks alarming and is not: it holds one file, so its module disc
+covering that file is one buried node out of two. At n = 2 the metric has no
+resolution, and a module drawn over its own single member is the encoding
+working rather than failing. Recorded rather than filtered out, because a
+threshold that quietly excluded inconvenient cases would not be a measurement.
 
 ### Member spacing, chosen by measurement
 
