@@ -517,17 +517,34 @@ export class Nebula3DEngine implements GraphEngine {
     // it worth framing them too. A scope pins its module open regardless of
     // zoom, so its wake always counts.
     const persistent = this.fitFor(layout.nodes, paddingPx);
-    const wakesSurvive =
-      persistent.k >= UNFOLD_ZOOM ||
-      this.scopePin !== null ||
-      this.pinnedUnfolds.size > 0;
-    if (!wakesSurvive) return persistent;
 
-    const framed = [
-      ...layout.nodes,
-      ...[...this.memberLayouts.values()].flatMap((wake) => wake.nodes),
-    ];
-    return this.fitFor(framed, paddingPx);
+    // Wakes held open by a scope or a flight survive any zoom; the rest live
+    // or die by the unfold threshold.
+    const held = new Set<string>(this.pinnedUnfolds);
+    if (this.scopePin !== null) held.add(this.scopePin);
+    const nodesOf = (ids: (id: string) => boolean): LayoutNode3D[] =>
+      [...this.memberLayouts.entries()]
+        .filter(([moduleId]) => ids(moduleId))
+        .flatMap(([, wake]) => wake.nodes);
+
+    // A candidate frame is only valid if applying it would leave the nodes it
+    // framed still on the map. Ask, then check, then fall back — rather than
+    // predicting once and trusting the prediction, which is the hole the first
+    // attempt at this had: the persistent fit can clear the threshold while
+    // the wake-inclusive one, being wider, does not.
+    const withAll = this.fitFor(
+      [...layout.nodes, ...nodesOf(() => true)],
+      paddingPx,
+    );
+    if (withAll.k >= UNFOLD_ZOOM) return withAll;
+
+    // Below the threshold only the held wakes remain, so frame exactly those.
+    if (held.size === 0) return persistent;
+    const withHeld = this.fitFor(
+      [...layout.nodes, ...nodesOf((id) => held.has(id))],
+      paddingPx,
+    );
+    return withHeld;
   }
 
   /** The camera that frames exactly `nodes`, silhouette-corrected. */
