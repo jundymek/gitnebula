@@ -72,6 +72,15 @@ this cost three people real time before the story was written:
 `Buffer.indexOf(0)` has neither property. Both traps are recorded in the
 script's header so the next person does not re-derive them.
 
+There was a third, found by Codex in review rather than by me: the first
+version decoded `git ls-files -z` as UTF-8, so a tracked file whose **name** is
+not valid UTF-8 would decode to a different string, fail to open, and be
+skipped by the `catch` in silence. Paths now stay raw `Buffer`s all the way to
+`readFileSync`, the extension test decodes `latin1` because it round-trips
+every byte, and a tracked file the sweep cannot read is **reported rather than
+skipped**. Three variants of one lesson: a check that can quietly report clean
+is not a check.
+
 ## Two deviations from the spec's literal wording, and why
 
 **AC-1 says the separator "is replaced by one that is still guaranteed not to

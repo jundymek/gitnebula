@@ -142,7 +142,50 @@ nul-sweep: no tracked text file carries a NUL byte   (exit 0)
       including `keeps a binary file in the universe at 0 LOC and counts it`
       at `analyze.test.ts:386`, unchanged.
 
-## 6. Suites and build (AC-6)
+## 6. The sweep cannot be fooled by a filename either (Codex finding)
+
+Codex's review found a real hole in the first version of the check: it decoded
+`git ls-files -z` as UTF-8, so a tracked file whose *name* is not valid UTF-8
+would decode to a different string, the read would fail, and the `catch` would
+skip it in silence — the same shape of quiet miss the story exists to close.
+Fixed: paths stay raw `Buffer`s all the way to `readFileSync`, and an
+unreadable tracked file is now **reported rather than skipped**.
+
+- [x] The mangling, shown as bytes:
+
+```
+raw bytes   : 7372632f6261642dff2e7473
+after utf8  : 7372632f6261642defbfbd2e7473   (MANGLED — no longer names the file)
+after latin1: 7372632f6261642dff2e7473       (round-trips)
+```
+
+**Observed:** `0xff` becomes `ef bf bd` (U+FFFD) under UTF-8; `latin1`, which
+the extension test uses, round-trips every byte.
+
+- [x] The "cannot read it" branch, exercised by staging a file and deleting it
+      from the working tree:
+
+```
+nul-sweep: 1 tracked text file(s) failed the sweep
+  packages/viz/src/temp-probe.ts — tracked but unreadable, so unchecked: ENOENT: …
+   (exit 1)
+```
+
+**Observed:** exit 1 with the reason. The previous version returned exit 0 here.
+
+- [ ] **End-to-end with a real non-UTF-8 filename — not runnable on this
+      machine.** APFS refuses such names outright:
+
+```
+$ python3 -c "os.open(b'…/bad-\xff-name.ts', os.O_CREAT|os.O_WRONLY, 0o644)"
+refused by the filesystem: [Errno 92] Illegal byte sequence
+```
+
+The scenario is reachable on ext4, which is what `ci.yml`'s `ubuntu-latest`
+runs on, so the fix is worth having and is verified at the level this machine
+allows — the two checks above — rather than claimed at a level it does not.
+
+## 7. Suites and build (AC-6)
 
 - [x] `pnpm lint` → **exit 0** (eslint + `prettier --check`).
 - [x] `pnpm --filter @gitnebula/viz test` → **Test Files 55 passed (55)** /

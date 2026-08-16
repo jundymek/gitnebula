@@ -20,9 +20,10 @@
 // Both were observed on this repository while writing this check. Buffer
 // scanning has neither property.
 
+import { Buffer } from "node:buffer";
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, extname, join } from "node:path";
+import { dirname, extname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const REPO_ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
@@ -59,14 +60,45 @@ export const BINARY_EXTENSIONS = new Set([
   ".mov",
 ]);
 
-/** Every file git tracks, repository-relative, NUL-delimited so paths survive. */
+/**
+ * Every file git tracks, as raw path **buffers**.
+ *
+ * Deliberately not decoded to UTF-8. A POSIX filename is an arbitrary sequence
+ * of non-NUL bytes, and decoding one that is not valid UTF-8 substitutes
+ * U+FFFD — after which the string no longer names the file, the read fails,
+ * and the sweep skips exactly the kind of file it is supposed to inspect. That
+ * is this story's own defect wearing a different hat, and it is why the paths
+ * stay bytes all the way to `readFileSync`, which accepts a Buffer path.
+ *
+ * `-z` is what makes it safe to split: NUL is the one byte a path cannot
+ * contain, so it is the only sound delimiter.
+ */
 export function trackedFiles(repoRoot = REPO_ROOT) {
   const out = execFileSync("git", ["ls-files", "-z"], {
     cwd: repoRoot,
-    encoding: "utf8",
     maxBuffer: 64 * 1024 * 1024,
   });
-  return out.split("\0").filter((path) => path.length > 0);
+
+  const paths = [];
+  let start = 0;
+  for (let index = 0; index < out.length; index += 1) {
+    if (out[index] !== 0) continue;
+    if (index > start) paths.push(out.subarray(start, index));
+    start = index + 1;
+  }
+  if (out.length > start) paths.push(out.subarray(start));
+  return paths;
+}
+
+/**
+ * The extension of a raw path buffer, lowercased.
+ *
+ * `latin1` rather than `utf8` because it maps every byte to exactly one code
+ * unit and back — so a filename this process cannot decode still gets its
+ * extension compared correctly. Extensions worth matching are ASCII.
+ */
+function extensionOf(pathBuffer) {
+  return extname(pathBuffer.toString("latin1")).toLowerCase();
 }
 
 /**
@@ -75,15 +107,27 @@ export function trackedFiles(repoRoot = REPO_ROOT) {
  * reviewer looks through, so "which file" is not enough to act on.
  */
 export function findNulBytes(repoRoot = REPO_ROOT) {
+  const prefix = Buffer.from(`${repoRoot}/`);
   const findings = [];
+
   for (const path of trackedFiles(repoRoot)) {
-    if (BINARY_EXTENSIONS.has(extname(path).toLowerCase())) continue;
+    if (BINARY_EXTENSIONS.has(extensionOf(path))) continue;
+
+    // Lossy only for the message; the read below uses the raw bytes.
+    const display = path.toString("utf8");
 
     let bytes;
     try {
-      bytes = readFileSync(join(repoRoot, path));
-    } catch {
-      continue; // tracked but not in the working tree; nothing to read
+      bytes = readFileSync(Buffer.concat([prefix, path]));
+    } catch (error) {
+      // Reported, never skipped. A tracked file the sweep could not read is a
+      // file the sweep cannot vouch for, and quietly passing over it is the
+      // failure this check exists to prevent.
+      findings.push({
+        path: display,
+        unreadable: String(error.message ?? error),
+      });
+      continue;
     }
 
     const offset = bytes.indexOf(0);
@@ -96,13 +140,16 @@ export function findNulBytes(repoRoot = REPO_ROOT) {
     for (let index = 0; index < offset; index += 1) {
       if (bytes[index] === 0x0a) line += 1;
     }
-    findings.push({ path, offset, line, count });
+    findings.push({ path: display, offset, line, count });
   }
   return findings;
 }
 
 /** Human-readable one-liner per finding, for the tooling check and the CLI. */
 export function formatFinding(finding) {
+  if (finding.unreadable !== undefined) {
+    return `${finding.path} — tracked but unreadable, so unchecked: ${finding.unreadable}`;
+  }
   return (
     `${finding.path}:${finding.line} — literal NUL byte at offset ${finding.offset}` +
     (finding.count > 1 ? ` (${finding.count} in this file)` : "")
@@ -113,7 +160,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const findings = findNulBytes();
   if (findings.length > 0) {
     process.stderr.write(
-      `nul-sweep: ${findings.length} tracked text file(s) carry a NUL byte\n`,
+      `nul-sweep: ${findings.length} tracked text file(s) failed the sweep\n`,
     );
     for (const finding of findings) {
       process.stderr.write(`  ${formatFinding(finding)}\n`);
