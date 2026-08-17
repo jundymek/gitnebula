@@ -1,6 +1,6 @@
 {
   "name": "gitnebula",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Turn any git repository into an interactive architecture map. One command, no config, fully offline.",
   "keywords": [
     "git",

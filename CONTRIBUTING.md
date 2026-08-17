@@ -124,12 +124,18 @@ git switch master && git pull            # a clean tree; nothing uncommitted
 pnpm install && pnpm lint && pnpm test   # the suite includes the cold-install e2e
 pnpm build                               # the only build entry
 
-npm version 0.1.0 --workspace packages/cli --no-git-tag-version  # or edit by hand
+npm version <version> --workspace packages/cli --no-git-tag-version  # or edit by hand
+# add the release's section to CHANGELOG.md, and its compare link at the bottom
 cd packages/cli && npm publish --dry-run # read the file list before the real one
 npm publish                              # add --otp=<code> if 2FA is on
-cd ../.. && git commit -am "chore(cli): release v0.1.0"
-git tag v0.1.0 && git push && git push --tags
+cd ../.. && git commit -am "chore(cli): release v<version>"
+git tag v<version> && git push && git push --tags
 ```
+
+`CHANGELOG.md` lives at the repository root and is part of the release, not an
+afterthought: the version bump and its entry land in the same commit. It
+records the **CLI's** versions — see the note below on why that is not the
+contract's.
 
 The tag is `v<version>` and names the CLI's version, not the contract's.
 **The two move independently** (AD-11): `schemaVersion` in `analysis.json` is
