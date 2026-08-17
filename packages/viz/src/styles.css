@@ -21,6 +21,10 @@
   --infra: #7c8598;
   --test: #a8cf52;
   --hot: #ff7a3d;
+  /* Story 5.6's co-change mark. The same value as the engine's
+     COCHANGE_RING_COLOR, so the panel's toggle and the ring the canvas draws
+     are visibly one feature. */
+  --cochange: #ff5fa2;
   --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
 }
@@ -376,6 +380,14 @@ canvas {
   top: 18px;
   right: 18px;
   width: 290px;
+  /* The panel can never grow past the window. Until story 5.6 its height was a
+     function of a fixed row count and this could not happen; the blast-radius
+     list made the content variable, and `body` is `overflow: hidden`, so
+     anything past the fold would be unreachable rather than merely off-screen.
+     The list carries its own cap as well — this is the backstop for a very
+     short window, and the same bound #start-here already uses. */
+  max-height: calc(100% - 36px);
+  overflow-y: auto;
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -500,4 +512,529 @@ canvas {
 .iconbtn.failed {
   color: var(--hot);
   border-color: var(--hot);
+}
+
+/* ---- story 5.1 — start-here panel (FR-26, UX-DR6, UX-DR12) --------------
+   Left side, below the search box: the detail panel owns the top right and the
+   two must be able to be up at once — choosing a row opens the detail panel
+   and shuts this one, but the reader can bring it back while a node is open.
+   Same panel surface, border and radius as #panel, so the two read as one
+   product rather than two components that happen to share a canvas. */
+#start-here {
+  position: absolute;
+  top: 116px;
+  left: 18px;
+  width: 320px;
+  max-width: calc(100vw - 36px);
+  max-height: calc(100% - 190px);
+  overflow-y: auto;
+  z-index: 2;
+  padding: 16px 18px;
+  background: rgba(16, 24, 39, 0.92);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+}
+
+#start-here[hidden] {
+  display: none;
+}
+
+.sh-close {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: var(--ink-mute);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sh-close:hover {
+  color: var(--ink);
+}
+
+.sh-title {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+
+.sh-sub {
+  margin: 3px 0 14px;
+  font-size: 11.5px;
+  color: var(--ink-mute);
+}
+
+.sh-cat + .sh-cat {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.sh-cat h3 {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.sh-blurb {
+  margin: 2px 0 8px;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+
+.sh-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sh-entry {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0 10px;
+  width: 100%;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sh-entry:hover,
+.sh-entry:focus-visible {
+  background: rgba(46, 62, 88, 0.4);
+  border-color: var(--line-hi);
+  outline: none;
+}
+
+.sh-name {
+  grid-column: 1;
+}
+
+/* The path clips from the front, so the directories stay on screen even when
+   they do not fit; the element carries a title with the whole of it. */
+.sh-path {
+  grid-column: 1;
+  direction: rtl;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+.sh-metric {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  font-size: 10.5px;
+  color: var(--ink-dim);
+  white-space: nowrap;
+}
+
+.sh-more {
+  margin: 7px 0 0;
+  font-size: 10.5px;
+  color: var(--ink-mute);
+}
+
+/* UX-DR14: a cause and an exit, on two lines, in that order. */
+.sh-empty {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+.sh-empty .sh-cause,
+.sh-empty .sh-exit {
+  display: block;
+}
+
+.sh-empty .sh-exit {
+  margin-top: 3px;
+  color: var(--ink-mute);
+}
+
+/* ---- story 5.3 (layer filter, FR-28) ------------------------------------
+ *
+ * The mode toggle's shape (UX-DR6) with one deliberate difference: it is
+ * multi-select, so an inactive toggle has to read as "switched off" rather
+ * than as "the other option". `aria-pressed` carries that for assistive
+ * technology; these rules carry it for everyone else.
+ */
+
+#layer-filter {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+}
+
+#layer-filter button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 11px;
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid var(--line-hi);
+  border-radius: 0;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+#layer-filter button:first-of-type {
+  border-radius: 6px 0 0 6px;
+}
+
+#layer-filter button:last-of-type {
+  border-radius: 0 6px 6px 0;
+}
+
+#layer-filter button + button {
+  border-left: none;
+}
+
+#layer-filter button[aria-pressed="true"] {
+  background: var(--line);
+}
+
+/* Off: the label recedes and the swatch loses its colour, so the active set
+ * is legible at a glance without opening anything (UX-DR13). */
+#layer-filter button.off {
+  color: var(--ink-mute);
+  background: transparent;
+}
+
+#layer-filter button.off .dot {
+  opacity: 0.25;
+}
+
+#layer-filter .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+#layer-filter .hidden-count {
+  margin-left: 8px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+/* The empty state (AC-4, UX-DR14): a cause, an exit, and one click back. */
+#filter-empty {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 320px;
+  padding: 18px 20px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  font-family: var(--sans);
+}
+
+#filter-empty[hidden] {
+  display: none;
+}
+
+#filter-empty .cause {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+#filter-empty .exit {
+  margin: 6px 0 0;
+  font-size: 11.5px;
+  color: var(--ink-dim);
+}
+
+#filter-empty button {
+  margin-top: 12px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  background: var(--line);
+  color: var(--ink);
+  border: 1px solid var(--line-hi);
+  border-radius: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+/* ---- story 5.5: the analysis window made legible ----
+   Appended at the end of the file, no existing selector touched — the
+   convention the wave-A cohort agreed so five branches union cleanly. */
+
+/* The history group's caption. It carries AC-1: the window is stated once for
+   the metrics it covers rather than suffixed onto each of their labels. */
+.p-window {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 14px 0 2px;
+}
+
+/* An absent value, not a zero (AC-2). Colour alone would not survive a
+   greyscale render or a colour-vision deficiency, so the italic carries the
+   distinction independently of the hue. */
+.p-row.is-empty span:last-child {
+  color: var(--ink-mute);
+  font-style: italic;
+}
+
+/* The panel-level empty state: cause, then exit (UX-DR14). */
+.p-notice {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  border-left: 2px solid var(--line);
+  padding-left: 9px;
+  margin: 12px 0 0;
+}
+
+.p-notice-cause,
+.p-notice-exit {
+  display: block;
+}
+
+/* The exit is the actionable half, so it reads one step brighter than the
+   cause rather than one step dimmer. */
+.p-notice-exit {
+  color: var(--ink-dim);
+}
+
+/* The blast-radius section (story 5.6, FR-27). Sits between the churn bar and
+   the panel actions, so the panel still ends with its buttons. */
+.p-blast {
+  display: block;
+  margin-bottom: 14px;
+}
+
+.p-blast[hidden] {
+  display: none;
+}
+
+/* Built from the same cause/exit halves as the panel-level notice and styled
+   to match it, under its own class so 5.5's "one notice per panel" count
+   stays true. */
+.p-blast-empty {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--ink-mute);
+  border-left: 2px solid var(--line);
+  padding-left: 9px;
+  margin: 0 0 8px;
+}
+
+.p-blast-empty[hidden] {
+  display: none;
+}
+
+.p-blast-caption {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 6px;
+}
+
+/* Bounded and scrollable, because this list is the panel's only unbounded
+   content and the page behind it cannot scroll (`body` is `overflow: hidden`).
+   Measured on this repository, one file has 44 co-change partners — at ~23 px
+   a row that is over 1,000 px of list, which pushes the `show on map` toggle
+   and the panel's own actions below the viewport where they cannot be reached
+   at all. The cap is expressed against the viewport rather than in rows so a
+   short window is bounded too, and it follows the pattern story 5.1's
+   start-here panel already established for the same reason. */
+.p-blast-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(38vh, 320px);
+  overflow-y: auto;
+}
+
+/* A partner row: id on the left, its shared-commit count on the right — the
+   .p-row rhythm, made actionable. */
+.p-blast-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 12px;
+  text-align: left;
+  padding: 5px 0;
+  background: transparent;
+  border: none;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.p-blast-row:hover {
+  color: var(--cochange);
+}
+
+.p-blast-row span:last-child {
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+/* Keyboard focus must be visible on a control that moves the camera — the
+   partner rows are reachable by Tab like every other button in the panel. */
+.p-blast-row:focus-visible {
+  outline: 1px solid var(--cochange);
+  outline-offset: 2px;
+}
+
+.p-blast-empty span {
+  display: block;
+}
+
+/* The exit is the actionable half, so it reads one step brighter than the
+   cause — the same relationship .p-notice-exit has to .p-notice-cause. */
+.p-blast-empty span:last-child {
+  color: var(--ink-dim);
+}
+
+.p-blast-show {
+  margin-top: 8px;
+}
+
+/* Pressed reads as pressed: the toggle borrows the mark's own colour, so the
+   control and the ring on the canvas are visibly the same feature. */
+.p-blast-show[aria-pressed="true"] {
+  color: var(--cochange);
+  border-color: var(--cochange);
+}
+
+.p-blast-show[hidden] {
+  display: none;
+}
+
+/* The heatmap's near-uniform notice (AC-4). Sits under the legend keys and
+   only in heat mode; `max-width` keeps it off the canvas on a narrow window. */
+.legend-notice {
+  display: block;
+  max-width: 30ch;
+  margin-top: 4px;
+  padding-top: 7px;
+  border-top: 1px solid var(--line);
+  line-height: 1.6;
+}
+
+.legend-notice-exit {
+  display: block;
+  color: var(--ink-dim);
+}
+
+/* ---- story 5.4: the scope bar (FR-30) ---------------------------------- */
+
+/* Top-centre: the one region left free by the legend (bottom-left), the hint
+   (bottom-right) and the detail panel (right). It states what the frame is
+   showing, so it has to be where the eye lands before reading the map. */
+.scope-bar {
+  position: absolute;
+  top: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(680px, calc(100% - 36px));
+  padding: 7px 12px;
+  border: 1px solid var(--line-hi);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  line-height: 1.7;
+}
+
+.scope-bar[hidden] {
+  display: none;
+}
+
+.scope-bar p {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-bar-scope {
+  color: var(--ink);
+}
+
+/* The counts and the "you left the scope" line are secondary to the scope
+   itself — same relationship the hint overlay has to the map. */
+.scope-bar-hidden,
+.scope-bar-left {
+  color: var(--ink-mute);
+}
+
+.scope-bar button {
+  flex: none;
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-dim);
+  cursor: pointer;
+}
+
+.scope-bar button[hidden] {
+  display: none;
+}
+
+.scope-bar button:hover {
+  border-color: var(--line-hi);
+  color: var(--ink);
+}
+
+/* The toggle reads its own state, so the pressed look is driven by the same
+   attribute a screen reader is (UX-DR13) — never by a separate class. */
+.scope-bar button[aria-pressed="true"] {
+  border-color: var(--backend);
+  color: var(--backend);
+}
+
+.scope-bar button:focus-visible {
+  outline: 2px solid var(--backend);
+  outline-offset: 2px;
 }

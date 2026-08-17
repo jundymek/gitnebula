@@ -10,6 +10,23 @@
 
 export { createGraphEngine, CanvasGraphEngine } from "./engine.js";
 
+/**
+ * The 3D view (story 5.7) — a second implementation of the same interface,
+ * reached through the same barrel. `app.ts` picks between them via
+ * `createViewEngine`, which is also where the AC-5 fallback lives; chrome
+ * never names either constructor.
+ */
+export { createNebula3DEngine, Nebula3DEngine } from "./engine3d.js";
+export {
+  createViewEngine,
+  DEFAULT_VIEW,
+  isViewKind,
+  probe3D,
+  viewFromSearch,
+  type ViewEngineResult,
+  type ViewKind,
+} from "./view.js";
+
 export {
   FILE_LABEL_ZOOM,
   HOT_COLOR,
@@ -32,6 +49,26 @@ export { SETTLE_DISPLACEMENT_PX, SETTLE_FRAMES } from "./settle.js";
 export { fuzzySearch, scoreMatch, type FuzzyMatch } from "./fuzzy.js";
 
 export { hashString, seedFor } from "./prng.js";
+
+/**
+ * Story 5.6's co-change mark. Exported for the same reason the layer colours
+ * are: chrome describes the mark in the panel, and a swatch that drifts from
+ * the canvas is worse than no swatch.
+ */
+export {
+  COCHANGE_RING_ALPHA,
+  COCHANGE_RING_COLOR,
+  COCHANGE_RING_DASH,
+  COCHANGE_RING_OFFSET_PX,
+  COCHANGE_RING_WIDTH,
+} from "./constants.js";
+
+/**
+ * Story 5.3's layer list. The filter control draws one toggle per entry, so
+ * the order it renders in and the order the engine defaults to are one
+ * constant rather than two that can drift.
+ */
+export { ALL_LAYERS, LAYER_LABEL, isLayer } from "./layers.js";
 
 export type {
   CameraState,

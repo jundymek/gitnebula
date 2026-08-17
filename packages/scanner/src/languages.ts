@@ -85,6 +85,34 @@ export const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
   ".dockerfile": "dockerfile",
 };
 
+/**
+ * Languages that serialize *data* rather than express behaviour. Small ones
+ * are configuration a reader recognizes (`package.json`, a CI workflow) and
+ * belong on the map; enormous ones are generated blobs, which is what
+ * {@link isDataLanguage} exists to let the scanner notice.
+ *
+ * Markup and prose (`markdown`, `html`, `text`) are deliberately absent: a
+ * long document is written by a person and is part of what a repository is.
+ *
+ * Every name here is one {@link detectLanguage} can actually produce. `.csv`
+ * and `.tsv` carry no entry in {@link LANGUAGE_BY_EXTENSION}, so they detect
+ * as {@link UNKNOWN_LANGUAGE} and are out of reach of this rule; adding them
+ * would change `stats.languages` for every repository, which is a wider
+ * change than the defect asks for.
+ */
+const DATA_LANGUAGES: ReadonlySet<string> = new Set([
+  "json",
+  "yaml",
+  "toml",
+  "ini",
+  "xml",
+]);
+
+/** Whether a language, as {@link detectLanguage} names it, serializes data. */
+export function isDataLanguage(language: string): boolean {
+  return DATA_LANGUAGES.has(language);
+}
+
 /** Extension-less filenames worth naming; compared case-sensitively. */
 const LANGUAGE_BY_FILENAME: Readonly<Record<string, string>> = {
   Makefile: "make",

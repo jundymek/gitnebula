@@ -10,21 +10,28 @@
 
 import type { AnalysisDocument } from "@gitnebula/contract";
 
-import type { GraphEngine } from "../engine/index.js";
+import { ALL_LAYERS, type GraphEngine } from "../engine/index.js";
 import { renderExportButton } from "./export-button.js";
 import {
   EXPORT_SLOT_ID,
+  FILTER_SLOT_ID,
   MODE_SLOT_ID,
   renderHeader,
+  VIEW_SLOT_ID,
   type HeaderActions,
 } from "./header.js";
+import { renderFilterEmpty, type FilterEmptyHandle } from "./filter-empty.js";
 import { renderHint } from "./hint.js";
-import { renderLegend } from "./legend.js";
+import { renderLayerFilter, type LayerFilterHandle } from "./layer-filter.js";
+import { renderLegend, type LegendHandle } from "./legend.js";
 import { renderModeToggle, type ModeToggleHandle } from "./mode-toggle.js";
 import { renderPanel, type PanelHandle } from "./panel.js";
+import { renderScopeBar } from "./scope-bar.js";
 // Types only: the bootstrap constructs these and hands them in, so chrome
 // wires them without owning their lifetime.
 import type { SearchBox } from "./search.js";
+import { renderStartHere, type StartHereHandle } from "./start-here.js";
+import { buildStartHereModel } from "./start-here-model.js";
 import type { Tooltip } from "./tooltip.js";
 import { createStore, type ChromeState, type Store } from "./store.js";
 
@@ -38,6 +45,12 @@ export interface MountOptions {
    * unchanged for the stories building alongside this one.
    */
   readonly overlays?: readonly HTMLElement[];
+  /**
+   * Story 5.7's 2D/3D switch, placed in the header's view slot. Optional and
+   * a plain element, so chrome never learns what a view is — and so every
+   * existing caller keeps working unchanged.
+   */
+  readonly viewSwitch?: HTMLElement;
 }
 
 /** What `connectEngine` needs beyond the handle. */
@@ -48,6 +61,24 @@ export interface ConnectOptions {
   readonly analysis: AnalysisDocument;
   /** Reference instant for the panel's relative last-change row (3.4). */
   readonly now?: number;
+  /**
+   * Whether disconnecting should also destroy the shared overlay controls —
+   * currently the search box, which holds a document-level `keydown` listener
+   * for its shortcut.
+   *
+   * Defaults to `true`, which is the behaviour every existing caller has and
+   * the right one when a page connects exactly once: the teardown is the page
+   * teardown, so it takes everything with it.
+   *
+   * Story 5.7 introduced a **second** reason to disconnect — swapping the 2D
+   * engine for the 3D one and back — and the search box outlives that: it is
+   * created once by `app.ts`, handed to `mountChrome` as an overlay, and
+   * reused by every engine. Destroying it on the first swap removed its
+   * shortcut listener and search stopped responding, while still looking
+   * present. Passing `false` says "unsubscribe this engine, leave the shared
+   * controls alone".
+   */
+  readonly destroyControls?: boolean;
 }
 
 /**
@@ -58,12 +89,43 @@ export interface ConnectOptions {
 export interface ChromeHandle extends Store<ChromeState> {
   readonly panel: PanelHandle;
   readonly modeToggle: ModeToggleHandle;
+  /** Story 5.1's start-here panel (FR-26). */
+  readonly startHere: StartHereHandle;
+  /** Story 5.3's layer filter and its empty state (FR-28). */
+  readonly layerFilter: LayerFilterHandle;
+  readonly filterEmpty: FilterEmptyHandle;
+  /** Story 5.5's legend, which follows the mode to show its notice (AC-4). */
+  readonly legend: LegendHandle;
   /**
    * Give the chrome the engine its controls act on. Called by
    * `connectEngine`, because the engine cannot exist before the stage it
    * measures is in the document.
    */
   attachEngine(engine: GraphEngine | null): void;
+}
+
+/**
+ * Whether the reader asked for less animation — the same query the engine
+ * resolves, deliberately duplicated here for one value.
+ *
+ * **Why this exists.** Under reduced motion `engine.load()` runs the layout to
+ * Settled and emits `settled` *synchronously inside the call* (UX-DR11), and
+ * `app.ts` connects the chrome to the engine only afterwards. The event is
+ * therefore emitted before anything is listening: `settling` would stay true
+ * forever, the 2.5 replay control would never enable, and story 5.1's panel —
+ * which waits for the settle to end — would never appear for exactly the
+ * readers who asked for less motion.
+ *
+ * The defect is in the boot order, not here, and its proper fix is either a
+ * settle-state accessor on the `GraphEngine` interface or connecting before
+ * loading — both of which reach outside this story's territory during a
+ * five-agent wave on this package. This resolves the initial value only;
+ * `settle-start` and `settled` keep owning every later transition.
+ */
+function prefersReducedMotion(): boolean {
+  return (
+    globalThis.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false
+  );
 }
 
 export function mountChrome(
@@ -80,13 +142,28 @@ export function mountChrome(
     // a second count would be a second truth.
     modules: analysis.nodes.filter((node) => node.kind === "module").length,
     languages: analysis.repo.stats.languages,
-    settling: true,
+    // Normally true until the engine says otherwise — except under reduced
+    // motion, where the engine has already finished settling before anything
+    // here is listening. See `prefersReducedMotion` below.
+    settling: !prefersReducedMotion(),
     hoveredId: null,
     selectedId: null,
     unfolded: 0,
     selected: null,
     isolated: false,
     mode: "structure",
+    // Story 5.1: shut until the layout settles, then opened once (AC-3).
+    startHereOpen: false,
+    startHereShown: false,
+    // Story 5.3: every layer on until the reader says otherwise (FR-28).
+    visibleLayers: ALL_LAYERS,
+    filteredOutCount: 0,
+    // Story 5.4's slice.
+    scopeId: null,
+    connectedOnly: false,
+    hiddenByDegree: 0,
+    leftScopeId: null,
+    scopeVisibleCount: analysis.nodes.length,
   });
 
   // Set by `connectEngine`. The panel's controls are live from the moment
@@ -113,6 +190,18 @@ export function mountChrome(
       store.setState({ selected: null, isolated: false });
       panel.close();
     },
+    onSelectPartner(id) {
+      // Story 5.6, AC-2: the existing flight, not a second one. `flyTo`
+      // unfolds a collapsed parent, waits for the wake, and selects on
+      // arrival — which repaints this panel on the partner. Exactly what a
+      // start-here row does, and chrome moves no camera by hand (AD-5).
+      void engine?.flyTo(id);
+    },
+    onShowBlastRadius(ids) {
+      // The panel asks; the engine owns the marked set and is the only thing
+      // that can draw it (chrome may not touch a canvas at all).
+      engine?.setBlastRadius(ids.length > 0 ? ids : null);
+    },
   });
 
   const modeToggle = renderModeToggle({
@@ -121,11 +210,115 @@ export function mountChrome(
     },
   });
 
+  // Story 5.1. The ranking is computed once, from the document the chrome was
+  // mounted with — the panel is a view over it and recomputes nothing when it
+  // is reopened (AC-3).
+  const startHere = renderStartHere(buildStartHereModel(analysis), {
+    onSelect(id) {
+      // The existing flight, not a second one: `flyTo` unfolds a collapsed
+      // parent, waits for the wake, and selects on arrival — which is what
+      // opens the detail panel (AD-5, AC-4). Chrome moves no camera by hand.
+      void engine?.flyTo(id);
+      store.setState({ startHereOpen: false });
+    },
+    onClose() {
+      store.setState({ startHereOpen: false });
+    },
+  });
+
+  // The panel follows the store rather than being toggled at each call site,
+  // so the header control, the first-load open and a row's dismissal are all
+  // one path.
+  store.subscribe((state) => {
+    if (state.startHereOpen) startHere.open();
+    else startHere.close();
+  });
+
+  // AC-3: the default first state, once — and only when the reader has not
+  // already gone somewhere themselves. Driven by the store's `settling` field
+  // rather than a second `settled` subscription, because `connectEngine` is
+  // shared ground this wave and a listener there is not this story's to add.
+  store.subscribe((state) => {
+    if (state.startHereShown || state.settling) return;
+    store.setState({
+      startHereShown: true,
+      startHereOpen: state.selectedId === null,
+    });
+  });
+
+  // Story 5.3. The control only asks; the engine owns the filter and echoes it
+  // back on its `filter` event, which is what moves these buttons — the same
+  // shape the mode toggle uses, so a filter changed anywhere reaches the UI.
+  const layerFilter = renderLayerFilter({
+    onFilter(layers) {
+      engine?.setLayerFilter(layers);
+    },
+  });
+
+  const filterEmpty = renderFilterEmpty({
+    onReset() {
+      // AC-4's one click back to the unfiltered map.
+      engine?.setLayerFilter(ALL_LAYERS);
+    },
+  });
+
+  // Story 5.4. The bar only asks; the engine owns scope and connected-only and
+  // publishes both back on `scope`, which is where the store reads them from.
+  // Same shape as story 3.4's isolate button — one owner for the state, one
+  // event carrying it.
+  const scopeBar = renderScopeBar({
+    onLeaveScope() {
+      engine?.setScope(null);
+    },
+    onReturnToScope() {
+      const target = store.getState().leftScopeId;
+      if (target !== null) engine?.setScope(target);
+    },
+    onConnectedOnly(connectedOnly) {
+      engine?.setConnectedOnly(connectedOnly);
+    },
+  });
+
+  // The bar follows the store, like the start-here panel above it, so the
+  // engine's event and any future caller are one path rather than two.
+  store.subscribe((state) => {
+    scopeBar.update({
+      scopeId: state.scopeId,
+      connectedOnly: state.connectedOnly,
+      hiddenByDegree: state.hiddenByDegree,
+      leftScopeId: state.leftScopeId,
+      // Nothing survived the two filters while a scope is active — the bar
+      // names that cause rather than showing an empty map with no explanation.
+      scopeIsEmpty: state.scopeId !== null && state.scopeVisibleCount === 0,
+    });
+  });
+
   const header = renderHeader(store, options.actions);
   header.querySelector(`#${MODE_SLOT_ID}`)?.append(modeToggle.element);
+  header.querySelector(`#${FILTER_SLOT_ID}`)?.append(layerFilter.element);
+  // Story 5.7's 2D/3D switch. Chrome *places* it and nothing more — the
+  // control is constructed by `app.ts`, which owns swapping the engine, since
+  // chrome may not name a canvas or build an engine (AD-5, boundary.test.ts).
+  // Exactly the arrangement `options.stage` already uses.
+  if (options.viewSwitch) {
+    header.querySelector(`#${VIEW_SLOT_ID}`)?.append(options.viewSwitch);
+  }
+
+  // Story 5.5: the legend reads the document so it can name the heatmap's
+  // near-uniform case, and follows the engine's mode (wired in
+  // `connectEngine`).
+  const legend = renderLegend(analysis);
 
   const main = document.createElement("main");
-  main.append(options.stage, renderLegend(), renderHint(), panel.element);
+  main.append(
+    options.stage,
+    legend.element,
+    renderHint(),
+    panel.element,
+    startHere.element,
+    filterEmpty.element,
+    scopeBar.element,
+  );
   if (options.overlays) main.append(...options.overlays);
 
   root.replaceChildren(header, main);
@@ -134,6 +327,10 @@ export function mountChrome(
     ...store,
     panel,
     modeToggle,
+    startHere,
+    layerFilter,
+    filterEmpty,
+    legend,
     attachEngine(next) {
       engine = next;
     },
@@ -195,6 +392,22 @@ export function connectEngine(
     engine.on("collapse", () => {
       handle.setState({ unfolded: engine.unfoldedModules().length });
     }),
+    // Story 5.4 — appended as its own entry rather than folded into a handler
+    // above, so this wave's three chrome stories stay on disjoint lines.
+    engine.on("scope", (payload) => {
+      handle.setState({
+        scopeId: payload.scopeId,
+        connectedOnly: payload.connectedOnly,
+        hiddenByDegree: payload.hiddenByDegree,
+        scopeVisibleCount: payload.visibleCount,
+        // Mirrored, never inferred. The engine owns whether there is a way
+        // back to offer; chrome deriving it from "was there a previous scope"
+        // is what made the bar claim a search had happened after the user
+        // pressed Escape, and made an offer outlive the document it pointed
+        // into.
+        leftScopeId: payload.returnToScopeId,
+      });
+    }),
     // Isolate state is the engine's, not the panel's. Reading it back from
     // the event it is published on means a change made anywhere — the panel
     // button, a future control, a test — reaches the button and the store.
@@ -205,6 +418,25 @@ export function connectEngine(
     engine.on("mode", ({ mode }) => {
       handle.setState({ mode });
       handle.modeToggle.setMode(mode);
+      // Story 5.5: the legend's heatmap notice follows the mode. One line in
+      // the existing handler rather than a second `mode` subscription —
+      // chrome.test.ts's engine double keys listeners by event name, so a
+      // second subscription silently REPLACES this one and the mode toggle
+      // stops repainting. Relying on the real emitter's Set semantics here
+      // would be a trap for the next reader either way.
+      handle.legend.setMode(mode);
+    }),
+    // Story 5.3, appended as its own entry rather than folded into a handler
+    // above — the convention this wave's five agents agreed on for this array.
+    engine.on("filter", ({ layers, hidden, visible }) => {
+      handle.setState({ visibleLayers: layers, filteredOutCount: hidden });
+      handle.layerFilter.setLayers(layers);
+      handle.layerFilter.setHidden(hidden);
+      // The counts come from the event rather than from `engine.nodes`, which
+      // is deliberately the *unfiltered* set (search and the 5.1 ranking read
+      // it) — subtracting against it here would make chrome re-derive a number
+      // the engine already knows.
+      handle.filterEmpty.update({ visible, hidden });
     }),
   ];
   options.search?.setNodes(engine.nodes);
@@ -213,6 +445,53 @@ export function connectEngine(
   const mode = engine.getMode();
   handle.setState({ mode });
   handle.modeToggle.setMode(mode);
+  // Story 5.3, the same mirror: a subscriber reading `state.visibleLayers`
+  // before the first `filter` event must see the engine's answer, not a
+  // hopeful default.
+  //
+  // The counts are derived here rather than assumed to be zero, because an
+  // engine may already carry a filter by the time it is connected — the
+  // `filter` event that announced it fired before anything was listening, and
+  // assuming "nothing hidden" would leave the count blank and the empty state
+  // shut over a map with nothing on it. Every *later* change takes its counts
+  // from the event; this is the one place chrome counts, once, at connect
+  // time, over the unfiltered node set the engine exposes anyway.
+  const layers = engine.getLayerFilter();
+  const hidden = engine.nodes.filter(
+    (node) => !layers.includes(node.layer),
+  ).length;
+  handle.setState({ visibleLayers: layers, filteredOutCount: hidden });
+  // Story 5.4, the same mirror for the same reason. An engine can already
+  // carry a scope or connected-only by the time chrome connects — a caller
+  // that configures it before wiring, or a reconnection — and the `scope`
+  // event that announced it fired before anyone was listening. Left at their
+  // defaults the bar would show no scope over a scoped map, and its toggle
+  // would then ask for the value already in force, which the setter no-ops:
+  // the control would sit permanently one click out of step.
+  const scopeCounts = engine.hiddenCount();
+  handle.setState({
+    scopeId: engine.getScope(),
+    connectedOnly: engine.getConnectedOnly(),
+    hiddenByDegree: scopeCounts.byDegree,
+    // Taken from the engine, not derived by subtraction: nodes also leave the
+    // frame through the layer filter and through semantic zoom, so
+    // `nodes.length - byScope` would overstate what is on screen and the empty
+    // state would stay shut over an empty map.
+    scopeVisibleCount: scopeCounts.visible,
+    // The pending way back belongs here too. If a search left a scope before
+    // chrome connected, the engine still holds the offer and only the chrome
+    // has forgotten it — the button would stay missing until some unrelated
+    // scope event happened to fire, and the user's way back would be gone
+    // without anything having said so.
+    leftScopeId: engine.getReturnScope(),
+  });
+  handle.layerFilter.setLayers(layers);
+  handle.layerFilter.setHidden(hidden);
+  handle.filterEmpty.update({
+    visible: engine.nodes.length - hidden,
+    hidden,
+  });
+  handle.legend.setMode(mode);
   // The PNG button (3.5) is mounted here rather than in `mountChrome` because
   // this is where the engine handle exists — the header only reserves the slot.
   document
@@ -221,6 +500,9 @@ export function connectEngine(
   return () => {
     handle.attachEngine(null);
     for (const unsubscribe of off) unsubscribe();
-    options.search?.destroy();
+    // Default true, so a page that connects once behaves exactly as before.
+    // A view swap (5.7) passes false: the search box is shared across engines
+    // and outlives any one of them.
+    if (options.destroyControls !== false) options.search?.destroy();
   };
 }

@@ -19,6 +19,10 @@ export interface HeaderActions {
 /** Ids stories 3.4 and 3.5 fill in. Do not rename them. */
 export const MODE_SLOT_ID = "mode-slot";
 export const EXPORT_SLOT_ID = "export-slot";
+/** Story 5.3's layer filter, filled by `mountChrome`. Do not rename. */
+export const FILTER_SLOT_ID = "filter-slot";
+/** Story 5.7's 2D/3D switch, filled by `mountChrome`. Do not rename. */
+export const VIEW_SLOT_ID = "view-slot";
 
 export function renderHeader(
   store: Store<ChromeState>,
@@ -44,6 +48,25 @@ export function renderHeader(
   const modeSlot = document.createElement("div");
   modeSlot.id = MODE_SLOT_ID;
 
+  // Story 5.1 (UX-DR12): the way back to the start-here panel after it has
+  // been dismissed. It writes the store directly rather than taking a new
+  // `HeaderActions` member, so `mountChrome`'s signature — and every existing
+  // caller and test — is unchanged.
+  const startHere = document.createElement("button");
+  startHere.className = "iconbtn";
+  startHere.id = "start-here-button";
+  startHere.type = "button";
+  startHere.title = "Show what to read first";
+  startHere.textContent = "◎ start here";
+  startHere.setAttribute("aria-expanded", "false");
+  startHere.setAttribute("aria-controls", "start-here");
+  startHere.addEventListener("click", () => {
+    // A disclosure, not a one-way door: pressing it while the panel is up
+    // shuts it, which is what `aria-expanded` promises.
+    const open = !store.getState().startHereOpen;
+    store.setState({ startHereOpen: open, startHereShown: true });
+  });
+
   const replay = document.createElement("button");
   replay.className = "iconbtn";
   replay.id = "replay";
@@ -54,7 +77,29 @@ export function renderHeader(
   const exportSlot = document.createElement("div");
   exportSlot.id = EXPORT_SLOT_ID;
 
-  header.append(brand, repo, stats, spacer, modeSlot, replay, exportSlot);
+  // Story 5.3's layer filter. Placed after `replay` by agreement with story
+  // 5.1's owner, whose control goes before it — so two agents appending to
+  // this call in the same wave never edit the same line.
+  const filterSlot = document.createElement("div");
+  filterSlot.id = FILTER_SLOT_ID;
+
+  // Story 5.7's 2D/3D switch. Appended after the filter slot, before export —
+  // its own line and its own slot, so the wave's agents never edit one line.
+  const viewSlot = document.createElement("div");
+  viewSlot.id = VIEW_SLOT_ID;
+
+  header.append(
+    brand,
+    repo,
+    stats,
+    spacer,
+    modeSlot,
+    startHere,
+    replay,
+    filterSlot,
+    viewSlot,
+    exportSlot,
+  );
 
   store.subscribe((state) => {
     repo.textContent = state.repoName;
@@ -66,6 +111,12 @@ export function renderHeader(
       }),
     );
     replay.disabled = state.settling;
+  });
+
+  // Story 5.1 — its own subscription rather than a line inside the one above,
+  // so the two stories' hunks stay disjoint in a shared file.
+  store.subscribe((state) => {
+    startHere.setAttribute("aria-expanded", String(state.startHereOpen));
   });
 
   return header;

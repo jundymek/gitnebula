@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest";
 
-import type { GraphEngine } from "../engine/index.js";
+import { ALL_LAYERS, type GraphEngine } from "../engine/index.js";
 import { exportFilename, renderExportButton } from "./export-button.js";
 import { createStore, type ChromeState } from "./store.js";
 
@@ -23,6 +23,18 @@ function store(repoName = "gitnebula") {
     selected: null,
     isolated: false,
     mode: "structure",
+    // Story 5.1's slice, added for the same reason.
+    startHereOpen: false,
+    startHereShown: false,
+    // Story 5.3's slice, added for the same reason.
+    visibleLayers: ALL_LAYERS,
+    filteredOutCount: 0,
+    // Story 5.4's slice, added for the same reason.
+    scopeId: null,
+    connectedOnly: false,
+    hiddenByDegree: 0,
+    leftScopeId: null,
+    scopeVisibleCount: 0,
   });
 }
 

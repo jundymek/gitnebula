@@ -7,6 +7,8 @@
  * fields, never reshaping the ones already here.
  */
 
+import type { Layer } from "@gitnebula/contract";
+
 import type { EngineNode, ViewMode } from "../engine/index.js";
 
 export type Listener<T> = (state: T) => void;
@@ -61,4 +63,41 @@ export interface ChromeState {
   readonly isolated: boolean;
   /** Story 3.4 — the engine's view mode, mirrored for the toggle (FR-21). */
   readonly mode: ViewMode;
+  // ---- story 5.1 (start-here) — appended, nothing above is reshaped -------
+  /** Whether the start-here panel is on screen (FR-26, UX-DR12). */
+  readonly startHereOpen: boolean;
+  /**
+   * True once the panel has had its first-load moment — whether it opened or
+   * the reader dismissed it before settling ended. It is what keeps the panel
+   * from reappearing on every later settle (a replay is not a first load).
+   */
+  readonly startHereShown: boolean;
+  // ---- story 5.3 (layer filter) — appended, nothing above is reshaped -----
+  /**
+   * The layers currently drawn, mirrored from the engine's `filter` event
+   * (FR-28). The engine owns the filter; this is what the control reads back,
+   * exactly as `mode` mirrors the engine's view mode.
+   */
+  readonly visibleLayers: readonly Layer[];
+  /**
+   * How many nodes the layer filter removes from the frame — its own cause,
+   * never a combined total with another filter's count (UX-DR14).
+   */
+  readonly filteredOutCount: number;
+  // ---- story 5.4 (drill-down) — appended, nothing above is reshaped -------
+  /** The module the map is scoped to, or null for the whole repo (FR-30). */
+  readonly scopeId: string | null;
+  /** Whether degree-0 nodes are being dropped from the frame (AC-3). */
+  readonly connectedOnly: boolean;
+  /**
+   * How many nodes the connected-only filter hid. Story 5.3 carries its own
+   * count for its own cause; the two overlap and are deliberately not summed,
+   * because UX-DR14 asks a hidden state to name its cause and a merged total
+   * names none.
+   */
+  readonly hiddenByDegree: number;
+  /** The scope a search flew out of, offered as a way back (AC-5). */
+  readonly leftScopeId: string | null;
+  /** How many nodes survive both filters; 0 while scoped is the empty state. */
+  readonly scopeVisibleCount: number;
 }

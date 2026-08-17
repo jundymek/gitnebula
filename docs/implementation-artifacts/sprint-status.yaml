@@ -69,6 +69,60 @@ development_status:
   # No AC covers it. Unassigned — the wave is the maintainer's call.
   4.7-viz-root-files: done
 
+  # Epic 5 — Onboarding-First Map (post-MVP), planned 2026-08-15.
+  #
+  # Motivated by the maintainer's verdict after a manual pass on langgraph
+  # (662 nodes): "a library like this has no real value for a developer".
+  # Measured in that pass and quoted in the specs: hover dims 647/650 nodes;
+  # pointer hit-areas cover 78% of the viewport at 6x; 232/650 files carry no
+  # edge; 386/650 have no history in the 90-day window; the 128 co-change
+  # pairs the contract already carries are unused by the UI.
+  #
+  # ONE branch, `epic/5-onboarding`, unlike Epic 4's three. Wave A merges into
+  # it; wave B launches FROM it (AGENT_PR_BASE_BRANCH=epic/5-onboarding) with
+  # wave A already in the base — which is what makes 5.6's dependency on 5.5 a
+  # base-state fact rather than a cross-wave block. The epic reaches master as
+  # a single merge commit after the maintainer's manual verification.
+  #
+  # Wave A — disjoint territories, all Depends_on []:
+  5.1-viz-start-here: done
+  5.2-viz-hover-fix: done
+  5.3-viz-layer-filter: done
+  5.4-viz-drill-down: done
+  5.5-viz-history-window: done
+  # Wave B — launched after wave A lands on the epic branch:
+  5.6-viz-blast-radius: done
+  5.7-viz-3d-view: done
+  # 5.8 documents what 5.1-5.7 build, so it is worked and merged last. Its
+  # Depends_on is [] because the harness stores exactly one blocking
+  # predecessor and seven cannot be declared — the ordering is the
+  # supervisor's, exactly as it was for 4.3.
+  5.8-repo-docs-refresh: done
+  # 5.9 was written by the epic-5 supervisor during wave A, with the
+  # maintainer's agreement, from a defect no story owned: the cli test command
+  # in six specs matches no project and exits 0. Unassigned — the wave it
+  # lands in is the maintainer's call. The row exists so that a merged PR for
+  # it cannot stop sprint-status.sh with a key the file does not carry.
+  5.9-repo-test-command-false-green: done
+  # 5.10 was written by the epic-5 supervisor during wave B, with the
+  # maintainer's agreement, from a defect no story owned: a literal NUL byte
+  # in packages/viz/src/engine/layout.ts makes our own scanner read the file
+  # as binary, so gitnebula's map of gitnebula shows its layout engine at
+  # loc 0. Unassigned — the wave it lands in is the maintainer's call. The row
+  # exists so that a merged PR for it cannot stop sprint-status.sh with a key
+  # the file does not carry.
+  5.10-viz-nul-separator: done
+  # 5.11 and 5.12 were written by their own agents on 2026-08-16, from defects the
+  # maintainer found in his own pass over the running map: start-here ranked by
+  # in-degree surfaced barrels rather than the code that explains the repository,
+  # and one 40,655-line generated fixture dominated the map and dragged
+  # packages/ into layer `test`. Both merged into the epic (PRs #73 and #72), so
+  # both read done. Written by hand rather than by measurement because each
+  # landed from a branch named for its author's earlier story, which is the one
+  # case sprint-status.sh cannot derive.
+  5.11-viz-start-here-ranking: done
+  5.12-scanner-data-blob: done
+
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
   M2: "Epic 2 merged: gitnebula run in the fixture repo emits a valid analysis.json and the viewer renders fixtures"

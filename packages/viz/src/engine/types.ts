@@ -84,6 +84,53 @@ export interface GraphEngineEventMap {
     readonly focusId: string | null;
     readonly isolated: boolean;
   };
+  /**
+   * The layer filter changed (5.3). `layers` is the surviving set in
+   * `ALL_LAYERS` order; `hidden` and `visible` are node counts, so chrome can
+   * name the cause and decide on its empty state without counting nodes — or
+   * subtracting against `nodes`, which is deliberately the *unfiltered* set.
+   */
+  filter: {
+    readonly layers: readonly Layer[];
+    readonly hidden: number;
+    readonly visible: number;
+  };
+  /**
+   * The scope or the connected-only filter changed (story 5.4). Carries what
+   * chrome needs to state the current frame without asking the canvas
+   * anything: the active scope, the two hidden counts kept apart by cause
+   * (UX-DR14), and — when a search flew out of a scope — the scope it left,
+   * so the chrome can offer a one-click way back (AC-5).
+   */
+  scope: {
+    readonly scopeId: string | null;
+    readonly connectedOnly: boolean;
+    readonly hiddenByScope: number;
+    readonly hiddenByDegree: number;
+    /**
+     * How many nodes survive both filters. Zero while a scope is active is the
+     * empty state AC-3 has to name rather than show as a blank map — and it is
+     * knowledge only the engine has, since chrome never sees the scene (AD-5).
+     */
+    readonly visibleCount: number;
+    /**
+     * Set only on the transition where a search left an active scope; null
+     * otherwise. A silent no-op is not acceptable for AC-5, so the event has
+     * to be able to say *why* the scope went away.
+     */
+    readonly leftForId: string | null;
+    /**
+     * The scope the chrome should currently offer as a way back, or null for
+     * "offer nothing" (AC-5).
+     *
+     * Deliberately the **state of the offer**, not a breadcrumb of the last
+     * scope visited. Chrome mirrors this field and infers nothing: a offer
+     * derived in the chrome from "was there a previous scope" would greet a
+     * user who pressed Escape with "left the scope to reach your search
+     * result", and would survive a document being replaced.
+     */
+    readonly returnToScopeId: string | null;
+  };
 }
 
 export type GraphEngineEvent = keyof GraphEngineEventMap;
@@ -201,6 +248,119 @@ export interface GraphEngine {
   /** Module ids currently unfolded into their file nodes. */
   unfoldedModules(): readonly string[];
   isUnfolded(moduleId: string): boolean;
+
+  // ---- layer filter (story 5.3, FR-28) ---------------------------------
+
+  /** The layers currently drawn, in `ALL_LAYERS` order. */
+  getLayerFilter(): readonly Layer[];
+
+  /**
+   * Restrict the frame to `layers`.
+   *
+   * **Excluded means not drawn, never dimmed** — a node whose layer is absent
+   * leaves the scene entirely, so it cannot be hovered, picked, or counted as
+   * pointer hit-area. Dimming is the hover encoding's business (5.2) and this
+   * is deliberately not it.
+   *
+   * Filtering is a frame concern, not a layout concern: the simulation keeps
+   * running on the whole graph, so switching a layer back on restores nodes
+   * exactly where they were and never re-runs the settle.
+   */
+  setLayerFilter(layers: readonly Layer[]): void;
+
+  // ---- scope and connected-only (story 5.4, FR-30) ---------------------
+
+  /** The module the map is scoped to, or null for the whole repository. */
+  getScope(): string | null;
+
+  /**
+   * Scope the map to a module, or leave the scope with `null`.
+   *
+   * A frame concern only: the simulation keeps running on the whole graph and
+   * positions do not move, which is what makes leaving instant and keeps the
+   * settle from being re-run (AC-4). Passing an id that is not a module in the
+   * document leaves the scope rather than scoping to nothing.
+   */
+  setScope(moduleId: string | null): void;
+
+  /** Whether degree-0 nodes are being dropped from the frame (AC-3). */
+  getConnectedOnly(): boolean;
+  setConnectedOnly(connectedOnly: boolean): void;
+
+  /**
+   * The scope currently offered as a way back after a search left one, or null
+   * for "offer nothing" (AC-5).
+   *
+   * On the interface so chrome can mirror it when it connects: the `scope`
+   * event that created the offer may have fired before anything was
+   * listening, and an offer the engine still holds but the chrome cannot see
+   * is a way back the user has silently lost.
+   */
+  getReturnScope(): string | null;
+
+  /**
+   * Restore the pending "return to scope" offer (story 5.7).
+   *
+   * The offer is normally *created* by the engine, when a search flies out of
+   * an active scope — there is deliberately no other way to raise one, because
+   * an offer that did not come from that transition would tell the user a
+   * search happened that did not.
+   *
+   * This exists for one caller and one purpose: **carrying the offer across a
+   * view swap.** Rebuilding the engine for the other view resets it, and the
+   * reader — who is still looking at the same search result — would silently
+   * lose their way back. `getReturnScope()` is a getter with no counterpart,
+   * so there was no way to hand the state to the replacement engine.
+   *
+   * It sets the offer and nothing else: no event, no camera move, no scope
+   * change. `connectEngine` mirrors `getReturnScope()` when it attaches, which
+   * is what puts the restored offer back on screen, so publishing here would
+   * only duplicate it.
+   *
+   * Added late in epic 5 and implemented in both engines. ADR-0007 notes that
+   * an addition to this interface is now a cross-story change, because it has
+   * to be implemented twice; this one was escalated to the maintainer rather
+   * than taken unilaterally.
+   */
+  setReturnScope(moduleId: string | null): void;
+
+  /**
+   * How many nodes each filter is currently hiding, kept apart by cause.
+   * Never a combined total — UX-DR14 asks a hidden state to name its cause,
+   * and the two counts are not additive.
+   */
+  hiddenCount(): {
+    readonly byScope: number;
+    readonly byDegree: number;
+    /**
+     * How many nodes actually survive every filter and can be drawn right now.
+     * Reported rather than left to the caller to subtract: the survivors are
+     * what is left after scope, connected-only, story 5.3's layers AND
+     * semantic zoom, and a caller doing the arithmetic from the two counts
+     * above would silently miss the last two.
+     */
+    readonly visible: number;
+  };
+
+  // ---- blast radius (story 5.6, FR-27) ---------------------------------
+
+  /**
+   * Mark a node's co-change partner set on the map, or clear it with `null`.
+   *
+   * A **frame** concern, like the layer filter and the scope before it:
+   * nothing moves, nothing is added to the graph, and no edge is drawn between
+   * the node and its partners. Co-change is not a dependency, and an edge
+   * would say it is. The partners are marked where they already sit.
+   *
+   * The Viewer computes no partner set of its own (AD-1) — the ids come from
+   * the contract's `cochanges`, which chrome reads. `[]` and `null` both mean
+   * "nothing marked"; an id that is not in the document is ignored rather than
+   * rejected, so a stale set degrades to marking less, never to throwing.
+   */
+  setBlastRadius(ids: readonly string[] | null): void;
+
+  /** The partner set currently marked; empty when nothing is. */
+  getBlastRadius(): readonly string[];
 
   // ---- export (story 3.5) ----------------------------------------------
 
