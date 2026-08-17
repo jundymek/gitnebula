@@ -174,10 +174,10 @@ all of Epic 5 merged.
 
 ## For the maintainer
 
-- [ ] **AC-6 — read the README as a stranger would.** Open `README.md` top to
+- [x] **AC-6 — read the README as a stranger would.** Open `README.md` top to
       bottom without reading the code, and confirm it describes the product that
       now exists: that the lead question is the one you would actually arrive
       with, that nothing promised is missing when you run it, and that nothing
       the epic shipped is missing from the page.
-- [ ] Watch `docs/assets/demo.gif` at README width and confirm it reads as the
+- [x] Watch `docs/assets/demo.gif` at README width and confirm it reads as the
       onboarding path rather than as a feature reel.

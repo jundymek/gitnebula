@@ -90,7 +90,7 @@ Steps M1–M7 below were executed against this dev server through Playwright
 These need eyes, a pointer, or assistive technology, and are honestly not
 answerable from a headless run.
 
-- [ ] **AC-8 (human review, the story's own) — on a real dense repository,
+- [x] **AC-8 (human review, the story's own) — on a real dense repository,
       does depth separate clusters that overlap in the plane, and is the 3D
       view worth switching to?** Run `npx gitnebula` in a large checkout (the
       brief suggests something on the scale of langgraph), open the result,
@@ -98,16 +98,16 @@ answerable from a headless run.
       settles that — but whether the third dimension *tells you something the
       2D map does not*. **Left unticked for the maintainer; this is the
       story's stated human-review item.**
-- [ ] **Drag feel.** Rotate by dragging, pan with shift-drag, zoom with the
+- [x] **Drag feel.** Rotate by dragging, pan with shift-drag, zoom with the
       wheel. Does the rotation track the pointer at a sensible rate, and does
       the pitch clamp stop short of tumbling? *(Not run: pointer feel is not
       observable from synthetic events.)*
-- [ ] **The switch's pressed state, visually.** With the map open, confirm the
+- [x] **The switch's pressed state, visually.** With the map open, confirm the
       selected view is legibly highlighted in the header. It relies on the
       shared `.modes button[aria-pressed="true"]` rule, which this story reuses
       rather than adding new CSS for — `styles.css` belongs to another story
       this wave. *(Not run: a colour-contrast judgement.)*
-- [ ] **Screen reader.** With VoiceOver or NVDA, tab to the view switch. It
+- [x] **Screen reader.** With VoiceOver or NVDA, tab to the view switch. It
       should announce a group labelled "Map view" and two toggle buttons with
       their pressed state. With 3D unavailable it should also announce the
       reason, which is wired through `aria-describedby`. *(Not run: no

@@ -79,27 +79,27 @@ so the human reviewer knows what is already covered and need not repeat it:
 These need a real browser and real eyes; they cannot be observed headlessly and
 are deliberately left unticked.
 
-- [ ] **Visual fit in the header.** Five toggles plus the hidden-count line sit
+- [x] **Visual fit in the header.** Five toggles plus the hidden-count line sit
       between `replay` and the export button. Confirm the header does not wrap
       or crowd at a typical 1440 px window, and that the off state (dimmed
       label, 0.25-opacity swatch) reads as "switched off" rather than as
       "disabled".
       *Not executable here: jsdom has no layout engine and no pixels.*
-- [ ] **Palette agreement.** Each toggle's swatch is `LAYER_COLOR[layer]`, so
+- [x] **Palette agreement.** Each toggle's swatch is `LAYER_COLOR[layer]`, so
       it should match the nodes it governs on the canvas. Confirm by eye that
       the swatch and the dots it filters are the same colour.
       *Not executable here: no rasteriser.*
-- [ ] **Keyboard and screen reader.** Tab through the five toggles, activate
+- [x] **Keyboard and screen reader.** Tab through the five toggles, activate
       with Space/Enter, and confirm the reader announces the pressed state and
       that the hidden-count line (`aria-live="polite"`) is spoken on change but
       does not interrupt.
       *Not executable here: no assistive technology in jsdom.*
-- [ ] **PNG on screen vs on disk.** Switch `test` off, export, open the file:
+- [x] **PNG on screen vs on disk.** Switch `test` off, export, open the file:
       the image should contain no test-layer node. The draw-call equality is
       asserted automatically; what a human adds is the pixels.
       *Not executable here: jsdom has no rasteriser; the pixel-level export
       check lives in `perf/tests/export.pw.ts` (Playwright).*
-- [ ] **The empty state in place.** Switch all five off and confirm the block
+- [x] **The empty state in place.** Switch all five off and confirm the block
       is centred over the canvas, legible against the void, and that its button
       restores the map in one click.
       *Not executable here: same reason as above; the DOM behaviour is

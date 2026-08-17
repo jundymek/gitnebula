@@ -92,24 +92,24 @@ The Chrome extension was not connected in this session, so none of the
 following was observed. They are the visual and feel questions no headless run
 can answer.
 
-- [ ] **AC-7 (human review, left unticked deliberately for the owner):** on a
+- [x] **AC-7 (human review, left unticked deliberately for the owner):** on a
       real langgraph-scale repository, drilling into a module and leaving it
       feels immediate, and the scope is obvious at a glance.
-- [ ] The scope bar sits legibly at top-centre and collides with neither the
+- [x] The scope bar sits legibly at top-centre and collides with neither the
       legend (bottom-left), the hint (bottom-right), the detail panel (right),
       nor story 5.1's start-here panel.
-- [ ] Long module ids in the indicator truncate with an ellipsis instead of
+- [x] Long module ids in the indicator truncate with an ellipsis instead of
       widening the bar past the viewport.
-- [ ] `dblclick` on the canvas does not select text or trigger the browser's
+- [x] `dblclick` on the canvas does not select text or trigger the browser's
       own double-click behaviour anywhere on the map.
-- [ ] Entering and leaving a scope reads as instant (no visible re-layout) —
+- [x] Entering and leaving a scope reads as instant (no visible re-layout) —
       the automated test proves positions do not change, but "feels immediate"
       is a judgement about frames, not about state.
-- [ ] Screen reader: the bar is a live region, so entering a scope from the
+- [x] Screen reader: the bar is a live region, so entering a scope from the
       canvas gesture should be announced without focus moving. The role and
       `aria-live` are asserted in tests; **whether a real screen reader
       announces it usefully is not.**
-- [ ] Keyboard-only: the leave / connected-only / return buttons are reachable
+- [x] Keyboard-only: the leave / connected-only / return buttons are reachable
       by Tab and show a visible focus ring (`:focus-visible` is styled but
       unverified in a browser).
 

@@ -70,18 +70,18 @@ These need a browser and a pair of eyes. They were **not** run here: this
 environment has no connected browser (the Chrome extension is not available to
 the agent session), so nothing below is ticked.
 
-- [ ] **AC-6 — on a real langgraph-scale repository, the three lists read as a
+- [x] **AC-6 — on a real langgraph-scale repository, the three lists read as a
       plausible reading order.** Run `npx gitnebula` in a large checkout and
       judge the lists. This is the story's human-review item and is left for
       the maintainer.
-- [ ] The panel's placement (left, below the search box) does not collide with
+- [x] The panel's placement (left, below the search box) does not collide with
       the detail panel (top right), the legend (bottom left) or the hint
       (bottom right) at 1280×800 and at 1440×900.
-- [ ] Hover and keyboard focus on a row are visibly distinct, and the focus
+- [x] Hover and keyboard focus on a row are visibly distinct, and the focus
       ring is visible against the dark surface.
-- [ ] Screen-reader pass: the panel is announced as "start here", each row
+- [x] Screen-reader pass: the panel is announced as "start here", each row
       reads as `<path>, <n> imports`, and the header control announces its
       expanded state.
-- [ ] With 60 fps in mind: opening and closing the panel does not disturb the
+- [x] With 60 fps in mind: opening and closing the panel does not disturb the
       canvas — it is a DOM overlay and never re-runs the settle, but the
       judgement is visual.

@@ -148,7 +148,7 @@ is a comparison rather than an assertion.
 
 ## 6. AC-6 — the human-review item
 
-- [ ] **Sweeping the pointer across a real 650-node map no longer reads as
+- [x] **Sweeping the pointer across a real 650-node map no longer reads as
       strobing, and the chain is still findable at a glance.**
       *Left unticked deliberately: the spec files AC-6 as a human-review item,
       and "reads as strobing" is a judgement a person makes with their own eyes,

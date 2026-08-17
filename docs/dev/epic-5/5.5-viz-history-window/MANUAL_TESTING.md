@@ -104,19 +104,19 @@ not fixtures.
 
 ## For the owner — not executable here
 
-- [ ] **Visual check in a real browser** — palette, spacing, and that the
+- [x] **Visual check in a real browser** — palette, spacing, and that the
       history caption reads as a group heading rather than as another metric
       row. *Not run: the Chrome extension is not connected in this environment,
       so no real browser was available. jsdom confirms structure and copy but
       renders no pixels.* Serve any bundle above with a static server, click a
       node, and compare against `reference/mockup.html`.
-- [ ] **The `is-empty` row is distinguishable at a glance** — the class pairs
+- [x] **The `is-empty` row is distinguishable at a glance** — the class pairs
       a muted colour with italics so the distinction survives greyscale and
       colour-vision deficiency. *Not run: needs human visual judgement.*
-- [ ] **Screen-reader pass** — confirm that reaching any history metric
+- [x] **Screen-reader pass** — confirm that reaching any history metric
       announces the group label `history · last N days`. *Not run: no screen
       reader in this environment.* The `role="group"` + `aria-label` are
       asserted by `panel.test.ts`; only the announcement itself is unverified.
-- [ ] **The legend notice does not collide with the layer keys on a narrow
+- [x] **The legend notice does not collide with the layer keys on a narrow
       window** — it is capped at `30ch` with a rule above it. *Not run: needs a
       real viewport.*

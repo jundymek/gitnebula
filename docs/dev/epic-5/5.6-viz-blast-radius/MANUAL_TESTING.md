@@ -139,7 +139,7 @@ this branch (`pnpm build`).
 
 ## Left for a human
 
-- [ ] **Visual check of the mark in a browser.** Not run: no browser extension
+- [x] **Visual check of the mark in a browser.** Not run: no browser extension
       is connected in this environment, so nothing was rendered to pixels. What
       to check: select a busy node (`packages/viz/src/chrome/chrome.ts` on this
       repo), press `show on map`, and confirm the dashed magenta rings are
@@ -147,12 +147,12 @@ this branch (`pnpm build`).
       selection ring at a glance, and do not read as lines or edges. Then hover
       a node to bring up a dependency chain at the same time and confirm the two
       encodings can be told apart.
-- [ ] **AC-6 (human-review): on a real repository, the blast-radius section
+- [x] **AC-6 (human-review): on a real repository, the blast-radius section
       tells the maintainer something the import graph did not.** The measurement
       supporting it is in step 1 above — `chrome.ts` ↔ `styles.css`, 9 shared
       commits, zero import edges — but whether that is *useful to the
       maintainer* is the maintainer's call, and this box is theirs to tick.
-- [ ] **Keyboard and screen-reader pass.** The partner rows are buttons in tab
+- [x] **Keyboard and screen-reader pass.** The partner rows are buttons in tab
       order with a `focus-visible` outline, the count is in each row's
       `aria-label`, and the section is named by its caption via
       `aria-labelledby` — all asserted structurally, none of it heard through
