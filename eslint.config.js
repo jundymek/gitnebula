@@ -10,6 +10,10 @@ export default tseslint.config(
       "test-fixtures/.generated/**",
       "_bmad/**",
       "reference/**",
+      // Untracked promo-video workspace (see .gitignore) — not project source.
+      // Listed here too, or the lint is red in a working copy that has it and
+      // green on a fresh clone, which teaches everyone to ignore a red lint.
+      "marketing/**",
       // Generated from analysis.schema.json (AD-9) — the generator owns its
       // formatting, and CI fails on any drift from a fresh regeneration.
       "packages/contract/src/generated/**",
