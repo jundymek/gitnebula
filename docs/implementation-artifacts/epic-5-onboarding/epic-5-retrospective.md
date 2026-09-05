@@ -19,8 +19,11 @@ source, that is marked.
 
 The immediate reason to write it now is that Epic 6 is being planned and epics
 1–4 each handed their successor a "next-epic readiness" statement. Epic 5 did
-not, and the Epic 6 planning handover (`docs/dev/epic-6-planning-handover.md`)
-flags the absence as a loose end.
+not, and a planning handover written by the SpecWitness side on the same day
+flagged the absence as a loose end. (That handover was deleted after this
+retrospective was written: checking it against the tree showed several of its
+claims about test coverage to be stale. What survived the check is quoted
+inline here and in `epics.md`'s Epic 6 section.)
 
 ## Delivery summary
 
@@ -412,9 +415,11 @@ holding two epics later.
 
 ## Next-epic readiness
 
-**Epic 6 can start**, and the handover in `docs/dev/epic-6-planning-handover.md`
-has already done its research. Three things from this retrospective feed it
-directly:
+**Epic 6 can start.** A planning handover from the SpecWitness side did the
+first pass of the research; it was checked against the tree during planning,
+several of its coverage claims turned out to be stale, and it was deleted once
+what survived had been folded into `epics.md`'s Epic 6 section. Three things
+from this retrospective feed that epic directly:
 
 1. **Debt item 6 is Epic 6's subject.** Observation 1 is the strongest possible
    argument for it and a warning about its limits in the same breath: a browser

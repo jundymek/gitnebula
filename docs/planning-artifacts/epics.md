@@ -36,7 +36,13 @@ epic6:
     - CLAUDE.md
     # Specific to this epic: the evidence that motivates it and the
     # conventions the new suite inherits rather than invents.
-    - docs/dev/epic-6-planning-handover.md
+    # A planning handover written by the SpecWitness side on 2026-09-05 was
+    # read as an input and then deleted by the maintainer, because verifying
+    # it against the tree showed several of its claims to be stale — picking,
+    # the 2D/3D swap and reduced-motion boot are all already covered, and it
+    # under-counted the epic-5 manual-testing walk. What survived the check is
+    # quoted inline in the Epic 6 section rather than cited to a file that no
+    # longer exists.
     - docs/implementation-artifacts/epic-5-onboarding/epic-5-retrospective.md
     - docs/planning-artifacts/human-review-checklist-v2-post-epic-5.md
     - packages/viz/perf/playwright.config.ts
