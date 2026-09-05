@@ -8,7 +8,7 @@ inputDocuments:
   - reference/mockup.html
   - CLAUDE.md
 epic5:
-  stepsCompleted: [1, 2, 3]
+  stepsCompleted: [1, 2, 3, 4]
   added: 2026-08-15
   branch: epic/5-onboarding
   inputDocuments:
@@ -22,6 +22,42 @@ epic5:
   # The measurements that justify FR-29..FR-31 were taken in-session on a real
   # langgraph checkout (662 nodes) rather than read from a document; they are
   # recorded inline in the Epic 5 section so the reasoning survives the session.
+epic6:
+  stepsCompleted: [1, 2, 3, 4]
+  added: 2026-09-05
+  branch: epic/6-assembled-viewer
+  inputDocuments:
+    - docs/planning-artifacts/prds/prd-gitnebula-2026-08-10/prd.md
+    - docs/planning-artifacts/prds/prd-gitnebula-2026-08-10/addendum.md
+    - docs/planning-artifacts/architecture.md
+    - docs/planning-artifacts/architecture/architecture-gitnebula-2026-08-10/ARCHITECTURE-SPINE.md
+    - docs/GITNEBULA_PROJECT_BRIEF.md
+    - reference/mockup.html
+    - CLAUDE.md
+    # Specific to this epic: the evidence that motivates it and the
+    # conventions the new suite inherits rather than invents.
+    - docs/dev/epic-6-planning-handover.md
+    - docs/implementation-artifacts/epic-5-onboarding/epic-5-retrospective.md
+    - docs/planning-artifacts/human-review-checklist-v2-post-epic-5.md
+    - packages/viz/perf/playwright.config.ts
+    - packages/viz/bundle/playwright.config.ts
+  # This epic introduces NO new FR. It verifies behaviour that FR-26..FR-33
+  # already define and that Epic 5 already shipped; each story names the
+  # requirement it covers rather than minting one. Decided with the maintainer
+  # on 2026-09-05 — the product does not change for the user, so there is no
+  # functional requirement to add, and the brief's "do not widen scope" rule
+  # applies to verification work as much as to features.
+  #
+  # Two scope decisions taken at planning time, both of which a story agent
+  # must not relitigate:
+  #   1. The suite runs OUTSIDE `pnpm test`, as its own script, exactly as
+  #      `perf` and `bundle-check` already do. It claims port 4320 and the
+  #      env var UI_PORT, continuing the PERF_PORT 4318 / BUNDLE_PORT 4319
+  #      series.
+  #   2. It covers ONLY what jsdom structurally cannot reach. ~318 jsdom tests
+  #      across 21 files in packages/viz/src/chrome/ already assert the
+  #      readouts, driving the components with fake engines; re-asserting them
+  #      through a browser would be duplication in a slower harness.
 ---
 
 # gitnebula - Epic Breakdown
@@ -175,6 +211,13 @@ FR-31: Epic 5 — analysis window in the UI
 FR-32: Epic 5 — 3D view
 FR-33: Epic 5 — README and docs refresh
 
+**Epic 6 adds no FR row, deliberately.** It verifies behaviour FR-26..FR-33
+already define and Epic 5 already shipped; the product does not change for the
+reader, so there is no functional requirement to mint. Each of its stories
+names the requirement it covers instead. Its verification targets are, by
+story: 6.2 → FR-32 + AD-5/AD-6, 6.3 → AD-7/AD-12 + NFR-11, 6.4 → FR-27/FR-26 +
+UX-DR14, 6.5 → FR-28 + UX-DR13.
+
 ## Epic List
 
 > **Deviation note (deliberate):** epics here are integration cohorts for
@@ -231,6 +274,20 @@ order, can trace what changes together, and can filter the map down to the
 part they care about — in 2D or in 3D.
 **FRs covered:** FR-26, FR-27, FR-28, FR-29, FR-30, FR-31, FR-32, FR-33
 **Stories:** 8, in two waves on one shared epic branch (see below).
+
+### Epic 6: The Assembled Viewer, Verified (post-MVP)
+
+Added 2026-09-05. The viewer is well covered part by part and **not covered at
+all as an assembled whole**: `boot()` — the ~120 lines that fetch the document,
+mount the chrome, parse `?view=3d` and build the engine — is executed by no
+test in the repository. Its only caller is `main.ts:9`. After merge, the path a
+reader actually takes is verified end to end in a real browser, the first
+screen a failed load produces is verified at all, and the two validators that
+guard the same document are checked against each other rather than separately.
+
+**FRs covered:** none new — verifies FR-26..FR-33, AD-5, AD-6, AD-7, AD-12,
+NFR-11, UX-DR13, UX-DR14.
+**Stories:** 5, in two waves on one shared epic branch, `epic/6-assembled-viewer`.
 
 > **Why one epic and not three.** Every story here is `Owner: viz` and most
 > touch `chrome/` and `engine/`. Splitting them across epics would be the
@@ -908,3 +965,307 @@ So that the documentation does not promise the previous version's product (FR-33
 **Given** `CLAUDE.md`'s frozen-artifact rule
 **When** documentation is updated
 **Then** completed-work sections are appended to, never rewritten, and the epic's ADRs are listed in `docs/adr/`.
+
+## Epic 6: The Assembled Viewer, Verified (post-MVP)
+
+Added 2026-09-05. One branch, `epic/6-assembled-viewer`; wave A (6.1, 6.5)
+merges into it, wave B (6.2–6.4) starts from it, and the whole epic reaches
+`master` as one merge commit after the maintainer's walk — the shape Epic 5
+used.
+
+**Why this epic exists, stated precisely.** An earlier framing — "nothing
+drives the chrome through a real browser" — was checked against the tree and is
+false. `packages/viz/perf/` and `packages/viz/bundle/` already carry 14
+Playwright tests covering frame rate, reduced-motion boot, export pixel parity
+and the built bundle; `engine.pick()` is tested against real geometry by a grid
+scan over a settled map (`engine.test.ts:290-305`); the 2D↔3D state carry-over
+has 15 tests (`app-view-swap.test.ts`); the 3D view is a perspective projection
+onto a 2D canvas, so **no WebGL path exists to fall back from**. Roughly 318
+jsdom tests across 21 files in `packages/viz/src/chrome/` already assert the
+readouts. **Re-asserting any of that through a browser would be duplication in
+a slower harness**, and this epic must not do it.
+
+What is true is narrower and worse:
+
+- **`boot()` is executed by no test in the repository.** Its only caller is
+  `main.ts:9`. That is ~120 lines that fetch the document, render the error
+  screen on failure, mount the chrome, parse `?view=3d`, and build the engine.
+- **The real `swapEngine()` is never called either.** Its four ordering
+  constraints — the switch reflecting what was *built* rather than requested,
+  the probe not erasing a constructor's reason, `publishHarnessHandle` **before**
+  `load()` because reduced motion settles synchronously inside it, and
+  `restoreState` after `load()` but before `connectEngine` — each document a
+  defect they exist to prevent, and each is guarded only by a **hand-maintained
+  duplicate** of the carry logic in the test file (`app-view-swap.test.ts:50-69`,
+  whose own comment says it must be "kept in step with" `app.ts`). Deleting a
+  field from `restoreState` would fail nothing.
+- **`renderErrorScreen` has no test at all**, in any harness, while being the
+  first and only thing a reader sees when a load fails — from three call sites
+  and six distinct failure constructions.
+- **Two validators guard the same document and nothing checks them against each
+  other.** `packages/cli/src/assemble.ts` validates with ajv against a schema
+  that is `additionalProperties: false` throughout; `packages/viz/src/loader.ts`
+  re-checks with hand-written predicates over a subset — deliberately, to keep
+  the bundle self-contained. Measured: the schema requires **12** node fields,
+  `isNodeShaped` checks **6**; the schema requires **4** edge fields,
+  `isEdgeShaped` checks **2**; `cochanges` is `required` at document level and
+  the loader asserts only that it is an array, never inspecting an element.
+- **Control reachability under real layout is guarded by a regex over the
+  stylesheet.** `blast-radius.test.ts:412-431` asserts that `max-height:` and
+  `overflow-y: auto` appear in the `.p-blast-list` and `#panel` rules, and its
+  own comment calls this "a weaker check than a rendered one". It would pass
+  with `max-height: 0`. Three regions depend on real viewport height (`#panel`,
+  `#start-here`, `.p-blast-list`), and `body` is `overflow: hidden`, so content
+  past the fold is **unreachable rather than merely off-screen** — the risk
+  `styles.css:874-881` documents and story 5.6 left unticked.
+
+**Two planning decisions a story agent must not relitigate.**
+
+1. **The suite runs outside `pnpm test`**, as its own script, exactly as `perf`
+   and `bundle-check` do. It claims port **4320** and the env var **`UI_PORT`**,
+   continuing the `PERF_PORT` 4318 / `BUNDLE_PORT` 4319 series, and keeps that
+   series' `reuseExistingServer: false` + `--strictPort` rule, which exists
+   because a green run was once traced by `lsof` to another worktree entirely.
+2. **It covers only what jsdom structurally cannot reach.** Every acceptance
+   criterion below names what makes its subject unreachable in jsdom. A
+   criterion that could be satisfied by a vitest test does not belong here.
+
+**Fixtures.** No new fixture is needed and none may be added: `root-files`
+carries 6 nodes across **three** layers (`backend` 2, `infra` 2, `test` 1) with
+**3** cross-layer file edges and the only committed co-change pair
+(`fp/proxy.py` ↔ `test_proxy.py`, 7 commits), which covers the layer filter and
+blast radius together. `module-zero-files` is the only fixture carrying layer
+`other`. `GITNEBULA_FIXTURE` selects the document and a missing one 404s loudly
+by design.
+
+### Story 6.1: The `ui` suite skeleton (`6.1-viz-ui-suite`)
+
+Owner: `viz` · Touches: `packages/viz/perf/src/` (helper promotion) ·
+Depends_on: `[]` · Cohort: wave A
+
+As the maintainer,
+I want a browser suite that can be run on demand and is proven able to fail,
+So that later stories add coverage instead of each inventing a harness
+(retrospective observation 7: a check that can quietly report clean is not a
+check).
+
+**Acceptance Criteria:**
+
+**Given** the conventions the `perf` and `bundle` suites already established
+**When** the `ui` suite is created
+**Then** it lives at `packages/viz/ui/` with `testDir: "./tests"`,
+`testMatch: "**/*.pw.ts"`, `workers: 1`, `fullyParallel: false`, `retries: 0`, a
+fixed viewport and `deviceScaleFactor: 1`
+**And** its dev server is started with `reuseExistingServer: false` and
+`--strictPort` on port **4320**, overridable by `UI_PORT`
+**And** it is invoked by `pnpm --filter @gitnebula/viz ui` and is **not** part
+of `pnpm test`, matching `perf` and `bundle-check`.
+
+**Given** that `openViewer` today lives in `packages/viz/perf/src/page-helpers.ts`
+and is needed by two suites
+**When** the `ui` suite needs it
+**Then** it is promoted to a location both suites import, the `perf` suite is
+updated to the new path, and `pnpm --filter @gitnebula/viz perf` still passes
+**And** no spec calls `page.goto` directly, because navigation resolves before
+the viewer publishes its handle.
+
+**Given** the house rule that a suite must be shown able to fail
+**When** the suite ships
+**Then** it carries at least one negative control in the shape
+`export.pw.ts:165` uses ("the parity check can fail: a stale export stops
+matching a changed screen") — a test that asserts the positive check would go
+red against a deliberately wrong expectation
+**And** `HARNESS_HANDLE_KEY` is imported rather than the string `"__gitnebula"`
+being written out
+**And** every `expect` carries a prose failure message as its second argument.
+
+**Given** `CLAUDE.md`'s rule against unasked-for additions
+**When** the suite is wired
+**Then** no dependency is added beyond what `perf` and `bundle` already use,
+and `docs/dev/epic-6/6.1-viz-ui-suite/README.md` states how to run it and why
+it is not in `pnpm test`.
+
+### Story 6.2: `boot()` and the real view swap, end to end (`6.2-viz-boot-e2e`)
+
+Owner: `viz` · Touches: — · Depends_on: `[6.1-viz-ui-suite]` · Cohort: wave B
+
+As a reader switching between 2D and 3D,
+I want the view change to keep what I was looking at,
+So that the map is a view of my frame rather than a reset (FR-32, AD-5, AD-6).
+
+**Acceptance Criteria:**
+
+**Given** that `boot()` is called by `main.ts:9` alone and by no test
+**When** the viewer is opened in a browser against the `root-files` fixture
+**Then** a test exercises the real `boot()` — not a reconstruction — and
+asserts through the harness handle that an engine was built and `settled`
+resolved
+**And** the same test proves `?view=3d` boots the 3D view directly, which no
+jsdom test can, since `boot()` fetches `analysis.json`.
+
+**Given** a reader who has set a mode, a layer filter, a scope, connected-only
+and a selection
+**When** they click the view switch and then switch back
+**Then** every one of those is carried in both directions, asserted through the
+handle after each swap
+**And** the assertions run against the real `captureState`/`restoreState` in
+`app.ts`, so the duplicate `carry()` helper in `app-view-swap.test.ts` is no
+longer the only thing proving the carry — the story states in its record which
+of the two is now authoritative.
+
+**Given** that `swapEngine` republishes the harness handle on every swap
+**When** a test holds a reference to the handle across a view change
+**Then** the suite documents and demonstrates the trap: the cached `engine` is
+destroyed, and the correct pattern is re-reading `globalThis[HARNESS_HANDLE_KEY]`
+after the swap.
+
+**Given** the ordering constraints inside `swapEngine`
+**When** a 3D swap succeeds
+**Then** the view switch's pressed state reflects the view that was **built**
+**And** when the 3D constructor fails, the reader is left on a working 2D map
+with the constructor's own reason shown rather than a probe's verdict — the
+case `unavailabilityAfterSwap` exists for.
+
+**Given** that jsdom pins `getBoundingClientRect` to a fixed 1200×800 at origin
+(0,0) for every element (`test-support/fake-canvas.ts:113-123`)
+**When** a node is clicked at real screen coordinates in a browser, with the
+canvas sitting below the header
+**Then** the node the reader aimed at is the node that becomes selected,
+asserted through `getSelected()` — the one class of hit-testing bug the jsdom
+grid scan structurally cannot see.
+
+### Story 6.3: The first screen of a failed load, and the seam between two validators (`6.3-viz-load-failure`)
+
+Owner: `viz` · Touches: `packages/cli` (fixture generation only, no source
+change) · Depends_on: `[6.1-viz-ui-suite]` · Cohort: wave B
+
+As a reader whose document is missing or stale,
+I want the viewer to tell me what went wrong and what to do,
+So that a failed load is a message rather than a blank page (AD-7, AD-12).
+
+**Acceptance Criteria:**
+
+**Given** that `renderErrorScreen` has no test in any harness and three call
+sites
+**When** `analysis.json` cannot be loaded
+**Then** each of the loader's failure kinds — `unreachable`, `malformed`,
+`unsupported-version` — renders a screen carrying its title and its detail
+**And** the `file://` case shows the protocol hint, which is the one a reader
+hits by double-clicking the bundle.
+
+**Given** that the screen is built with `textContent` rather than `innerHTML`,
+deliberately
+**When** a failure detail contains markup
+**Then** it is displayed as text and no element is created from it.
+
+**Given** two validators over one document — ajv in `packages/cli/src/assemble.ts`
+against a schema that is `additionalProperties: false` throughout, and
+hand-written predicates in `packages/viz/src/loader.ts`
+**When** the seam is measured
+**Then** the story records the exact difference: the schema requires **12**
+node fields and `isNodeShaped` checks **6** (`parent`, `commits`, `authors`,
+`lastChangedAt`, `description`, `descriptionSource` unchecked); the schema
+requires **4** edge fields and `isEdgeShaped` checks **2** (`kind`, `weight`
+unchecked); `cochanges` is `required` at document level and the loader asserts
+only that it is an array, never inspecting an element
+**And** a test demonstrates the consequence in the browser: a document that ajv
+would reject loads and renders, and the story states for each unchecked field
+whether the viewer degrades safely or misreads it
+**And** the finding is reported, not silently patched — widening the loader is
+a contract-adjacent decision and would need its own story, per `CLAUDE.md`.
+
+**Given** `NFR-11`
+**When** this story closes
+**Then** `analysis.schema.json` is byte-unchanged and `schemaVersion` is still
+`"1.0"`.
+
+### Story 6.4: Every control stays reachable at a real window size (`6.4-viz-reachability`)
+
+Owner: `viz` · Touches: — · Depends_on: `[6.1-viz-ui-suite]` · Cohort: wave B
+
+As a reader on a short screen looking at a file with many co-change partners,
+I want the panel's actions to stay reachable,
+So that content past the fold is scrollable rather than lost (FR-27, FR-26,
+UX-DR14).
+
+**Acceptance Criteria:**
+
+**Given** that `body` is `overflow: hidden`, so anything past the fold is
+unreachable rather than off-screen, and that the current guard
+(`blast-radius.test.ts:412-431`) is a regex over the stylesheet its own comment
+calls "a weaker check than a rendered one"
+**When** the panel is opened on the node with the most co-change partners, at
+a viewport of 1280×800 and again at a height of ~600 px
+**Then** the `show on map` control and the panel's actions are inside the
+viewport and clickable at both sizes
+**And** the check is a rendered one — element boxes measured in the browser —
+not a match against CSS text.
+
+**Given** the three regions bounded by real viewport height — `#panel`,
+`#start-here` and `.p-blast-list`
+**When** each is filled past its cap
+**Then** each scrolls its own content and none pushes a control outside the
+window
+**And** the test would fail if the `max-height` were removed, demonstrated by
+the negative control 6.1 established.
+
+**Given** that jsdom reports `offsetWidth`/`offsetHeight` as 0, so the tooltip's
+flip has never run against a measured box (`tooltip.ts:104-107`)
+**When** a node with a long path is hovered near the right and bottom edges
+**Then** the tooltip's rendered rectangle stays inside the viewport
+**And** the pure `tooltipPosition` function is left unchanged — this story
+tests its real inputs, not its logic, which `tooltip.test.ts` already proves.
+
+**Given** the human-review checklist v2
+**When** this story closes
+**Then** the "scrolling felt in a browser" item that story 5.6 left unticked is
+either ticked with the evidence named, or restated as what remains genuinely
+subjective.
+
+### Story 6.5: Stable hooks for the readouts, and two defects Epic 5 left unowned (`6.5-viz-testids-and-debts`)
+
+Owner: `viz` · Touches: `docs/adr/` · Depends_on: `[]` · Cohort: wave A
+
+As a maintainer restyling the chrome,
+I want the tests to survive a class rename, and the two reported defects closed,
+So that the suite asserts behaviour rather than styling (FR-28, UX-DR13).
+
+**Acceptance Criteria:**
+
+**Given** that existing jsdom tests are pinned to styling classes — `.p-row`
+carries 5 rules in `styles.css`, `.p-badge` 2, `.sh-metric` 1 — so a restyle
+breaks tests that are not about styling
+**When** `data-testid` is added
+**Then** it is added **only** where the current hook is a CSS class **and** the
+value is unreachable from the `GraphEngine` interface: the panel metric rows,
+`.sh-metric`, the legend rows, `.scope-bar-hidden`, `.scope-bar-back` and
+`.p-blast-row`
+**And** controls that already carry an `id`, a `role` + `aria-label` or a
+`data-*` are left alone, and `header.ts`'s two slot ids marked **Do not
+rename** are untouched
+**And** the existing jsdom tests for those regions are moved onto the new hooks,
+so the pass is a net simplification rather than an addition.
+
+**Given** the retrospective's debt 7a: the legend names four layers and `other`
+is the largest layer on this repository (145 of 363 nodes) while `infra` is 3,
+and both currently share the grey `#7c8598`
+**When** the legend is corrected
+**Then** `other` gains its own entry with a fifth hue distinguishable from
+`infra`'s, so every layer-filter toggle has a legend key
+**And** because `reference/mockup.html` knows only four layers, the fifth hue
+is a deliberate departure and lands as an ADR in `docs/adr/` stating context,
+decision and consequences.
+
+**Given** the retrospective's debt 7b: `hiddenCount().visible` short-circuits to
+`graph.nodes.length` when no scope and no connected-only filter is active, so
+it ignores the layer filter, in both the 2D and 3D engines, while the interface
+documents it as the survivors of every filter
+**When** the count is corrected
+**Then** it counts the survivors of the layer filter on that path too, in both
+engines, pinned by a test watched red first
+**And** any readout that displayed the wrong number is corrected with it.
+
+**Given** that this story runs in wave A alongside 6.1
+**When** it is worked
+**Then** it touches no file under `packages/viz/ui/`, so the two branches
+cannot conflict.
