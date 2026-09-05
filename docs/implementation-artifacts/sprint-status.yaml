@@ -123,6 +123,42 @@ development_status:
   5.11-viz-start-here-ranking: done
   5.12-scanner-data-blob: done
 
+  # Epic 6 — The Assembled Viewer, Verified (post-MVP), planned 2026-09-05.
+  #
+  # Motivated by a gap found while planning: `boot()` — the ~120 lines that
+  # fetch the document, render the error screen, mount the chrome, parse
+  # `?view=3d` and build the engine — is executed by no test in the
+  # repository. Its only caller is `packages/viz/src/main.ts:9`. With it, the
+  # real `swapEngine()` and its four ordering constraints are unexercised,
+  # guarded only by a hand-maintained duplicate of the carry logic in
+  # `app-view-swap.test.ts:50-69`; `renderErrorScreen` has no test in any
+  # harness; and two validators guard one document with nothing checking them
+  # against each other (schema requires 12 node fields, the loader's predicate
+  # checks 6; 4 edge fields against 2; `cochanges` asserted only to be an
+  # array).
+  #
+  # The epic deliberately does NOT re-assert what is already covered. Checked
+  # during planning and recorded in `epics.md` so nobody re-derives it: perf
+  # and bundle already carry 14 Playwright tests; `engine.pick()` is tested
+  # against real geometry; the 2D-3D carry-over has 15 tests; the 3D view is a
+  # 2D-canvas projection, so no WebGL path exists; reduced-motion boot is
+  # covered twice over; and ~318 jsdom tests already assert the readouts.
+  #
+  # ONE branch, `epic/6-assembled-viewer`, as epic 5 used. Wave A merges into
+  # it; wave B launches FROM it with wave A already in the base — which is why
+  # 6.2/6.3/6.4's dependency on 6.1 is a base-state fact rather than a
+  # cross-wave block.
+  #
+  # Wave A — disjoint territories (6.1 owns a new directory, 6.5 owns chrome):
+  6.1-viz-ui-suite: backlog
+  6.5-viz-testids-and-debts: backlog
+  # Wave B — launched after wave A lands on the epic branch. All three write
+  # new spec files into the directory 6.1 creates; none of them touches
+  # packages/viz/src.
+  6.2-viz-boot-e2e: backlog
+  6.3-viz-load-failure: backlog
+  6.4-viz-reachability: backlog
+
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
   M2: "Epic 2 merged: gitnebula run in the fixture repo emits a valid analysis.json and the viewer renders fixtures"
