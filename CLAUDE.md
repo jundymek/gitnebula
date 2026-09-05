@@ -44,6 +44,34 @@ spec and this file disagree, the spec wins — and flag the divergence.
 
 - `docs/GITNEBULA_PROJECT_BRIEF.md` — the brief. Scope source of truth.
 - `docs/planning-artifacts/` — PRD, architecture, epics.
+
+### Citing a requirement
+
+**Cite the document that actually carries it.** The PRD
+(`prds/prd-gitnebula-2026-08-10/prd.md`) defines **FR-1..FR-25** and is frozen;
+it has not changed since 2026-08-10 and adding to it is not how this project
+grows. Requirements introduced by a post-MVP epic live in `epics.md`, which
+declares them as such — *"Added 2026-08-15. These extend the inventory;
+FR-1..FR-25 are unchanged."*
+
+So `FR-26` and above are **epic-level requirements**: write `epics.md FR-26`,
+never `PRD FR-26`. Nine Epic 5 specs wrote the latter and point a reader at a
+document that does not contain the requirement it names — a documentation
+defect recorded as observation 3 of the Epic 5 retrospective. Those specs are
+shipped and frozen; this rule is for every spec written from now on.
+
+Where each identifier is actually defined, verified 2026-09-05:
+
+| identifier | defined in |
+| --- | --- |
+| `FR-1`..`FR-25` | `prds/prd-gitnebula-2026-08-10/prd.md` (frozen) |
+| `FR-26`..`FR-33` | `epics.md` (post-MVP, Epic 5) |
+| `NFR-*`, `UX-DR*` | `epics.md` |
+| `SM-*` (success metrics) | `prds/prd-gitnebula-2026-08-10/prd.md` |
+| `AD-*` | `architecture.md` |
+| `ADR-*` | `docs/adr/` |
+
+Name the file that defines it, not the tier you assume it belongs to.
 - `docs/implementation-artifacts/` — story specs and sprint status. This is the
   `TASK_SOURCE_DIR` terminal-agents reads; a story file must be committed and
   pushed to `origin/master` before its agent can be launched.

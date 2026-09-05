@@ -1,5 +1,13 @@
 # Human-review checklist
 
+> **Superseded for walks from 2026-09-05 onward by
+> [`human-review-checklist-v2-post-epic-5.md`](human-review-checklist-v2-post-epic-5.md).**
+> This file is unchanged and stays the record of what the MVP's owner gate
+> asked for. v2 carries every item below except one — "Hover dim/highlight
+> reads instantly at 2,000 files", which story 5.2 superseded by replacing
+> dimming with chain emphasis — and adds items for the Epic 5 features
+> (FR-26..FR-33) that did not exist when this file was written.
+
 Acceptance criteria that cannot be verified automatically (PRD §13.2.5 rule:
 collected here, not scattered). Walked by the maintainer; the walk itself is
 story 4.4's owner gate. Check items only with the evidence named.
