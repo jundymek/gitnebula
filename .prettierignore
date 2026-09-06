@@ -11,6 +11,13 @@ reference/
 CLAUDE.md
 .claude/
 
+# SpecWitness run evidence — machine-written, local-only, never committed
+# (.specwitness/.gitignore keeps it out of Git; this keeps it out of the lint
+# gate, which SpecWitness itself runs inside a worktree where the directory
+# exists). The reviewable artifacts beside it — config.yaml, contracts/, plans/
+# — are deliberately NOT ignored: they are read by humans and belong formatted.
+.specwitness/runs/
+
 # terminal-agents worktree scratch files (never committed)
 plan.md
 DECISIONS.md

@@ -21,6 +21,9 @@ packages/cli/*.tgz
 # output directory, and the one CI uses.
 /gitnebula-bundle/
 /.gitnebula-site/
+# The same bundle, built by the SpecWitness `viewer` service so a browser probe
+# has a fixed address to talk to (.specwitness/config.yaml).
+/specwitness-bundle/
 
 # Generated fixture repositories (AD-14) — built by scripts, never committed
 test-fixtures/.generated/

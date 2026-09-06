@@ -1,0 +1,1090 @@
+plan:
+  epic: epic-6
+  contract:
+    version: 1
+    fingerprint: fab2a9b7d4687cd61ccd75bfeb9527f8b0e71a9d04080a66b2c03c2202c1b561
+  data:
+    seed: gs03p7iedmkq0xbx
+    bindings:
+      - kind: fixed
+        name: viewerRootPath
+        value: /
+      - kind: fixed
+        name: threeDeeQueryPath
+        value: /?view=3d
+      - kind: fixed
+        name: viewSwitchSelector
+        value: "#view-switch"
+      - kind: fixed
+        name: viewSwitchReasonSelector
+        value: "#view-switch-reason"
+      - kind: fixed
+        name: threeDeePressedSelector
+        value: "#view-switch button[data-view='3d'][aria-pressed='true']"
+      - kind: fixed
+        name: twoDeePressedSelector
+        value: "#view-switch button[data-view='2d'][aria-pressed='true']"
+      - kind: fixed
+        name: toggledLayerButton
+        value: "#layer-test"
+      - kind: fixed
+        name: untouchedLayerButton
+        value: "#layer-backend"
+      - kind: fixed
+        name: legendSelector
+        value: .legend
+      - kind: fixed
+        name: layerFilterSelector
+        value: "#layer-filter"
+      - kind: fixed
+        name: errorScreenSelector
+        value: .error-screen
+      - kind: fixed
+        name: expectedSchemaVersion
+        value: "1.0"
+      - kind: fixed
+        name: baselineAnalysisSchemaDigest
+        value: 897d6aca49577b131e690cdf8b0a09c4d6f8453b1e0591fff7d7b75d8519fc37
+      - kind: fixed
+        name: baselineLoaderDigest
+        value: a1d2b72addbb703352ab22a207d6934ee6155d41a2991f579d8b16f437365b3c
+      - kind: fixed
+        name: baselineTooltipDigest
+        value: 261db9e97a31977a52340fd26c31b89297c0b580d854c5a7feff1dce7866bd0b
+      - kind: fixed
+        name: baselineDependencyCount
+        value: "47"
+      - kind: fixed
+        name: baselineFixtureBuilderCount
+        value: "3"
+      - kind: fixed
+        name: baselineChromeClassSelectorCount
+        value: "34"
+      - kind: fixed
+        name: baselineChromeTestFileFloor
+        value: "20"
+      - kind: fixed
+        name: baselineRootTestScript
+        value: pnpm -r test && pnpm test:tooling
+      - kind: fixed
+        name: baselineAdrCount
+        value: "7"
+      - kind: fixed
+        name: uiSuiteDefaultPort
+        value: "4320"
+      - kind: fixed
+        name: uiSuiteWorkers
+        value: "1"
+      - kind: fixed
+        name: uiSuiteRetries
+        value: "0"
+      - kind: fixed
+        name: uiSuiteDeviceScaleFactor
+        value: "1"
+      - kind: fixed
+        name: uiSpecGlobFragment
+        value: pw.ts
+      - kind: fixed
+        name: uiTestDirFragment
+        value: tests
+  criteria:
+    - criterionId: E6-01
+      disposition: automated
+      probes:
+        - id: ui-config-discovery-and-isolation
+          surface: observation
+          mechanics:
+            commandId: ui-config
+            args: []
+          assertions:
+            - description: the on-demand UI Playwright config exists at all, so the suite has a configuration to be judged against
+              target:
+                source: jsonPath
+                path: $.present
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: testDir points at the UI suite's own tests directory rather than the package root
+              target:
+                source: jsonPath
+                path: $.testDir
+                phase: snapshot
+              comparison: contains
+              expected: tests
+            - description: testMatch selects only the .pw.ts specs, so the suite discovers no vitest file
+              target:
+                source: jsonPath
+                path: $.testMatch
+                phase: snapshot
+              comparison: contains
+              expected: pw.ts
+            - description: the suite runs with exactly one worker
+              target:
+                source: jsonPath
+                path: $.workers
+                phase: snapshot
+              comparison: equals
+              expected: "1"
+            - description: full parallelism is disabled
+              target:
+                source: jsonPath
+                path: $.fullyParallel
+                phase: snapshot
+              comparison: equals
+              expected: "false"
+            - description: retries are disabled, so a flaky pass cannot be minted by re-running
+              target:
+                source: jsonPath
+                path: $.retries
+                phase: snapshot
+              comparison: equals
+              expected: "0"
+            - description: the device scale factor is pinned to 1, so measured geometry is CSS pixels
+              target:
+                source: jsonPath
+                path: $.deviceScaleFactor
+                phase: snapshot
+              comparison: equals
+              expected: "1"
+            - description: a fixed viewport width is stated literally in the config rather than left to the browser default
+              target:
+                source: jsonPath
+                path: $.viewportWidth
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: a fixed viewport height is stated literally in the config rather than left to the browser default
+              target:
+                source: jsonPath
+                path: $.viewportHeight
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+    - criterionId: E6-02
+      disposition: automated
+      probes:
+        - id: ui-config-server-policy
+          surface: observation
+          mechanics:
+            commandId: ui-config
+            args: []
+          assertions:
+            - description: the UI suite config is present, so its webServer policy can be read at all
+              target:
+                source: jsonPath
+                path: $.present
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the default development-server port is 4320
+              target:
+                source: jsonPath
+                path: $.defaultPort
+                phase: snapshot
+              comparison: equals
+              expected: "4320"
+            - description: UI_PORT is honored as an override of that default
+              target:
+                source: jsonPath
+                path: $.honorsUiPortEnv
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: reuseExistingServer is false, so the suite never adopts a server another worktree left running
+              target:
+                source: jsonPath
+                path: $.reuseExistingServer
+                phase: snapshot
+              comparison: equals
+              expected: "false"
+            - description: the server is started with a strict port, so a busy port fails loudly instead of sliding to the next one
+              target:
+                source: jsonPath
+                path: $.strictPort
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+        - id: ui-readme-records-the-reuse-prohibition
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: the UI suite README exists, so the documentation half of this criterion has somewhere to live
+              target:
+                source: jsonPath
+                path: $.uiReadmePresent
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the README addresses the suite's own on-demand server and its separation from the default test command, which is where the reuse prohibition is recorded
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsOnDemandSeparation
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-03
+      disposition: automated
+      probes:
+        - id: viz-ui-script-exists
+          surface: observation
+          mechanics:
+            commandId: pkg-scripts
+            args: []
+          assertions:
+            - description: "@gitnebula/viz declares a `ui` script, which is what `pnpm --filter @gitnebula/viz ui` resolves to"
+              target:
+                source: jsonPath
+                path: $.vizHasUiScript
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: that script invokes Playwright, so the command runs the browser suite rather than something else
+              target:
+                source: jsonPath
+                path: $.vizUiInvokesPlaywright
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the script text names playwright explicitly rather than delegating to an unnamed wrapper
+              target:
+                source: jsonPath
+                path: $.vizUiScript
+                phase: snapshot
+              comparison: contains
+              expected: playwright
+    - criterionId: E6-04
+      disposition: automated
+      probes:
+        - id: default-test-command-untouched
+          surface: observation
+          mechanics:
+            commandId: pkg-scripts
+            args: []
+          assertions:
+            - description: no Playwright invocation is reachable from the root `test` script graph
+              target:
+                source: jsonPath
+                path: $.playwrightReachableFromTest
+                phase: snapshot
+              comparison: equals
+              expected: "false"
+            - description: the viz package's own `test` script does not invoke Playwright either
+              target:
+                source: jsonPath
+                path: $.vizTestInvokesPlaywright
+                phase: snapshot
+              comparison: equals
+              expected: "false"
+            - description: the root `test` script is byte-identical to the pre-epic command, so its observable behavior is unchanged
+              target:
+                source: jsonPath
+                path: $.rootTest
+                phase: snapshot
+              comparison: equals
+              expected: pnpm -r test && pnpm test:tooling
+            - description: the root test command still fans out recursively to every workspace package
+              target:
+                source: jsonPath
+                path: $.rootTestRecursive
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-05
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "This is a claim about a machine, not about a file, and no declared surface may uninstall or hide a browser. The static precondition is checked by E6-04 (no Playwright anywhere in the `pnpm test` script graph); that is necessary, not sufficient. Verify it properly in a clean environment - a container, or a checkout with PLAYWRIGHT_BROWSERS_PATH pointed at an empty directory and no browsers downloaded - that `pnpm install --frozen-lockfile && pnpm test` exits 0. Watch for any attempted browser download or launch in the output: the default path must never reach one. Record the environment used as the evidence."
+    - criterionId: E6-06
+      disposition: automated
+      probes:
+        - id: ui-readme-documents-separation
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: the UI suite README exists
+              target:
+                source: jsonPath
+                path: $.uiReadmePresent
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: it addresses the separation between the on-demand browser suite and the default test command
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsOnDemandSeparation
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-07
+      disposition: automated
+      probes:
+        - id: navigation-goes-through-shared-helper
+          surface: observation
+          mechanics:
+            commandId: ui-source-census
+            args: []
+          assertions:
+            - description: the UI suite directory exists, so its sources can be censused at all
+              target:
+                source: jsonPath
+                path: $.present
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: specs navigate through openViewer rather than an ad-hoc navigation of their own
+              target:
+                source: jsonPath
+                path: $.openViewerUseCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: at most one direct page.goto remains in the UI suite - the one inside the shared helper itself; a second would be a spec bypassing it
+              target:
+                source: jsonPath
+                path: $.pageGotoDirectCount
+                phase: snapshot
+              comparison: lessThan
+              expected: "2"
+        - id: performance-suite-still-passes-with-shared-helper
+          surface: shell
+          mechanics:
+            commandId: viz-perf
+            args: []
+            argumentAllowlist: []
+          assertions:
+            - description: the performance suite exits 0 after being moved onto the shared openViewer helper, which is the criterion's own 'continues to pass' clause
+              target:
+                source: exitCode
+              comparison: equals
+              expected: "0"
+            - description: the run actually discovered specs, so the zero exit above is a passing suite rather than an empty one
+              target:
+                source: stdout
+              comparison: notContains
+              expected: No tests found
+    - criterionId: E6-08
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "A negative control is a check that must FAIL, and no probe can be written whose passing means another check failed - the declared surfaces adjudicate only satisfied expectations. Verify by hand that the UI suite contains an explicit negative control which takes a representative positive assertion, evaluates it against a deliberately incorrect expectation, and asserts that the evaluation is unsatisfied. Then confirm it fails for the right reason: temporarily break the assertion mechanism (or the fixture it reads) and check the control does not still pass by catching any error indiscriminately."
+    - criterionId: E6-09
+      disposition: automated
+      probes:
+        - id: ui-suite-source-hygiene
+          surface: observation
+          mechanics:
+            commandId: ui-source-census
+            args: []
+          assertions:
+            - description: the UI suite directory exists, so a zero count means clean rather than absent
+              target:
+                source: jsonPath
+                path: $.present
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the literal __gitnebula key is spelled nowhere in the UI suite sources
+              target:
+                source: jsonPath
+                path: $.literalHandleKeyCount
+                phase: snapshot
+              comparison: equals
+              expected: "0"
+            - description: at least one UI suite source reaches the handle through the HARNESS_HANDLE_KEY constant instead
+              target:
+                source: jsonPath
+                path: $.filesImportingHandleKeyConst
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: the suite actually asserts something, so the message count below is measured against a non-empty population
+              target:
+                source: jsonPath
+                path: $.expectCalls
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: every assertion in the UI suite supplies a prose failure message
+              target:
+                source: jsonPath
+                path: $.expectsWithoutMessage
+                phase: snapshot
+              comparison: equals
+              expected: "0"
+    - criterionId: E6-10
+      disposition: automated
+      probes:
+        - id: production-boot-settles-in-real-browser
+          surface: browser
+          mechanics:
+            serviceId: viewer
+            path: /
+            scenario: |-
+              waitFor "#view-switch"
+              waitFor ".legend"
+          assertions:
+            - description: the production boot path built the chrome in a real browser, so boot() ran rather than throwing
+              target:
+                source: visible
+                selector: "#view-switch"
+              comparison: equals
+              expected: "true"
+            - description: "the engine reached a rendered, settled state: the legend built from the loaded document is on screen"
+              target:
+                source: visible
+                selector: .legend
+              comparison: equals
+              expected: "true"
+            - description: the layer filter is mounted, so the boot completed past chrome assembly rather than stalling part way
+              target:
+                source: visible
+                selector: "#layer-filter"
+              comparison: equals
+              expected: "true"
+            - description: no loader error screen replaced the viewer, so the boot path resolved rather than failed
+              target:
+                source: visible
+                selector: .error-screen
+              comparison: equals
+              expected: "false"
+        - id: ui-suite-has-browser-specs
+          surface: observation
+          mechanics:
+            commandId: ui-source-census
+            args: []
+          assertions:
+            - description: the UI suite exists
+              target:
+                source: jsonPath
+                path: $.present
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: at least one .pw.ts browser spec exists to exercise the boot path
+              target:
+                source: jsonPath
+                path: $.specFileCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: the suite reaches the harness handle through its constant, which is how a published handle is read for a built engine
+              target:
+                source: jsonPath
+                path: $.filesImportingHandleKeyConst
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+    - criterionId: E6-11
+      disposition: automated
+      probes:
+        - id: view-3d-query-boot
+          surface: browser
+          mechanics:
+            serviceId: viewer
+            path: /?view=3d
+            scenario: waitFor "#view-switch"
+          assertions:
+            - description: the view switch renders, so the viewer booted rather than showing an error screen
+              target:
+                source: visible
+                selector: "#view-switch"
+              comparison: equals
+              expected: "true"
+            - description: the 3D button is the pressed one, so ?view=3d booted directly into the 3D view
+              target:
+                source: visible
+                selector: "#view-switch button[data-view='3d'][aria-pressed='true']"
+              comparison: equals
+              expected: "true"
+            - description: the 2D button is not pressed, so the 3D entry was not a fallback to the default view
+              target:
+                source: visible
+                selector: "#view-switch button[data-view='2d'][aria-pressed='true']"
+              comparison: equals
+              expected: "false"
+            - description: no loader error screen is shown on the 3D entry path
+              target:
+                source: visible
+                selector: .error-screen
+              comparison: equals
+              expected: "false"
+    - criterionId: E6-12
+      disposition: automated
+      probes:
+        - id: reader-state-survives-view-round-trip
+          surface: browser
+          mechanics:
+            serviceId: viewer
+            path: /
+            scenario: |-
+              waitFor "#layer-filter"
+              click "#layer-test"
+              waitFor "#layer-test[aria-pressed='false']"
+              click "#view-switch button[data-view='3d']"
+              waitFor "#view-switch button[data-view='3d'][aria-pressed='true']"
+              click "#view-switch button[data-view='2d']"
+              waitFor "#view-switch button[data-view='2d'][aria-pressed='true']"
+          assertions:
+            - description: after 2D to 3D and back the layer filter still has the test layer switched off, so reader state survived both swaps through production capture and restore
+              target:
+                source: visible
+                selector: "#layer-test[aria-pressed='false']"
+              comparison: equals
+              expected: "true"
+            - description: an untouched layer toggle is still on, so the swap restored the recorded filter rather than clearing every layer
+              target:
+                source: visible
+                selector: "#layer-backend[aria-pressed='true']"
+              comparison: equals
+              expected: "true"
+            - description: the round trip ended back in 2D, so both swaps completed
+              target:
+                source: visible
+                selector: "#view-switch button[data-view='2d'][aria-pressed='true']"
+              comparison: equals
+              expected: "true"
+            - description: the viewer survived both swaps without falling back to an error screen
+              target:
+                source: visible
+                selector: .error-screen
+              comparison: equals
+              expected: "false"
+    - criterionId: E6-13
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: Deciding this requires reading globalThis[HARNESS_HANDLE_KEY] twice and comparing object identity against a destroyed engine. The browser surface can read only url, title, element text and element visibility, so no probe can express it. In the UI suite, confirm one spec caches the handle BEFORE a swap and demonstrates that the cached handle refers to the destroyed prior engine (a call on it throws, or it reports destroyed state), while a fresh read of globalThis[HARNESS_HANDLE_KEY] after the swap returns the live engine. Both outcomes must be asserted - a spec that only shows the fresh read works does not demonstrate the stale one is dead.
+    - criterionId: E6-14
+      disposition: automated
+      probes:
+        - id: pressed-state-follows-built-view
+          surface: browser
+          mechanics:
+            serviceId: viewer
+            path: /
+            scenario: |-
+              waitFor "#view-switch button[data-view='2d'][aria-pressed='true']"
+              click "#view-switch button[data-view='3d']"
+              waitFor "#view-switch button[data-view='3d'][aria-pressed='true']"
+          assertions:
+            - description: after a successful swap the 3D button carries the pressed state, so it reflects the view that was actually built
+              target:
+                source: visible
+                selector: "#view-switch button[data-view='3d'][aria-pressed='true']"
+              comparison: equals
+              expected: "true"
+            - description: the 2D button is no longer pressed, so pressed state moved rather than being set on both
+              target:
+                source: visible
+                selector: "#view-switch button[data-view='2d'][aria-pressed='true']"
+              comparison: equals
+              expected: "false"
+            - description: the unavailability readout is empty after a successful build, so the switch is not reporting a view it failed to construct
+              target:
+                source: text
+                selector: "#view-switch-reason"
+              comparison: equals
+              expected: ""
+    - criterionId: E6-15
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: Requires forcing the 3D constructor to throw, which no declared surface can arrange against the shipped bundle. In the UI suite (or a jsdom test with an injected failing constructor), confirm that after the throw the viewer is still interactive in 2D - nodes selectable, filters responsive - and that the reason shown to the reader is the constructor's own failure message VERBATIM. The specific defect to look for is a later capability probe overwriting it with a generic WebGL-unavailable verdict, so assert on the exact reason string rather than on the presence of any message.
+    - criterionId: E6-16
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "The browser surface's only click verb takes a CSS selector; it cannot click at a computed screen coordinate, and canvas-painted nodes have no selectable element. Verify in the UI suite: compute a node's real screen position from the engine, click at those page coordinates with the header offset in place, and assert getSelected() returns that node's id. Then confirm the test would actually catch the offset bug - check that the expected page coordinate differs from the canvas-relative one by the header height, so a viewer that forgot to subtract the offset would select a different node or none."
+    - criterionId: E6-17
+      disposition: automated
+      probes:
+        - id: ui-readme-records-the-five-findings
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: the UI suite README exists
+              target:
+                source: jsonPath
+                path: $.uiReadmePresent
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: it addresses boot() and its prior absence of test execution
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsBootGap
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: it addresses production capture/restore as the authority for view-state carryover
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsCaptureRestore
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: it addresses the jsdom fake canvas and why real-coordinate picking is not representable there
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsJsdomCanvas
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: it records the requirement to reacquire the harness handle after a swap
+              target:
+                source: jsonPath
+                path: $.uiReadmeMentionsHandleReacquire
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-18
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "The declared viewer service serves only the real index.html and a valid analysis.json, and the browser surface has no request-interception verb, so none of the three failure kinds can be induced by a probe. Verify in the UI suite with route interception: for unreachable (network failure or 404), malformed (an invalid JSON body) and unsupported version (a document declaring a different major), assert on the exact h1 title and the p detail rendered inside .error-screen. The three titles must be distinct from one another, and each detail must name its specific cause rather than a shared generic sentence."
+    - criterionId: E6-19
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "A file: URL is outside the declared service origin, and the browser surface refuses any navigation off that origin by design, so this cannot be probed. Open the built index.html directly from disk in a browser and confirm the protocol-specific screen appears rather than a blank page or a generic load failure, and that its detail gives a concrete way to serve the viewer instead (the command to run, not just the observation that file: does not work)."
+    - criterionId: E6-20
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "Inducing a failure whose detail contains markup requires serving a crafted document, which no declared surface can do. In the UI suite, force a loader failure whose detail contains markup such as an image or script tag, then assert BOTH halves: the literal markup text appears in the rendered detail, and querying for an element of that tag inside .error-screen finds nothing. Asserting only the first half would still pass on an innerHTML regression, because the escaped text and the injected element can coexist."
+    - criterionId: E6-21
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "Judging whether a written comparison is DERIVED from the current schema and loader is a document-versus-code reading task, and no declared surface can count fields in either. Re-derive the numbers yourself from packages/contract/src/analysis.schema.json and packages/viz/src/loader.ts: required node fields, required edge fields, how many of each the browser loader actually checks, and how deep cochanges validation goes. Then confirm the report states those numbers, and that it explicitly FLAGS any divergence from 12 versus 6, 4 versus 2, and array-only validation rather than quietly printing different figures as if they were expected."
+    - criterionId: E6-22
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: This needs a document the assembly-time schema validator REJECTS to be served to the browser, and the declared viewer service serves only the real bundle. Verify that the story ships at least one such document, that the assembly-time validator does reject it, that loading it in the browser renders the map rather than an error screen, and that the accompanying report enumerates every schema-required field the browser loader does not check, each classified as 'absence degrades safely' or 'absence is misread'. An unclassified field in that list means the item is not met.
+    - criterionId: E6-23
+      disposition: automated
+      probes:
+        - id: validator-gap-report-content
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: a validator-gap report exists somewhere in the searched documentation locations
+              target:
+                source: jsonPath
+                path: $.validatorReportPath
+                phase: snapshot
+              comparison: notEquals
+              expected: "null"
+            - description: the report states that it describes the gap without changing either validator
+              target:
+                source: jsonPath
+                path: $.validatorReportMentionsNoValidatorChange
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the report records the open decision for a future alignment, including whether browser validation should widen
+              target:
+                source: jsonPath
+                path: $.validatorReportMentionsFutureAlignment
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+        - id: neither-validator-moved
+          surface: observation
+          mechanics:
+            commandId: file-integrity
+            args: []
+          assertions:
+            - description: the browser loader is byte-for-byte the pre-epic file, so the report changed no validator
+              target:
+                source: jsonPath
+                path: $.loaderDigest
+                phase: snapshot
+              comparison: equals
+              expected: a1d2b72addbb703352ab22a207d6934ee6155d41a2991f579d8b16f437365b3c
+            - description: the assembly-time schema is byte-for-byte the pre-epic file, so the other validator did not move either
+              target:
+                source: jsonPath
+                path: $.analysisSchemaDigest
+                phase: snapshot
+              comparison: equals
+              expected: 897d6aca49577b131e690cdf8b0a09c4d6f8453b1e0591fff7d7b75d8519fc37
+    - criterionId: E6-24
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: Deciding this needs measured bounding boxes at two viewport sizes and a click proven to land on the control; the browser surface reports only whether an element is visible, which does not establish that its box lies inside the viewport. In the UI suite, select the node with the longest co-change list, then at 1280x800 and again at roughly 1280x600 read the bounding boxes of the 'show on map' control and of the panel's own action buttons, assert every box is fully inside the viewport (left, top, right, bottom all within bounds), and assert each is clickable through Playwright actionability rather than a synthetic event dispatch.
+    - criterionId: E6-25
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "Requires reading scrollHeight against clientHeight and the geometry of associated controls, none of which is an assertable target on the declared surfaces. For each of #panel, #start-here and .p-blast-list, populate the region past its visual cap and assert that the region ITSELF is the scroll container (scrollHeight exceeds clientHeight on that element, not on an ancestor), and that no control associated with the region has a bounding box extending outside the browser window."
+    - criterionId: E6-26
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: A negative control must fail on purpose, which cannot be expressed as a passing probe. Confirm the reachability check has a companion that deliberately defeats the relevant height cap (removes or raises it) and asserts the reachability check then fails. Check that it fails for the RIGHT reason - an out-of-viewport bounding box - and not because the fixture, the selector or the mount broke; the failure message it produces should name the box and the viewport bound it exceeded.
+    - criterionId: E6-27
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: Needs the tooltip's measured rendered rectangle, and the declared browser surface exposes no geometry target. In the UI suite, hover a node with a long path near the right viewport edge and again near the bottom edge, and after each hover assert the tooltip bounding box satisfies left >= 0, top >= 0, right <= viewport width and bottom <= viewport height. Assert all four bounds after both hovers, not just the bound on the near edge - a fix that flips the tooltip can push it off the opposite side.
+    - criterionId: E6-28
+      disposition: automated
+      probes:
+        - id: layout-report-content
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: a layout report exists in the searched documentation locations
+              target:
+                source: jsonPath
+                path: $.layoutReportPath
+                phase: snapshot
+              comparison: notEquals
+              expected: "null"
+            - description: the report records the content length used for each bounded region
+              target:
+                source: jsonPath
+                path: $.layoutReportMentionsContentLength
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the report records the viewport heights tested
+              target:
+                source: jsonPath
+                path: $.layoutReportMentionsViewportHeights
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the report answers whether any control was unreachable
+              target:
+                source: jsonPath
+                path: $.layoutReportMentionsUnreachable
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+        - id: layout-defect-not-repaired-here
+          surface: observation
+          mechanics:
+            commandId: file-integrity
+            args: []
+          assertions:
+            - description: the tooltip implementation is byte-for-byte the pre-epic file, so a discovered layout defect was reported rather than repaired in this epic
+              target:
+                source: jsonPath
+                path: $.tooltipDigest
+                phase: snapshot
+              comparison: equals
+              expected: 261db9e97a31977a52340fd26c31b89297c0b580d854c5a7feff1dce7866bd0b
+    - criterionId: E6-29
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "The load-bearing clauses here are 'only on' and 'byte-for-byte', and neither is decidable from the declared surfaces: a census can count hooks but cannot judge whether a given element was already addressable by id, by role plus accessible name, or by another data attribute, and the header's slot ids are assigned from constants rather than written as attributes, so no probe reads them. Run the testid-census observation to get the full list of data-testid values with their files, then check each one falls inside the permitted set (panel metric rows, summary metrics, legend rows, scope-bar hidden and back readouts, blast-radius rows) and that its element was not already identifiable. Finally diff packages/viz/src/chrome/header.ts and confirm the two protected slot id constants are unchanged byte for byte."
+    - criterionId: E6-30
+      disposition: automated
+      probes:
+        - id: chrome-tests-select-through-hooks
+          surface: observation
+          mechanics:
+            commandId: testid-census
+            args: []
+          assertions:
+            - description: the post-change count of CSS-class selectors in chrome tests is strictly lower than the independently measured pre-change count of 34
+              target:
+                source: jsonPath
+                path: $.classSelectorCount
+                phase: snapshot
+              comparison: lessThan
+              expected: "34"
+            - description: the chrome test files were not deleted to achieve that fall - at least the pre-epic 21 remain
+              target:
+                source: jsonPath
+                path: $.chromeTestFileCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "20"
+            - description: stable hooks exist for the tests to select through, so coverage moved onto them rather than simply being removed
+              target:
+                source: jsonPath
+                path: $.testIdCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+    - criterionId: E6-31
+      disposition: automated
+      probes:
+        - id: legend-carries-fifth-layer
+          surface: browser
+          mechanics:
+            serviceId: viewer
+            path: /
+            scenario: |-
+              waitFor ".legend"
+              waitFor "#layer-filter"
+          assertions:
+            - description: the legend carries an entry for the other layer, which is the fifth key this criterion adds
+              target:
+                source: text
+                selector: .legend
+              comparison: contains
+              expected: other
+            - description: the legend still carries the infra entry alongside it, so other was added rather than renamed from infra
+              target:
+                source: text
+                selector: .legend
+              comparison: contains
+              expected: infra
+            - description: the legend still carries the backend key
+              target:
+                source: text
+                selector: .legend
+              comparison: contains
+              expected: backend
+            - description: the legend still carries the frontend key
+              target:
+                source: text
+                selector: .legend
+              comparison: contains
+              expected: frontend
+            - description: the legend still carries the test key, so all five layer-filter toggles have a corresponding legend entry
+              target:
+                source: text
+                selector: .legend
+              comparison: contains
+              expected: test
+            - description: the other layer-filter toggle exists, which is the toggle the new legend key must correspond to
+              target:
+                source: visible
+                selector: "#layer-other"
+              comparison: equals
+              expected: "true"
+            - description: the infra layer-filter toggle exists, so the two formerly gray-sharing layers are both separately filterable
+              target:
+                source: visible
+                selector: "#layer-infra"
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-32
+      disposition: automated
+      probes:
+        - id: legend-hue-adr-in-house-format
+          surface: observation
+          mechanics:
+            commandId: docs-presence
+            args: []
+          assertions:
+            - description: an ADR about the legend colour exists in docs/adr
+              target:
+                source: jsonPath
+                path: $.legendAdrFile
+                phase: snapshot
+              comparison: notEquals
+              expected: "null"
+            - description: the ADR count grew past the pre-epic 7, so the record is new rather than an existing file matching the search
+              target:
+                source: jsonPath
+                path: $.adrCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "7"
+            - description: the ADR carries the house format's Context section
+              target:
+                source: jsonPath
+                path: $.legendAdrHasContext
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the ADR carries the house format's Decision section
+              target:
+                source: jsonPath
+                path: $.legendAdrHasDecision
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the ADR carries the house format's Consequences section
+              target:
+                source: jsonPath
+                path: $.legendAdrHasConsequences
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+    - criterionId: E6-33
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: The equality is between two internal quantities - hiddenCount().visible and the number of nodes surviving the active layer filter - and neither is exposed as element text, url or visibility, so any probe available here would assert on a rendered string that stays identical whether the number is right or wrong. In the UI or unit suite, for BOTH the 2D and 3D engines, on the path with no scope and no connected-only filtering, compute the survivor count independently from the fixture and assert hiddenCount().visible equals it exactly - for at least one filter state that hides some nodes and one that hides none.
+    - criterionId: E6-34
+      disposition: needs-human
+      reason: not-safely-automatable
+      guidance: "Any probe available here could only assert that a hidden-count readout contains its fixed wording, which would stay green with a wrong number - worse than no probe. Instead, enumerate every readout consuming the layer-filter visibility count (start from #layer-filter-hidden and the scope-bar hidden readout), assert each displays the corrected survivor count in both 2D and 3D against a fixture whose expected number you derived by hand, and confirm the story report either names every corrected readout or presents evidence that no readout consumed the previously incorrect value."
+    - criterionId: E6-35
+      disposition: automated
+      probes:
+        - id: no-new-dependency-no-new-fixture
+          surface: observation
+          mechanics:
+            commandId: file-integrity
+            args: []
+          assertions:
+            - description: the total declared dependency count across the workspace is still the pre-epic 47, so the epic added no package dependency
+              target:
+                source: jsonPath
+                path: $.dependencyCount
+                phase: snapshot
+              comparison: equals
+              expected: "47"
+            - description: the number of fixture-repo builders is still the pre-epic 3, so no fixture was added
+              target:
+                source: jsonPath
+                path: $.fixtureBuilderCount
+                phase: snapshot
+              comparison: equals
+              expected: "3"
+            - description: the existing fixture builders are still present rather than replaced, so the existing fixtures remained sufficient
+              target:
+                source: jsonPath
+                path: $.fixtureBuilders
+                phase: snapshot
+              comparison: contains
+              expected: build-fixture-repo.sh
+    - criterionId: E6-36
+      disposition: automated
+      probes:
+        - id: contract-and-loader-byte-identical
+          surface: observation
+          mechanics:
+            commandId: file-integrity
+            args: []
+          assertions:
+            - description: analysis.schema.json is byte-for-byte the pre-epic file
+              target:
+                source: jsonPath
+                path: $.analysisSchemaDigest
+                phase: snapshot
+              comparison: equals
+              expected: 897d6aca49577b131e690cdf8b0a09c4d6f8453b1e0591fff7d7b75d8519fc37
+            - description: the schema still pins the document schemaVersion at 1.0
+              target:
+                source: jsonPath
+                path: $.analysisSchemaVersion
+                phase: snapshot
+              comparison: equals
+              expected: "1.0"
+            - description: the browser loader is byte-for-byte the pre-epic file
+              target:
+                source: jsonPath
+                path: $.loaderDigest
+                phase: snapshot
+              comparison: equals
+              expected: a1d2b72addbb703352ab22a207d6934ee6155d41a2991f579d8b16f437365b3c
+            - description: the tooltip implementation is byte-for-byte the pre-epic file
+              target:
+                source: jsonPath
+                path: $.tooltipDigest
+                phase: snapshot
+              comparison: equals
+              expected: 261db9e97a31977a52340fd26c31b89297c0b580d854c5a7feff1dce7866bd0b
+        - id: produced-document-still-version-1-0
+          surface: observation
+          mechanics:
+            commandId: analysis-shape
+            args: []
+          assertions:
+            - description: the document the assembler actually produced declares schemaVersion 1.0
+              target:
+                source: jsonPath
+                path: $.schemaVersion
+                phase: snapshot
+              comparison: equals
+              expected: "1.0"
+            - description: the assembler still produces a non-empty node set, so the version above was read from a real analysis
+              target:
+                source: jsonPath
+                path: $.nodes
+                phase: snapshot
+              comparison: greaterThan
+              expected: "0"
+            - description: no node carries a description, so the out-of-scope describe layer did not ship as a side effect of the assembler being touched
+              target:
+                source: jsonPath
+                path: $.describedNodes
+                phase: snapshot
+              comparison: equals
+              expected: "0"
+    - criterionId: E6-37
+      disposition: automated
+      probes:
+        - id: performance-suite-passes
+          surface: shell
+          mechanics:
+            commandId: viz-perf
+            args: []
+            argumentAllowlist: []
+          assertions:
+            - description: the performance suite exits 0 on the epic branch, so it continues to pass after the epic's changes
+              target:
+                source: exitCode
+              comparison: equals
+              expected: "0"
+            - description: the performance run actually discovered specs, so the zero exit above is a passing suite rather than an empty one
+              target:
+                source: stdout
+              comparison: notContains
+              expected: No tests found
+        - id: unit-and-chrome-suites-still-reached-by-default-test
+          surface: observation
+          mechanics:
+            commandId: pkg-scripts
+            args: []
+          assertions:
+            - description: the root test command still fans out recursively to every workspace package, so the run's unit gate reached the viz unit suite and the chrome boundary test rather than filtering them out
+              target:
+                source: jsonPath
+                path: $.rootTestRecursive
+                phase: snapshot
+              comparison: equals
+              expected: "true"
+            - description: the root test script is the unmodified pre-epic command, so nothing was excluded from it to make the unit gate pass
+              target:
+                source: jsonPath
+                path: $.rootTest
+                phase: snapshot
+              comparison: equals
+              expected: pnpm -r test && pnpm test:tooling
+            - description: the viz package still declares its own test script, which is what the recursive fan-out executes for the unit and chrome suites
+              target:
+                source: jsonPath
+                path: $.vizTestScript
+                phase: snapshot
+              comparison: notEquals
+              expected: "null"
+        - id: chrome-test-files-not-removed
+          surface: observation
+          mechanics:
+            commandId: testid-census
+            args: []
+          assertions:
+            - description: the chrome test files still number at least the pre-epic 21, so 'continues to pass' was not achieved by deleting the boundary tests
+              target:
+                source: jsonPath
+                path: $.chromeTestFileCount
+                phase: snapshot
+              comparison: greaterThan
+              expected: "20"
+    - criterionId: E6-38
+      disposition: needs-human
+      reason: human-verifiability
+      guidance: "Open the viewer on a REAL repository map - not a fixture - and switch between 2D and 3D several times. Judge whether the behavior matches what the automated assertions claim: camera and reader state carry over, the settle re-runs sensibly, nothing flickers or strands the map mid-swap, and the pressed button always matches what you are actually looking at. Record which repository you used and what you observed, then tick the item in docs/dev/epic-6/6.2-viz-boot-e2e/MANUAL_TESTING.md. It begins unticked; leaving it unticked with a note describing what looked wrong is a valid outcome."
+    - criterionId: E6-39
+      disposition: needs-human
+      reason: human-verifiability
+      guidance: Ask a reviewer who has not read the implementation to look at each of the three loader error screens - unreachable, malformed, unsupported version - and, for each, say in their own words what went wrong and what they would do next. Both answers must come from the screen alone, with no prompting. Record their wording verbatim as the evidence, then tick the item in docs/dev/epic-6/6.3-viz-load-failure/MANUAL_TESTING.md. If a screen names a cause but offers no usable exit, leave it unticked and say which screen and what was missing.
+    - criterionId: E6-40
+      disposition: needs-human
+      reason: human-verifiability
+      guidance: After the mechanical reachability checks have run, revisit the earlier manual item about browser scrolling in docs/dev/epic-6/6.4-viz-reachability/MANUAL_TESTING.md. Either tick it and NAME the evidence that now covers it (which check, which viewport, which region), or rewrite it so it asks only about the part a machine cannot decide - whether the scrolling feels discoverable and comfortable - and leave that rewritten item unticked. Do not tick it on the strength of the automated checks without naming them.
+meta:
+  schemaVersion: 1
+  compiledAt: 2026-09-07T20:25:59.779Z
+  provenance:
+    provider: claude
+    model: null
+    providerCliVersion: 2.1.263 (Claude Code)
+    generatedAt: 2026-09-07T20:25:59.779Z
