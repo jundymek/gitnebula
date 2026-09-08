@@ -164,8 +164,51 @@ correct on its own terms, the gap only visible between them.
 **Fix:** none applied — the resolution is a merge, and merges are the
 maintainer's click. The supervisor reproduced the answer instead: `master` merged
 into the epic tip locally in a throwaway worktree (one comment-only conflict in
-`.prettierignore`, see observation 6), then re-verified. The outcome of that run
-is recorded in the closure report and the epic journal.
+`.prettierignore`, see observation 6), then re-verified.
+
+That run — against `fb4db42`, a local commit that was never pushed and that the
+maintainer would have to recreate to reproduce — returned **FAIL: 9 pass, 11
+fail, 20 needs_human**, with all four deterministic gates passing. The headline
+is not the finding; the classification is.
+
+**Seven of the eleven failures are instrument artifacts on correct work.** E6-09
+counts two literal `__gitnebula` strings, both inside
+`ui/src/suite-conventions.test.ts` — a comment at :144 and
+`raw.includes("__gitnebula")` at :151 — which is the check that *enforces* the
+criterion. E6-10, E6-11, E6-12 and E6-14 each read a selector's visibility and
+expect `false`; the runner answers `<no element matches the selector>` and the
+aggregator scores that as a failure, although an absent element is not visible.
+Two of them look for `.error-screen`, which a good boot correctly never renders;
+one for `#view-switch button[data-view='2d'][aria-pressed='true']`, which under
+`?view=3d` does not exist because the attribute sits on the 3D button. The
+epic's own browser suite asserts all four behaviours and passes. E6-23 and E6-28
+report the validator-gap and layout reports missing; both exist, and
+`findReport` in `scripts/specwitness/docs-presence.mjs` scans only the immediate
+`.md` files of `docs`, `docs/dev` and `packages/viz/ui` — no recursion — so it
+cannot reach a story subdirectory, which its own comment ("location is not fixed
+by the contract") is the argument for.
+
+**Three failures are one real divergence.** E6-02, E6-06 and E6-17 all fail on
+the same missing file: `packages/viz/ui/README.md`, which the probe hard-codes.
+Story 6.1's spec never asked for it — it asked for
+`docs/dev/epic-6/6.1-viz-ui-suite/README.md`, which exists and carries every
+clause the three criteria want: the separation from `pnpm test` (:36),
+`reuseExistingServer: false` and `--strictPort` as load-bearing (:63), and the
+cross-worktree `lsof` incident (:68). The substance shipped; only its location
+differs from what the contract expects.
+
+**One failure is a real divergence on defensible grounds.** E6-07 expects two
+direct `page.goto(` calls in the suite sources and counts three, all in story
+6.3's `ui/tests/support/load-failure-page.ts`. They exist because 6.1's
+`openViewer` waits for a harness handle that a *failed* boot never publishes, so
+a failure-navigation helper cannot use it; the file's comment at :424 says the
+gotos live there "so the specs stay free of `page.goto`". No spec calls `goto`
+directly, which is the criterion's evident intent — but the criterion counts
+occurrences, and the count is three. The maintainer adjudicates: sharpen the
+criterion, or move the navigation.
+
+**Twenty `needs_human` is the contract's design, not a shortfall.** Two of them,
+E6-05 and E6-08, the maintainer's own plan already declares human-adjudicated.
 
 ### 6. The integration merge conflicts, on comments only
 
@@ -343,6 +386,16 @@ next epic inherits, concretely:
 | 4 | Add `intent.md` to `.prettierignore` | maintainer | one shared line; three branches adding it is the collision this epic avoided |
 | 5 | Merge `master` into the epic branch (or resolve at integration) so SpecWitness can see `scripts/specwitness/`, then run the contract | maintainer | merges are the maintainer's click |
 | 6 | Restore the CI push/PR triggers and get a green run | maintainer | GitHub Actions billing; story 4.2 |
+| 7 | Adjudicate the four substantive SpecWitness failures: create `packages/viz/ui/README.md` or repoint E6-02/E6-06/E6-17; accept or sharpen E6-07's third `page.goto` | maintainer | the contract is frozen and only its author may change it |
+| 8 | Fix two probes: make `findReport` recursive so E6-23/E6-28 can see story reports, and narrow E6-09's literal count so the check that enforces a rule stops violating it | maintainer | probe mechanics, in `scripts/specwitness/` on master |
+
+The epic's closure verdict is **not ready to merge into master**, and the
+integration PR was therefore not opened. Not because the epic's own gates fail —
+every one of them passes — but because the verification contract built for
+exactly this moment returns FAIL, and four of its eleven failures are
+substantive. All four are documentation or probe-shape decisions that could be
+settled in minutes, and none is a defect in the shipped product. Once they are
+adjudicated the epic is ready and the integration PR follows.
 
 ## Follow-through on the previous epic's action items
 
