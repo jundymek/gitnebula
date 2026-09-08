@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";
-import { openViewer } from "../src/page-helpers.js";
+import { openViewer } from "../../harness/page-helpers.js";
 
 /**
  * AC-5 — the `prefers-reduced-motion` audit (NFR-7, AD-6).

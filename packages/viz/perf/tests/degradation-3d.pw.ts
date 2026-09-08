@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { expect, test } from "@playwright/test";
 
 import { aggregate, FPS_FLOOR } from "../src/measure.js";
-import { openViewer } from "../src/page-helpers.js";
+import { openViewer } from "../../harness/page-helpers.js";
 import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";
 
 /**
