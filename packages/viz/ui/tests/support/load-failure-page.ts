@@ -174,53 +174,82 @@ export interface ErrorScreenText {
  * The counterpart to 6.1's `openViewer`, which waits for the harness handle a
  * failed boot never publishes.
  *
- * It waits for **either** outcome rather than only the expected one. A page
- * that boots successfully — because a route glob stopped matching, say, so the
- * dev server's valid fixture was served after all — would otherwise sit out
- * the full timeout and then report `waitForSelector` exceeded, which names the
- * symptom and hides the cause. Racing the two makes that case fail in a second
- * and say what actually happened. Verified by breaking the glob on purpose.
+ * It waits for **three** outcomes rather than only the expected one, because
+ * each of the other two is a distinct failure this helper is the right place
+ * to name:
+ *
+ *  - **booted** — the page loaded successfully, which means the document under
+ *    test was not the one served (a route glob that stopped matching, say).
+ *    Waiting only for `.error-screen` would sit out the full timeout and then
+ *    report `waitForSelector` exceeded, naming the symptom and hiding the
+ *    cause. Verified by breaking the glob on purpose: red in 164 ms.
+ *  - **timeout** — `boot()` threw, or hung, before it could render a screen or
+ *    publish a handle. Neither expected signal ever arrives, so without this
+ *    branch every affected test burns the full 120 s Playwright timeout, and a
+ *    regression in a shared path stalls most of the suite while saying nothing
+ *    about the exception behind it. Any uncaught page error is captured and
+ *    reported here instead.
  */
+const BOOT_RACE_TIMEOUT_MS = 30_000;
+
 export async function openViewerExpectingFailure(
   page: Page,
 ): Promise<ErrorScreenText> {
-  await page.goto("/");
-  const outcome = await page.evaluate(
-    async (key) =>
-      new Promise<"failed" | "booted">((resolve) => {
-        const look = (): boolean => {
-          if (document.querySelector(".error-screen")) {
-            resolve("failed");
-            return true;
-          }
-          if (key in globalThis) {
-            resolve("booted");
-            return true;
-          }
-          return false;
-        };
-        if (look()) return;
-        const observer = new MutationObserver(() => {
-          if (look()) observer.disconnect();
-        });
-        observer.observe(document.body, { childList: true, subtree: true });
-        // The handle is published on `globalThis`, which no observer watches,
-        // so a poll backs the observer up rather than replacing it.
-        const timer = setInterval(() => {
-          if (look()) {
-            clearInterval(timer);
+  // Subscribed before the navigation: an exception thrown during boot arrives
+  // while the page is still loading, and a listener attached afterwards would
+  // miss the very error this exists to report.
+  const pageErrors: string[] = [];
+  const onPageError = (error: Error): void => {
+    pageErrors.push(error.message);
+  };
+  page.on("pageerror", onPageError);
+  try {
+    await page.goto("/");
+    const outcome = await page.evaluate(
+      ({ key, timeoutMs }) =>
+        new Promise<"failed" | "booted" | "timeout">((resolve) => {
+          const settle = (outcome: "failed" | "booted" | "timeout"): true => {
             observer.disconnect();
-          }
-        }, 50);
-      }),
-    HARNESS_HANDLE_KEY,
-  );
-  if (outcome === "booted") {
-    throw new Error(
-      "the Viewer booted successfully on a page this helper was asked to " +
-        "drive into a load failure. The document under test was not the one " +
-        "served — check that the analysis.json route still matches.",
+            clearInterval(poll);
+            clearTimeout(deadline);
+            resolve(outcome);
+            return true;
+          };
+          const look = (): boolean => {
+            if (document.querySelector(".error-screen"))
+              return settle("failed");
+            if (key in globalThis) return settle("booted");
+            return false;
+          };
+          const observer = new MutationObserver(() => void look());
+          // The handle is published on `globalThis`, which no observer
+          // watches, so a poll backs the observer up rather than replacing it.
+          const poll = setInterval(() => void look(), 50);
+          const deadline = setTimeout(() => void settle("timeout"), timeoutMs);
+          if (look()) return;
+          observer.observe(document.body, { childList: true, subtree: true });
+        }),
+      { key: HARNESS_HANDLE_KEY, timeoutMs: BOOT_RACE_TIMEOUT_MS },
     );
+    if (outcome === "booted") {
+      throw new Error(
+        "the Viewer booted successfully on a page this helper was asked to " +
+          "drive into a load failure. The document under test was not the " +
+          "one served — check that the analysis.json route still matches.",
+      );
+    }
+    if (outcome === "timeout") {
+      throw new Error(
+        "the Viewer neither rendered an error screen nor published a handle " +
+          `within ${BOOT_RACE_TIMEOUT_MS} ms. ` +
+          (pageErrors.length > 0
+            ? `boot() threw: ${pageErrors.join(" | ")}`
+            : "No uncaught page error was reported, so boot() is hanging " +
+              "rather than throwing."),
+      );
+    }
+  } finally {
+    page.off("pageerror", onPageError);
   }
   await page.waitForSelector(".error-screen", { timeout: 60_000 });
   return readErrorScreen(page);
