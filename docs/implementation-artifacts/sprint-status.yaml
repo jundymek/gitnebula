@@ -158,6 +158,12 @@ development_status:
   6.2-viz-boot-e2e: done
   6.3-viz-load-failure: done
   6.4-viz-reachability: done
+  # Added 2026-09-08 by the epic/6-assembled-viewer supervisor at closure, on
+  # the maintainer's instruction. The frozen SpecWitness contract requires
+  # `packages/viz/ui/README.md` in criteria E6-06 and E6-17; no story spec ever
+  # asked for it, so three of the contract's eleven failures are that one
+  # missing file. Unassigned when written.
+  6.6-viz-ui-readme: ready-for-dev
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
