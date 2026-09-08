@@ -986,7 +986,18 @@ export class CanvasGraphEngine implements GraphEngine {
       // The survivor count is reported, never left to the caller to subtract:
       // nodes also leave the frame through story 5.3's layers and through
       // semantic zoom, and neither of those appears in the two counts above.
-      visible: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      //
+      // `visibleIds()` returns `null` as an early-out when there is no scope
+      // and no connected-only filter — nothing needs materialising then. That
+      // `null` means "there is no *set* to consult", NOT "everything
+      // survives": the layer filter is still live, and on this path it is the
+      // only thing removing nodes. Reading it as the whole graph is debt 7b,
+      // reported by story 5.7 and fixed in 6.5.
+      visible: visible
+        ? visible.size
+        : this.graph
+          ? this.graph.nodes.length - this.hiddenByLayerFilter()
+          : 0,
     };
   }
 
@@ -1103,13 +1114,16 @@ export class CanvasGraphEngine implements GraphEngine {
   /** Publish the frame's filter state. `leftForId` is set only for AC-5. */
   private emitScope(leftForId: string | null): void {
     const counts = this.hiddenCount();
-    const visible = this.visibleIds();
     this.emitter.emit("scope", {
       scopeId: this.scopeId,
       connectedOnly: this.connectedOnly,
       hiddenByScope: counts.byScope,
       hiddenByDegree: counts.byDegree,
-      visibleCount: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      // Taken from `counts`, not recomputed. This line used to carry its own
+      // copy of the survivor expression, which is how debt 7b came to exist in
+      // two places at once — and it is reachable here: leaving a scope while a
+      // layer filter is on emits with no scope left to consult.
+      visibleCount: counts.visible,
       leftForId,
       returnToScopeId: this.lastScopeId,
     });

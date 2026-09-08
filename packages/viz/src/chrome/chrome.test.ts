@@ -5,6 +5,7 @@ import { connectEngine, mountChrome } from "./chrome.js";
 import { EXPORT_SLOT_ID, FILTER_SLOT_ID, MODE_SLOT_ID } from "./header.js";
 import { HINT_LINES } from "./hint.js";
 import { LEGEND_ENTRIES } from "./legend.js";
+import { LEGEND_ROW_TESTID } from "./testids.js";
 import type { Layer } from "@gitnebula/contract";
 
 import {
@@ -95,14 +96,22 @@ describe("chrome — UX-DR6 header", () => {
 });
 
 describe("chrome — UX-DR2/9 legend and hint", () => {
-  it("lists the four layers plus the hot spot, in the mockup's colours", () => {
+  it("lists every layer plus the hot spot, in the mockup's colours", () => {
     const { root } = mount();
-    const rows = [...root.querySelectorAll(".legend span")];
+    // Story 6.5: keyed on the row's `data-testid` rather than on
+    // `.legend span`, which also matched the heat-mode notice and its two
+    // child spans and so depended on which fixture was mounted.
+    const rows = [
+      ...root.querySelectorAll(`[data-testid="${LEGEND_ROW_TESTID}"]`),
+    ];
     expect(rows.map((row) => row.textContent)).toEqual([
       "backend",
       "frontend",
       "infra",
       "test",
+      // Added by story 6.5 (debt 7a): the largest layer on this repository had
+      // a filter toggle and no key. Its hue is ADR-0008's.
+      "other",
       "hot spot",
     ]);
     expect(LEGEND_ENTRIES.map((entry) => entry.color)).toEqual([
@@ -110,6 +119,7 @@ describe("chrome — UX-DR2/9 legend and hint", () => {
       LAYER_COLOR.frontend,
       LAYER_COLOR.infra,
       LAYER_COLOR.test,
+      LAYER_COLOR.other,
       HOT_COLOR,
     ]);
   });

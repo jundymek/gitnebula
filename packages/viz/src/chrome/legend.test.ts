@@ -10,6 +10,9 @@ import {
   MOSTLY_COLD_SHARE,
   renderLegend,
 } from "./legend.js";
+import { ALL_LAYERS } from "../engine/layers.js";
+import { LAYER_COLOR } from "../engine/index.js";
+import { LEGEND_ROW_TESTID } from "./testids.js";
 import {
   loadContractFixture,
   loadSyntheticFixture,
@@ -33,10 +36,56 @@ function withChurn(
 describe("legend — the layer keys (UX-DR2)", () => {
   it("keys every colour the canvas can draw in structure mode", () => {
     const handle = renderLegend(loadSyntheticFixture());
-    const labels = [...handle.element.querySelectorAll("span")]
-      .filter((row) => row.querySelector(".dot"))
-      .map((row) => row.textContent);
+    const labels = [
+      ...handle.element.querySelectorAll<HTMLElement>(
+        `[data-testid="${LEGEND_ROW_TESTID}"]`,
+      ),
+    ].map((row) => row.textContent);
     expect(labels).toEqual(LEGEND_ENTRIES.map((entry) => entry.label));
+  });
+
+  /**
+   * Debt 7a (story 6.5). `other` had a filter toggle and no legend key,
+   * because `LAYER_COLOR.other` was the same grey as `LAYER_COLOR.infra` and
+   * a fifth entry would have drawn two identical swatches. Story 5.5 declined
+   * to add the entry for exactly that reason, which was correct — the missing
+   * piece was a palette decision, taken by the maintainer and recorded in
+   * ADR-0008.
+   */
+  it("keys every layer the filter can switch off", () => {
+    const keyed = new Set(LEGEND_ENTRIES.map((entry) => entry.label));
+    for (const layer of ALL_LAYERS) {
+      // A toggle whose colour has no key is a control the reader cannot
+      // connect to anything on the canvas.
+      expect(keyed, `layer "${layer}" has a filter toggle`).toContain(layer);
+    }
+  });
+
+  it("gives every entry its own colour", () => {
+    const byColour = new Map<string, string[]>();
+    for (const entry of LEGEND_ENTRIES) {
+      byColour.set(entry.color, [
+        ...(byColour.get(entry.color) ?? []),
+        entry.label,
+      ]);
+    }
+    const shared = [...byColour.entries()].filter(
+      ([, labels]) => labels.length > 1,
+    );
+    // The assertion that would have caught the shared grey. Two entries with
+    // one swatch make the legend actively misleading rather than merely
+    // incomplete: the reader looks up a colour and finds two answers.
+    expect(
+      shared.map(([color, labels]) => `${color}: ${labels.join(" + ")}`),
+    ).toEqual([]);
+  });
+
+  it("distinguishes other from infra, the grey they used to share", () => {
+    expect(LAYER_COLOR.other).not.toBe(LAYER_COLOR.infra);
+    // Pinned so a later palette edit cannot quietly return `other` to a grey
+    // and re-open the defect while the no-duplicates test still passes.
+    expect(LAYER_COLOR.infra).toBe("#7c8598");
+    expect(LAYER_COLOR.other).toBe("#cf81cf");
   });
 });
 

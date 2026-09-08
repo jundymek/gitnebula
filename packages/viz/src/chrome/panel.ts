@@ -30,6 +30,7 @@ import {
   formatSharedCommits,
   type PanelModel,
 } from "./panel-model.js";
+import { PANEL_BLAST_ROW_TESTID, PANEL_ROW_TESTID } from "./testids.js";
 
 export interface PanelActions {
   /** Toggle isolate for the open node. */
@@ -217,6 +218,12 @@ export function renderPanel(actions: PanelActions): PanelHandle {
       // AC-2: an absent value is marked, not merely worded differently, so
       // the stylesheet can make it visibly distinct from a real zero.
       line.className = row.empty ? `p-row ${EMPTY_STATE_CLASS}` : "p-row";
+      // The row's *value* is not reachable from `GraphEngine` — churn,
+      // authors and the analysis window are document fields the interface
+      // does not expose — so a test has to read it from the DOM. The hook
+      // survives a restyle; `.p-row` carries five rules in `styles.css` and
+      // does not.
+      line.dataset.testid = PANEL_ROW_TESTID;
       const label = document.createElement("span");
       label.textContent = row.label;
       const value = document.createElement("span");
@@ -306,6 +313,11 @@ export function renderPanel(actions: PanelActions): PanelHandle {
         ...model.partners.map((partner) => {
           // A button, not a link: it moves the camera inside one page.
           const row = button("p-blast-row", "");
+          // `getBlastRadius()` returns the currently *marked* set, not a
+          // node's partner list, and the interface exposes no `cochanges` —
+          // so the partner rows and their shared-commit counts exist only
+          // here.
+          row.dataset.testid = PANEL_BLAST_ROW_TESTID;
           const name = document.createElement("span");
           name.textContent = partner.id;
           const count = document.createElement("span");

@@ -29,6 +29,7 @@ import {
   topCochanges,
 } from "./panel-model.js";
 import { renderPanel, type PanelActions, type PanelHandle } from "./panel.js";
+import { PANEL_BLAST_ROW_TESTID } from "./testids.js";
 import { engineNodeFrom } from "../test-support/engine-nodes.js";
 import {
   loadContractFixture,
@@ -36,6 +37,9 @@ import {
 } from "../test-support/fixtures.js";
 
 const NOW = Date.parse("2026-08-13T12:00:00.000Z");
+
+/** Story 6.5 — the co-change partner rows by their stable hook. */
+const BLAST_ROW = `[data-testid="${PANEL_BLAST_ROW_TESTID}"]`;
 
 function mountPanel(overrides: Partial<PanelActions> = {}): PanelHandle {
   const handle = renderPanel({
@@ -61,9 +65,7 @@ function open(
 }
 
 function partnerRows(handle: PanelHandle): HTMLButtonElement[] {
-  return [
-    ...handle.element.querySelectorAll<HTMLButtonElement>(".p-blast-row"),
-  ];
+  return [...handle.element.querySelectorAll<HTMLButtonElement>(BLAST_ROW)];
 }
 
 // ---------------------------------------------------------------------------

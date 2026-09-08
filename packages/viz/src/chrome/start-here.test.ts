@@ -3,10 +3,14 @@ import { describe, expect, it, vi } from "vitest";
 
 import { buildStartHereModel } from "./start-here-model.js";
 import { renderStartHere, START_HERE_ID } from "./start-here.js";
+import { START_HERE_METRIC_TESTID } from "./testids.js";
 import {
   langgraphShapedDocument,
   langgraphShapedWithoutTests,
 } from "../test-support/langgraph-shape.js";
+
+/** Story 6.5 — the per-entry metric by its stable hook. */
+const SH_METRIC = `[data-testid="${START_HERE_METRIC_TESTID}"]`;
 
 function panelFor(
   document_ = langgraphShapedDocument(),
@@ -41,7 +45,7 @@ describe("start-here panel — the three lists", () => {
     // Story 5.11: core ranks on `imports × lines`, so the row prints both
     // numbers. Printing only one would leave the reader unable to see why a
     // file with fewer importers sits above one with more.
-    expect(first.querySelector(".sh-metric")?.textContent).toBe(
+    expect(first.querySelector(SH_METRIC)?.textContent).toBe(
       "7 importers · 40 lines",
     );
   });
