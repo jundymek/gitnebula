@@ -18,9 +18,17 @@ export const LAYER_COLOR: Readonly<Record<Layer, string>> = {
   frontend: "#9b8cff",
   infra: "#7c8598",
   test: "#a8cf52",
-  // The contract has a fifth layer the mockup's legend does not name; it
-  // takes the infra grey rather than inventing a sixth hue.
-  other: "#7c8598",
+  // The contract's fifth layer, which the mockup's legend does not name. It
+  // shared the infra grey until story 6.5, on the reasoning that a layer with
+  // no legend key should not invent a hue. Story 5.3 then gave `other` a
+  // filter toggle, and measured it as the LARGEST layer on this repository
+  // (145 of 363 nodes, against infra's 3) — so the reader got a toggle whose
+  // colour keyed to a different label, on 40% of the map.
+  //
+  // Two layers may no longer share a swatch; `legend.test.ts` now fails if any
+  // two entries do. The departure from the mockup's four-layer palette is
+  // deliberate and recorded in ADR-0008, which carries the measurements.
+  other: "#cf81cf",
 };
 
 /** Hot-spot colour (`--hot`). In structure mode it REPLACES the layer colour. */

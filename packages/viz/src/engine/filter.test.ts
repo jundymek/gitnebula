@@ -312,3 +312,78 @@ describe("AC-6 — a toggle is a redraw, never a re-settle", () => {
     expect(settleStarts).toBe(0);
   });
 });
+
+/**
+ * Debt 7b, reported by story 5.7 and never assigned (story 6.5).
+ *
+ * `hiddenCount().visible` is documented as the survivors of **every** filter,
+ * layers included (`types.ts`). But `visibleIds()` returns `null` as an
+ * early-out whenever there is no scope and no connected-only filter — nothing
+ * needs materialising in that case — and `hiddenCount()` read that `null` as
+ * "everything survives", falling back to `graph.nodes.length`. The layer
+ * filter was therefore invisible to the count on the one path where the layer
+ * filter is the *only* thing removing nodes.
+ *
+ * 5.7 hit it while building the degradation sweep, which read the full node
+ * count for every sample. It handed the defect to "5.3/5.4", both already
+ * merged, so no one received it.
+ *
+ * The fixture matters as much as the assertion. Epic 5 shipped a test that
+ * went green with its bug still present because no node in the fixture had
+ * the failing shape, so the shape is spelled out here: ≥ 2 layers, no scope,
+ * no connected-only, one layer switched off.
+ */
+describe("debt 7b — the survivor count respects the layer filter", () => {
+  it("counts survivors, not the whole graph, with no scope and no connected-only", () => {
+    settledEngine();
+    const total = engine.nodes.length;
+    expect(engine.getScope()).toBeNull();
+    expect(engine.getConnectedOnly()).toBe(false);
+    expect(engine.hiddenCount().visible).toBe(total);
+
+    engine.setLayerFilter(["backend"]);
+
+    const survivors = engine.nodes.filter(
+      (node) => node.layer === "backend",
+    ).length;
+    // The guard that makes this a real test rather than a tautology: the
+    // filter has to be hiding something, or `total` and `survivors` agree and
+    // the unfixed implementation passes.
+    expect(survivors).toBeGreaterThan(0);
+    expect(survivors).toBeLessThan(total);
+    expect(engine.hiddenCount().visible).toBe(survivors);
+  });
+
+  it("reports the same survivor count on the `scope` event, on leaving a scope", () => {
+    settledEngine();
+    engine.setLayerFilter(["backend"]);
+
+    const seen: number[] = [];
+    engine.on("scope", (payload) => seen.push(payload.visibleCount));
+
+    // Leaving a scope is the reachable path onto the early-out: the event
+    // fires, and by the time it computes its count there is no scope and no
+    // connected-only left, so `visibleIds()` is `null` again. A layer toggle
+    // by itself does NOT emit here — `onLayerFilterChanged` returns early
+    // when nothing is scoped, which is deliberate and left alone.
+    engine.setScope("fp/");
+    engine.setScope(null);
+
+    // `emitScope` carried its own copy of the same expression, so fixing only
+    // the accessor would have left the wrong number on the path chrome reads.
+    const survivors = engine.nodes.filter(
+      (node) => node.layer === "backend",
+    ).length;
+    expect(seen.at(-1)).toBe(survivors);
+  });
+
+  it("returns to the full count when every layer comes back", () => {
+    settledEngine();
+    const total = engine.nodes.length;
+
+    engine.setLayerFilter(["backend"]);
+    engine.setLayerFilter([...ALL_LAYERS]);
+
+    expect(engine.hiddenCount().visible).toBe(total);
+  });
+});

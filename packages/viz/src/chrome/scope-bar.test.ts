@@ -7,6 +7,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { renderScopeBar, type ScopeBarState } from "./scope-bar.js";
+import { SCOPE_BAR_BACK_TESTID, SCOPE_BAR_HIDDEN_TESTID } from "./testids.js";
 
 const IDLE: ScopeBarState = {
   scopeId: null,
@@ -24,6 +25,15 @@ function bar(actions: Partial<Parameters<typeof renderScopeBar>[0]> = {}) {
     ...actions,
   });
 }
+
+/**
+ * Story 6.5: the two readouts are reached by their stable hook, not by their
+ * styling class. `.scope-bar-hidden` and `.scope-bar-back` are what the
+ * stylesheet paints; what these tests are actually about is the sentence the
+ * bar composes and whether it is on screen, and that survives a restyle.
+ */
+const HIDDEN_LINE = `[data-testid="${SCOPE_BAR_HIDDEN_TESTID}"]`;
+const BACK_BUTTON = `[data-testid="${SCOPE_BAR_BACK_TESTID}"]`;
 
 function text(element: HTMLElement, selector: string): string {
   const found = element.querySelector<HTMLElement>(selector);
@@ -100,7 +110,7 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
   it("states the count and why those nodes went", () => {
     const handle = bar();
     handle.update({ ...IDLE, connectedOnly: true, hiddenByDegree: 232 });
-    expect(text(handle.element, ".scope-bar-hidden")).toBe(
+    expect(text(handle.element, HIDDEN_LINE)).toBe(
       "232 nodes hidden: no dependencies",
     );
   });
@@ -108,14 +118,14 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
   it("never prints a bare total without its cause", () => {
     const handle = bar();
     handle.update({ ...IDLE, connectedOnly: true, hiddenByDegree: 232 });
-    const line = text(handle.element, ".scope-bar-hidden");
+    const line = text(handle.element, HIDDEN_LINE);
     expect(line).toMatch(/no dependencies/);
   });
 
   it("reads as English for a single node", () => {
     const handle = bar();
     handle.update({ ...IDLE, connectedOnly: true, hiddenByDegree: 1 });
-    expect(text(handle.element, ".scope-bar-hidden")).toBe(
+    expect(text(handle.element, HIDDEN_LINE)).toBe(
       "1 node hidden: no dependencies",
     );
   });
@@ -123,7 +133,7 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
   it("says nothing when the filter is on but hid nothing", () => {
     const handle = bar();
     handle.update({ ...IDLE, connectedOnly: true, hiddenByDegree: 0 });
-    expect(text(handle.element, ".scope-bar-hidden")).toBe("");
+    expect(text(handle.element, HIDDEN_LINE)).toBe("");
   });
 
   it("names the cause when the filter emptied the scope", () => {
@@ -135,7 +145,7 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
       hiddenByDegree: 0,
       scopeIsEmpty: true,
     });
-    expect(text(handle.element, ".scope-bar-hidden")).toBe(
+    expect(text(handle.element, HIDDEN_LINE)).toBe(
       "every node in this scope is hidden by connected-only",
     );
   });
@@ -151,7 +161,7 @@ describe("AC-3 — the hidden count always names its cause (UX-DR14)", () => {
       connectedOnly: false,
       scopeIsEmpty: true,
     });
-    expect(text(handle.element, ".scope-bar-hidden")).toBe("");
+    expect(text(handle.element, HIDDEN_LINE)).toBe("");
   });
 
   it("carries aria-pressed on the toggle (UX-DR13)", () => {
@@ -181,16 +191,14 @@ describe("AC-5 — the way back after a search left the scope", () => {
 
     expect(text(handle.element, ".scope-bar-left")).toContain("left the scope");
     // The affordance IS the exit sentence: the button says where it goes.
-    expect(text(handle.element, ".scope-bar-back")).toBe(
-      "return to libs/langgraph/",
-    );
+    expect(text(handle.element, BACK_BUTTON)).toBe("return to libs/langgraph/");
   });
 
   it("returns to the scope when the button is pressed", () => {
     const onReturnToScope = vi.fn();
     const handle = bar({ onReturnToScope });
     handle.update({ ...IDLE, leftScopeId: "libs/langgraph/" });
-    handle.element.querySelector<HTMLButtonElement>(".scope-bar-back")!.click();
+    handle.element.querySelector<HTMLButtonElement>(BACK_BUTTON)!.click();
     expect(onReturnToScope).toHaveBeenCalledOnce();
   });
 
@@ -202,6 +210,6 @@ describe("AC-5 — the way back after a search left the scope", () => {
       scopeId: "libs/langgraph/",
       leftScopeId: "libs/langgraph/",
     });
-    expect(text(handle.element, ".scope-bar-back")).toBe("");
+    expect(text(handle.element, BACK_BUTTON)).toBe("");
   });
 });

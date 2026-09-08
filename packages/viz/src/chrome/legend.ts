@@ -1,7 +1,12 @@
 /**
- * The legend (UX-DR2, mockup bottom-left): the four named layers plus the hot
+ * The legend (UX-DR2, mockup bottom-left): every named layer plus the hot
  * spot entry, which exists because in structure mode `--hot` REPLACES a
  * node's layer colour — without the entry, an orange node has no key.
+ *
+ * Story 6.5 applies that same rule to the layers themselves. The legend
+ * carried the mockup's four while the contract has five and the layer filter
+ * offers five toggles, so `other` — the largest layer on this repository —
+ * was a control with no key. It now has one, and its own hue (ADR-0008).
  *
  * The swatch colours come from the engine's constants, so the legend and the
  * canvas cannot drift apart.
@@ -17,18 +22,29 @@ import type { AnalysisDocument } from "@gitnebula/contract";
 
 import { HOT_COLOR, LAYER_COLOR, type ViewMode } from "../engine/index.js";
 import { mostlyColdState } from "./empty-state.js";
+import { LEGEND_ROW_TESTID } from "./testids.js";
 
 export interface LegendEntry {
   readonly label: string;
   readonly color: string;
 }
 
-/** The mockup's five entries, in its order. */
+/**
+ * The mockup's four layers in its order, then `other`, then the hot spot.
+ *
+ * `other` is story 6.5's correction (debt 7a). The mockup knows four layers
+ * and the contract has five, so the legend named four while the layer filter
+ * offered five toggles — and the unnamed one is the largest layer on this
+ * repository. It sits after the mockup's four so their order is untouched,
+ * and before `hot spot`, which stays last because it is not a layer at all:
+ * in structure mode it REPLACES a node's layer colour.
+ */
 export const LEGEND_ENTRIES: readonly LegendEntry[] = [
   { label: "backend", color: LAYER_COLOR.backend },
   { label: "frontend", color: LAYER_COLOR.frontend },
   { label: "infra", color: LAYER_COLOR.infra },
   { label: "test", color: LAYER_COLOR.test },
+  { label: "other", color: LAYER_COLOR.other },
   { label: "hot spot", color: HOT_COLOR },
 ];
 
@@ -84,6 +100,7 @@ export function renderLegend(document_: AnalysisDocument): LegendHandle {
   legend.className = "legend";
   for (const entry of LEGEND_ENTRIES) {
     const row = document.createElement("span");
+    row.dataset.testid = LEGEND_ROW_TESTID;
     const dot = document.createElement("i");
     dot.className = "dot";
     dot.style.background = entry.color;

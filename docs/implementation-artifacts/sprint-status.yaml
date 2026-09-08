@@ -151,7 +151,7 @@ development_status:
   #
   # Wave A — disjoint territories (6.1 owns a new directory, 6.5 owns chrome):
   6.1-viz-ui-suite: done
-  6.5-viz-testids-and-debts: backlog
+  6.5-viz-testids-and-debts: done
   # Wave B — launched after wave A lands on the epic branch. All three write
   # new spec files into the directory 6.1 creates; none of them touches
   # packages/viz/src.

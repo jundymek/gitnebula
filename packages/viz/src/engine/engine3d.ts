@@ -1204,7 +1204,16 @@ export class Nebula3DEngine implements GraphEngine {
     return {
       byScope: this.hiddenByScope,
       byDegree: this.hiddenByDegree,
-      visible: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      // Debt 7b, the same correction as the 2D engine's and for the same
+      // reason: `visibleIds()` returning `null` means there is no set to
+      // consult, not that every node survives. The layer filter is still live
+      // on that path. ADR-0007 warned that a member of `GraphEngine` is
+      // implemented twice and drifts twice — this one was wrong twice.
+      visible: visible
+        ? visible.size
+        : this.graph
+          ? this.graph.nodes.length - this.hiddenByLayerFilter()
+          : 0,
     };
   }
 
@@ -1267,13 +1276,15 @@ export class Nebula3DEngine implements GraphEngine {
 
   private emitScope(leftForId: string | null): void {
     const counts = this.hiddenCount();
-    const visible = this.visibleIds();
     this.emitter.emit("scope", {
       scopeId: this.scopeId,
       connectedOnly: this.connectedOnly,
       hiddenByScope: counts.byScope,
       hiddenByDegree: counts.byDegree,
-      visibleCount: visible ? visible.size : (this.graph?.nodes.length ?? 0),
+      // From `counts`, not recomputed — the 2D engine's `emitScope` carried
+      // the identical duplicate, and a copy is what let the defect live in two
+      // places per engine instead of one.
+      visibleCount: counts.visible,
       leftForId,
       returnToScopeId: this.lastScopeId,
     });

@@ -765,3 +765,75 @@ describe("the 2,000-node fixture", () => {
     }
   });
 });
+
+/**
+ * Debt 7b in the 3D engine (story 6.5).
+ *
+ * ADR-0007 records the cost of the swap seam: every member of `GraphEngine`
+ * is implemented twice, so a defect in one is usually a defect in the other.
+ * `hiddenCount()` was copied between the two engines verbatim, and so was
+ * this bug — the `null` early-out from `visibleIds()` read as "everything
+ * survives" when a layer filter was the only active filter.
+ *
+ * Mirrors `filter.test.ts`'s 2D block deliberately: the same fixture shape
+ * (≥ 2 layers, no scope, no connected-only, one layer off) and the same
+ * assertions, because the whole claim of the seam is that the two engines
+ * answer identically.
+ */
+describe("debt 7b — the 3D survivor count respects the layer filter", () => {
+  it("counts survivors, not the whole graph, with no scope and no connected-only", () => {
+    engine = create();
+    engine.load(loadContractFixture("root-files"));
+    run(engine, 60);
+
+    const total = engine.nodes.length;
+    expect(engine.getScope()).toBeNull();
+    expect(engine.getConnectedOnly()).toBe(false);
+    expect(engine.hiddenCount().visible).toBe(total);
+
+    engine.setLayerFilter(["backend"]);
+
+    const survivors = engine.nodes.filter(
+      (node) => node.layer === "backend",
+    ).length;
+    // The filter has to actually be hiding something, or the unfixed
+    // implementation passes by coincidence.
+    expect(survivors).toBeGreaterThan(0);
+    expect(survivors).toBeLessThan(total);
+    expect(engine.hiddenCount().visible).toBe(survivors);
+  });
+
+  it("agrees with the 2D engine on the same document and the same filter", () => {
+    const document_ = loadContractFixture("root-files");
+
+    engine = create();
+    engine.load(document_);
+    run(engine, 60);
+    engine.setLayerFilter(["backend"]);
+
+    const canvas2d = document.createElement("canvas");
+    document.body.append(canvas2d);
+    const flat = new CanvasGraphEngine({ canvas: canvas2d });
+    spares.push(flat);
+    flat.load(document_);
+    for (let i = 0; i < 60; i++) flat.frame(i * FRAME_MS);
+    flat.setLayerFilter(["backend"]);
+
+    // AD-5's seam is only worth something if the two sides answer the same
+    // question the same way. Before the fix both were wrong together; the
+    // point of asserting it is that they stay right together.
+    expect(engine.hiddenCount().visible).toBe(flat.hiddenCount().visible);
+  });
+
+  it("returns to the full count when every layer comes back", () => {
+    engine = create();
+    engine.load(loadContractFixture("root-files"));
+    run(engine, 60);
+    const total = engine.nodes.length;
+
+    engine.setLayerFilter(["backend"]);
+    engine.setLayerFilter(["backend", "frontend", "infra", "test", "other"]);
+
+    expect(engine.hiddenCount().visible).toBe(total);
+  });
+});
