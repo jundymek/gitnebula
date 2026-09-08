@@ -15,7 +15,7 @@ import {
   FPS_FLOOR,
   type PhaseStats,
 } from "../src/measure.js";
-import { openViewer } from "../src/page-helpers.js";
+import { openViewer } from "../../harness/page-helpers.js";
 import { writeReport } from "../src/report.js";
 // A deep import into the engine's constants: the AD-5 boundary rule governs
 // `src/chrome`, which must not know the engine's internals. The harness is the

@@ -12,7 +12,7 @@
 
 import type { Page } from "@playwright/test";
 
-import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";
+import { HARNESS_HANDLE_KEY } from "../src/harness-handle.js";
 
 export interface OpenViewerOptions {
   /**

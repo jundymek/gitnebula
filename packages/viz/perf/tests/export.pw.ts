@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";
-import { openViewer } from "../src/page-helpers.js";
+import { openViewer } from "../../harness/page-helpers.js";
 
 /**
  * AC-1 and AC-2 in a real browser: the PNG is a ≥ 2× **re-render** of exactly

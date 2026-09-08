@@ -13,7 +13,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "perf": "playwright test -c perf/playwright.config.ts",
-    "bundle-check": "playwright test -c bundle/playwright.config.ts"
+    "bundle-check": "playwright test -c bundle/playwright.config.ts",
+    "ui": "playwright test -c ui/playwright.config.ts"
   },
   "dependencies": {
     "@gitnebula/contract": "workspace:*",
