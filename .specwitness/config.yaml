@@ -1,0 +1,173 @@
+# SpecWitness project configuration.
+#
+# This file is how SpecWitness learns your project. It is also a security
+# boundary: ONLY commands declared in this file are ever executed. Nothing an AI
+# provider produces can introduce a command — if it is not written here, it does
+# not run.
+#
+# Committed to Git:  config.yaml, contracts/, plans/
+# Local-only:        runs/, scorecard.jsonl  (see .specwitness/.gitignore)
+#
+# Uncomment the sections you need. Everything below `project` is optional, so a
+# valid config can stay this short. Run `specwitness doctor` after editing to
+# check that what you declared actually resolves on this machine.
+
+version: 1
+
+project:
+  # The branch an epic is verified against. Never guessed at verification time.
+  # Detected from this repository's HEAD when `specwitness init` ran — change it
+  # if that is not the branch you merge into.
+  baseBranch: master
+  # Optional helper for locating an epic's branch; `--head` always wins over it.
+  # Every epic merged so far used this shape (PRs #9, #18, #31, #42, #50, #71).
+  epicBranchPattern: "epic/{n}-{slug}"
+
+# Where your planning and implementation artifacts live. These match the
+# defaults, and are written out rather than left implicit because CLAUDE.md
+# names both paths as the repo's contract with its agents: a move would have to
+# change this file too, instead of silently falling back.
+planning:
+  format: bmad-v6 # the only supported format in V0
+  planningArtifacts: docs/planning-artifacts # PRD, architecture, epics
+  implementationArtifacts: docs/implementation-artifacts # story files
+
+# One-time preparation run inside the isolated worktree before any gate. The
+# worktree is a fresh checkout with no node_modules, and this is a pnpm
+# workspace, so a frozen-lockfile install is the precondition for every gate.
+setup:
+  install: pnpm install --frozen-lockfile
+
+# Deterministic quality gates, run in the order written. The first failure stops
+# the run — put the cheapest, fastest gate first. Every `id` must be unique.
+#
+# This is CLAUDE.md's "Verification" rule made executable: `pnpm lint && pnpm
+# test` must pass before a commit, and `pnpm build` before a PR touching `cli`
+# or `viz`. The build gate is unconditional here because it is also what the
+# `viewer` service below serves — a verification run needs the bundle either
+# way.
+#
+# `pnpm test` runs every package plus `test:tooling`, which enforces the
+# canonical test-command table and would otherwise be checked by nobody.
+gates:
+  - { id: lint, run: pnpm lint }
+  - { id: typecheck, run: pnpm typecheck }
+  - { id: unit, run: pnpm test }
+  - { id: build, run: pnpm build }
+
+# Long-running processes started for behavioral verification and stopped
+# afterwards. `ready` is how SpecWitness knows the service has finished booting:
+# give it either a `url` to poll or a `command` to run until it succeeds.
+# `timeoutSec` defaults to 60. Declare `port` so `doctor` can warn you when
+# something else already holds it.
+#
+# gitnebula has no backend, so there is exactly one service and it is not the
+# product's own server. `gitnebula` binds an EPHEMERAL port on 127.0.0.1 and
+# prints the URL — right for a human, useless to a verifier that must know the
+# address before the process starts. The bridge builds the bundle with the CLI
+# the `build` gate just compiled and serves that directory on a fixed port, so
+# a browser probe sees the shipped index.html + analysis.json, not a re-render
+# of them.
+#
+# The first boot analyzes this repository, which is why the timeout is generous
+# relative to the default 60s.
+services:
+  viewer:
+    run: node scripts/specwitness/serve-bundle.mjs --port 4173 --dir specwitness-bundle
+    port: 4173
+    ready: { url: "http://127.0.0.1:4173/", timeoutSec: 180 }
+
+# Commands that put test data into a known state before verification.
+#
+# Left unset deliberately: gitnebula has no database and no test fixtures that
+# outlive a run. The one piece of generated state — the throwaway git repos
+# under `test-fixtures/.generated/` — is rebuilt by the root `pretest` hook, so
+# the `unit` gate already puts it in a known state.
+# data:
+#   reset: ./scripts/reset-test-db.sh
+
+# Commands that measure something about the running system. Each must print a
+# single JSON object to stdout; SpecWitness compares before/after values rather
+# than trusting a narrative claim that something changed.
+#
+# `analysis.json` is the single interface between all modules, so its shape is
+# the thing worth measuring: an epic that claims to touch only the viewer and
+# moves the node or edge count has done something it did not say. `schemaVersion`
+# is included because changing the contract is never a side effect of another
+# story, and `describedNodes` because the `describe`/LLM layer is out of MVP
+# scope — a non-zero value means it shipped without a story asking for it.
+observations:
+  analysis-shape:
+    run: node scripts/specwitness/analysis-shape.mjs --file specwitness-bundle/analysis.json
+  # Structural facts about the tree, added 2026-09-06 after the first `plan`
+  # compile mapped only 5 of 40 criteria: the plan-author reported, correctly,
+  # that with one HTTP service and one observation there was no surface able to
+  # read a config file, a README or a package manifest. Each command below
+  # prints one JSON object and asserts nothing itself -- the plan decides what
+  # the values must be.
+  ui-config:
+    run: node scripts/specwitness/ui-config-shape.mjs
+  pkg-scripts:
+    run: node scripts/specwitness/pkg-scripts.mjs
+  file-integrity:
+    run: node scripts/specwitness/file-integrity.mjs
+  testid-census:
+    run: node scripts/specwitness/testid-census.mjs
+  docs-presence:
+    run: node scripts/specwitness/docs-presence.mjs
+  ui-source-census:
+    run: node scripts/specwitness/ui-source-census.mjs
+  # Added 2026-09-07 after the first run that reached a verdict recorded E6-37 as
+  # needs-human with the reason "the performance suite is NOT part of pnpm test and
+  # no declared command runs it". It is not that the suite cannot be verified -- it
+  # is that nothing offered it to a plan. `observations:` is the one declared-command
+  # map a plan may name, and it feeds the shell surface as well as the observation
+  # one, so a single entry here is all a shell probe asserting exit 0 needs.
+  #
+  # The command is `playwright test -c perf/playwright.config.ts`, run through the
+  # package that owns it: @playwright/test is a devDependency of packages/viz and
+  # resolves from there, though NOT from the repository root -- which is why doctor
+  # reports the capability absent and why story 7.0's provisioning is what supplies
+  # the browser for the declared browser probes.
+  viz-perf:
+    run: pnpm --filter @gitnebula/viz perf
+
+# Bounded retries per probe class, for environments that are genuinely flaky.
+# EVERY SURFACE DEFAULTS TO 0 and the whole block is optional, because a run
+# must be deterministic unless you asked otherwise. A probe that fails and then
+# passes is reported as a PASS marked `flaky`, with every attempt and its
+# evidence recorded — retries change how often something is tried, never what
+# the answer means. Maximum 5 per surface; a larger number is rejected rather
+# than quietly reduced, so what you wrote is always what you get.
+#
+# Left at the defaults. Every surface of this pipeline is deterministic by
+# design — the analyzers are offline and pure, and there is no network in the
+# run — so a probe that needs a second attempt is reporting a real defect, not
+# weather. The one known flake is the fixture-repo builder racing concurrent
+# callers, and hiding that behind a retry is the opposite of fixing it.
+# retries:
+#   http: 0
+#   browser: 0
+#   observation: 0
+#   shell: 0
+
+# Local AI CLIs used to AUTHOR verification artifacts. Verdicts are always
+# computed mechanically — no model is ever asked whether your epic passes.
+# SpecWitness shells out to CLIs you already have installed and never talks to
+# a model API directly.
+#
+# The implementing agents are pinned to claude-opus-5, so the authoring roles go
+# to codex: an independent reader from a different model family catches what the
+# author missed. `explainer` stays on claude, where it is only rendering a run
+# that was already decided mechanically.
+ai:
+  providers:
+    claude: { adapter: claude-code-cli, mode: subscription }
+    codex: { adapter: codex-cli, mode: chatgpt }
+  roles:
+    # Each role names one of the providers declared above. Assigning the
+    # authoring roles to a different model family than your coding agents is
+    # the point: an independent reader catches what the author missed.
+    contract-author: codex
+    plan-author: claude
+    explainer: claude
