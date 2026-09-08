@@ -249,16 +249,57 @@ test("clicking empty space at real screen coordinates clears the selection (AC-6
     "the selection this test needs to clear was never established",
   ).toBe("fp/proxy.py");
 
-  // A corner of the canvas, well away from a map that has just been framed.
-  // `onPointerUp` is `setSelected(hit?.id ?? null)`: aiming at nothing has to
-  // select nothing, which is how the panel closes.
-  const emptyX = 6;
-  const emptyY = canvasBox.height - 6;
+  // Somewhere with no node under it — and, just as importantly, with nothing
+  // *over* it. `<main>` stacks overlays on the stage: the legend, the hint, the
+  // scope bar, the search box, the panel. A point that is empty as far as
+  // `pick()` is concerned can still sit under the legend, and then the click
+  // never reaches the canvas at all — the selection would not clear and this
+  // test would fail with a message about the engine, blaming the wrong thing.
+  //
+  // So the point has to satisfy both conditions, and `elementFromPoint` is what
+  // answers the second. Searched rather than hardcoded, because a fixed corner
+  // is exactly the kind of coordinate a later chrome story quietly covers up.
+  const empty = await page.evaluate(
+    ([handleKey, rect]) => {
+      const handle = (
+        globalThis as unknown as Record<
+          string,
+          {
+            engine: {
+              pick(point: { x: number; y: number }): { id: string } | null;
+            };
+          }
+        >
+      )[handleKey as string];
+      if (!handle) throw new Error("no harness handle");
+      const box = rect as {
+        x: number;
+        y: number;
+        width: number;
+        height: number;
+      };
+      const stage = document.querySelector("#stage");
+      for (let y = box.height - 8; y > 0; y -= 8) {
+        for (let x = 8; x < box.width; x += 8) {
+          if (handle.engine.pick({ x, y }) !== null) continue;
+          // The click is dispatched at page coordinates, so the hit test that
+          // decides which element receives it happens in page coordinates too.
+          if (document.elementFromPoint(box.x + x, box.y + y) !== stage)
+            continue;
+          return { x, y };
+        }
+      }
+      return null;
+    },
+    [HARNESS_HANDLE_KEY, canvasBox] as const,
+  );
+
   expect(
-    await pickAt(page, HARNESS_HANDLE_KEY, { x: emptyX, y: emptyY }),
-    "the corner this test treats as empty space has a node in it, so " +
-      "clicking there would not test what it claims to",
-  ).toBeNull();
+    empty,
+    "no point on the stage is both free of nodes and free of overlays, so " +
+      "there is nowhere to click that tests 'aiming at nothing'",
+  ).not.toBeNull();
+  const { x: emptyX, y: emptyY } = empty!;
 
   await page.mouse.click(canvasBox.x + emptyX, canvasBox.y + emptyY);
 
