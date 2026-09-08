@@ -123,7 +123,11 @@ being relied on — a test that has never been seen red proves nothing:
 | mutation | result |
 | --- | --- |
 | add a bare `expect(1).toBe(1)` to a spec | ✗ `gives every expect a prose failure message (AC-6)` |
+| add `expect.soft(1).toBe(1)` (no message) | ✗ same check |
 | write `"__gitnebula"` as a literal | ✗ `imports HARNESS_HANDLE_KEY rather than writing the literal (AC-6)` |
+| drop the import, declare `const HARNESS_HANDLE_KEY = "some-other-key"` | ✗ same check |
+| import the key from a different module | ✗ same check |
+| import the key *and* shadow it locally | ✗ same check |
 | add a direct `page.goto("/")` | ✗ `navigates through openViewer, never page.goto (AC-4)` |
 | `reuseExistingServer: false` → `true` | ✗ `keeps the server isolation that the lsof incident bought (AC-2)` |
 | delete the `lsof` comment | ✗ same check |
@@ -145,6 +149,17 @@ being relied on — a test that has never been seen red proves nothing:
 
 All mutations were reverted; `git diff --stat` on both files was empty
 afterwards.
+
+- [x] **A Codex review round found a second false-green in the same check, and
+      it was fixed.** The `HARNESS_HANDLE_KEY` assertion was
+      `code.includes("HARNESS_HANDLE_KEY")` — presence of the identifier, not
+      provenance of the binding. A spec could have written
+      `const HARNESS_HANDLE_KEY = "some-other-key"` and passed the convention
+      test while waiting on a forked key, which is precisely the failure AC-6
+      exists to prevent. It now matches a named import anchored on the
+      `harness-handle.js` module path, and separately rejects a local
+      re-declaration that shadows it. The three mutations in the table above
+      are the proof; all three were green before the fix and are red after it.
 
 ## 8. Repository gates
 

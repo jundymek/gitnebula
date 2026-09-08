@@ -40,15 +40,31 @@ function readSpec(name: string): string {
 }
 
 /**
- * Strips string literals, template literals and comments, replacing each with
- * an equal number of spaces so that offsets are preserved.
+ * A named import of `HARNESS_HANDLE_KEY` from the module that defines it.
+ * Anchored on the module path, so a same-named constant imported from
+ * somewhere else does not satisfy it.
+ */
+const HANDLE_IMPORT =
+  /import\s*\{[^}]*\bHARNESS_HANDLE_KEY\b[^}]*\}\s*from\s*["'][^"']*harness-handle\.js["']/;
+
+/**
+ * Strips comments and — unless `keepStrings` is set — string and template
+ * literals, replacing each with an equal number of spaces so that offsets are
+ * preserved.
  *
  * Every check below is about *code* — a `page.goto` inside a comment
  * explaining why we do not call `page.goto` must not fail the check, and the
  * word `expect` inside a failure message must not be counted as an assertion.
  * Blanking rather than deleting keeps reported positions honest.
+ *
+ * `keepStrings` exists for the import check alone: an import's module path
+ * *is* a string literal, so blanking it would erase the very thing that check
+ * has to read.
  */
-function blankLiteralsAndComments(source: string): string {
+function blankLiteralsAndComments(
+  source: string,
+  { keepStrings = false }: { keepStrings?: boolean } = {},
+): string {
   const out = source.split("");
   let i = 0;
   while (i < source.length) {
@@ -68,7 +84,7 @@ function blankLiteralsAndComments(source: string): string {
       }
       continue;
     }
-    if (ch === '"' || ch === "'" || ch === "`") {
+    if (!keepStrings && (ch === '"' || ch === "'" || ch === "`")) {
       const quote = ch;
       out[i] = " ";
       i++;
@@ -136,11 +152,31 @@ describe("the ui suite's own conventions (AC-1, AC-6)", () => {
         `${name} writes the handle key out as a literal; import ` +
           "HARNESS_HANDLE_KEY from src/harness-handle.js instead",
       ).toEqual({ file: name, writesLiteral: false });
+      // Deliberately an *import* match, not `code.includes("HARNESS_HANDLE_KEY")`.
+      // The identifier merely appearing proves nothing: a spec could write
+      // `const HARNESS_HANDLE_KEY = "some-other-key"` and satisfy a presence
+      // check while waiting on a forked key — passing this test and violating
+      // AC-6 at the same time. The binding has to come from the module that
+      // owns it.
+      const importable = blankLiteralsAndComments(readSpec(name), {
+        keepStrings: true,
+      });
       expect(
-        { file: name, imports: code.includes("HARNESS_HANDLE_KEY") },
-        `${name} never references HARNESS_HANDLE_KEY — a spec that does not ` +
-          "reach the harness handle is not driving the Viewer",
-      ).toEqual({ file: name, imports: true });
+        { file: name, importsFromHandleModule: HANDLE_IMPORT.test(importable) },
+        `${name} does not import HARNESS_HANDLE_KEY from ` +
+          "src/harness-handle.js — a locally declared constant of the same " +
+          "name would make the spec wait on a key the Viewer never publishes",
+      ).toEqual({ file: name, importsFromHandleModule: true });
+
+      // The other half of the same hole: importing it *and* shadowing it.
+      expect(
+        {
+          file: name,
+          redeclares: /\b(?:const|let|var)\s+HARNESS_HANDLE_KEY\b/.test(code),
+        },
+        `${name} declares its own HARNESS_HANDLE_KEY, shadowing the imported ` +
+          "one; the key must have exactly one definition",
+      ).toEqual({ file: name, redeclares: false });
     }
   });
 
@@ -151,7 +187,9 @@ describe("the ui suite's own conventions (AC-1, AC-6)", () => {
     for (const name of specFiles()) {
       const code = blankLiteralsAndComments(readSpec(name));
       const bare: number[] = [];
-      const pattern = /\bexpect\s*\(/g;
+      // `expect.soft(value, message)` takes a message too, so it is held to
+      // the same rule; a bare `\bexpect\s*\(` would let it through.
+      const pattern = /\bexpect(?:\.\w+)?\s*\(/g;
       let match: RegExpExecArray | null;
       while ((match = pattern.exec(code)) !== null) {
         const openParen = code.indexOf("(", match.index);

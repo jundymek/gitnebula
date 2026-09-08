@@ -91,7 +91,11 @@ Everything 6.2, 6.3 and 6.4 need already exists and is enforced:
 5. **A conventions check that enforces 1–3 automatically.**
    `ui/src/suite-conventions.test.ts` globs `ui/tests/*.pw.ts`, so a spec added
    by 6.2 is covered the moment it lands; nobody has to remember to extend a
-   list.
+   list. It checks *provenance*, not spelling: a named import of
+   `HARNESS_HANDLE_KEY` anchored on the `harness-handle.js` module path, with a
+   local re-declaration rejected separately. A presence check would have let a
+   spec declare `const HARNESS_HANDLE_KEY = "some-other-key"` and stay green
+   while waiting on a forked key.
 
 ## The negative control (AC-5)
 
