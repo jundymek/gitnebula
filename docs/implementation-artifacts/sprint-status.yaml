@@ -155,9 +155,9 @@ development_status:
   # Wave B — launched after wave A lands on the epic branch. All three write
   # new spec files into the directory 6.1 creates; none of them touches
   # packages/viz/src.
-  6.2-viz-boot-e2e: backlog
-  6.3-viz-load-failure: backlog
-  6.4-viz-reachability: backlog
+  6.2-viz-boot-e2e: done
+  6.3-viz-load-failure: done
+  6.4-viz-reachability: done
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
