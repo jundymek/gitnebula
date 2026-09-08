@@ -207,6 +207,16 @@ looking like a normal pass. Verified by pointing the glob at a URL nothing
 requests: red in 164 ms, saying *"the Viewer booted successfully on a page this
 helper was asked to drive into a load failure."*
 
+`openViewerExpectingFailure` races a third outcome behind those two — a bounded
+deadline, plus any uncaught page error captured from before the navigation —
+because a `boot()` that throws or hangs produces neither expected signal, and
+every affected test would otherwise burn the full 120 s Playwright timeout
+while saying nothing about the exception behind it. Raised by Codex review as
+its only finding; verified by shortening the deadline and leaving the
+`analysis.json` route permanently pending: red in 3.1 s with *"the Viewer
+neither rendered an error screen nor published a handle within 3000 ms. No
+uncaught page error was reported, so boot() is hanging rather than throwing."*
+
 ---
 
 ## Files
