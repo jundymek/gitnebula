@@ -1,0 +1,216 @@
+spec:
+  epic: epic-6
+  version: 1
+  criteria:
+    - id: E6-01
+      statement: The on-demand UI browser suite discovers only `packages/viz/ui/tests/**/*.pw.ts`, runs with one worker, disables full parallelism and retries, and uses a fixed viewport with device scale factor 1.
+      kind: structural
+      severity: critical
+      verifiability: automated
+    - id: E6-02
+      statement: The UI suite starts its own strict-port development server on port 4320 by default, honors `UI_PORT` as an override, never reuses an existing server, and documents that server reuse is forbidden because of the prior cross-worktree `lsof` incident.
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-03
+      statement: "`pnpm --filter @gitnebula/viz ui` runs the UI browser suite."
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-04
+      statement: The repository's `pnpm test` invokes no Playwright suite and its observable behavior is unchanged by this epic.
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-05
+      statement: "`pnpm test` succeeds on a machine with no browser installed."
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-06
+      statement: The UI suite README documents the separation between the on-demand browser suite and the default test command.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-07
+      statement: The UI and performance suites use one shared `openViewer` helper whose observable behavior matches the former performance-suite helper, every browser spec navigates through that helper rather than calling `page.goto` directly, and the performance suite continues to pass.
+      kind: structural
+      severity: critical
+      verifiability: automated
+    - id: E6-08
+      statement: The UI suite contains an automated negative control proving that a representative positive assertion fails when evaluated against a deliberately incorrect expectation.
+      kind: invariant
+      severity: critical
+      verifiability: automated
+    - id: E6-09
+      statement: UI suite sources import `HARNESS_HANDLE_KEY` rather than spelling the `__gitnebula` key, and every assertion in those sources supplies a prose failure message.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-10
+      statement: The UI suite executes the production `boot()` path in a real browser, publishes a harness handle for a built engine, and reaches a resolved settled state.
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-11
+      statement: Opening the viewer with `?view=3d` boots directly into the 3D view, as reported through the published harness handle.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-12
+      statement: After a reader sets the mode, layer filter, scope, connected-only state, and selection, switching from 2D to 3D and back preserves every value after each swap through the production state-capture and restoration behavior.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-13
+      statement: A harness handle cached before a view swap refers to the destroyed prior engine, while rereading `globalThis[HARNESS_HANDLE_KEY]` after the swap yields the active engine; the suite demonstrates both outcomes.
+      kind: invariant
+      severity: critical
+      verifiability: automated
+    - id: E6-14
+      statement: After a successful view swap, the view switch's pressed state represents the view actually built rather than merely the requested view.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-15
+      statement: If construction of the 3D view throws, the viewer remains usable in 2D and displays the constructor's own failure reason without replacing it with a later capability-probe verdict.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-16
+      statement: Clicking a rendered node at its real browser screen coordinates selects the intended node even when the canvas is offset below the page header, as confirmed through `getSelected()`.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-17
+      statement: The UI suite README records that `boot()` previously had no test execution, identifies production capture/restore behavior as authoritative for view-state carryover, states whether the former test-only carry helper remains necessary, explains why real-coordinate picking is not representable by the jsdom fake canvas, and documents the requirement to reacquire the harness handle after swaps.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-18
+      statement: Each loader failure kind—unreachable, malformed, and unsupported version—renders a browser-visible error screen containing its specific title and detail.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-19
+      statement: A viewer load attempted through the `file:` protocol displays the protocol-specific guidance needed to serve the viewer instead.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-20
+      statement: Failure detail containing markup is rendered as literal text and does not create an element represented by that markup.
+      kind: security
+      severity: critical
+      verifiability: automated
+    - id: E6-21
+      statement: The documented validator comparison is derived from the current schema and browser loader and accurately reports the required-versus-checked node fields, required-versus-checked edge fields, and the depth of `cochanges` validation, explicitly flagging any result that differs from 12 versus 6, 4 versus 2, and array-only validation.
+      kind: invariant
+      severity: critical
+      verifiability: automated
+    - id: E6-22
+      statement: At least one document rejected by the assembly-time schema validator loads and renders in the browser, and the accompanying report classifies every schema-required field omitted from browser validation according to whether its absence degrades safely or is misread.
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-23
+      statement: The validator-gap report describes the gap without changing either validator and records that any future alignment must decide whether browser validation should widen despite its deliberate bundle-preserving narrowness.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-24
+      statement: With the panel open for the node having the longest co-change list, both the `show on map` control and the panel's own actions have rendered boxes inside the viewport and are clickable at 1280×800 and at a viewport approximately 600 pixels high.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-25
+      statement: When populated beyond their visual caps, `#panel`, `#start-here`, and `.p-blast-list` each provide their own usable scrolling and do not push any associated control outside the browser window.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-26
+      statement: The control-reachability check includes a negative control proving it fails when the relevant height cap is deliberately defeated.
+      kind: invariant
+      severity: critical
+      verifiability: automated
+    - id: E6-27
+      statement: For a node with a long path hovered near both the right and bottom viewport edges, the tooltip's measured rendered rectangle remains entirely within the viewport.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-28
+      statement: The layout report records, for each bounded region, the content length used, viewport heights tested, and whether any control was unreachable; any discovered shipped-layout defect is reported without being repaired as part of this epic.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-29
+      statement: Stable `data-testid` hooks are present only on panel metric rows, summary metrics, legend rows, scope-bar hidden and back readouts, and blast-radius rows; elements already identifiable by an id, role plus accessible name, or another data attribute receive no new test id, and the header's two protected slot ids remain byte-for-byte unchanged.
+      kind: structural
+      severity: critical
+      verifiability: automated
+    - id: E6-30
+      statement: Existing jsdom coverage for the hooked readout regions selects through the stable hooks instead of duplicating coverage, and the documented post-change count of CSS-class selectors in chrome tests is lower than the independently documented pre-change count.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-31
+      statement: The legend exposes an `other` layer entry with a fifth color distinct from the `infra` gray, every layer-filter toggle has a corresponding legend key, and no two legend entries share a color.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-32
+      statement: A house-format ADR records the fifth legend hue, including context, decision, and consequences, and explains the intentional departure from the reference mockup's four-layer palette and why sharing gray with `infra` is no longer acceptable.
+      kind: structural
+      severity: normal
+      verifiability: automated
+    - id: E6-33
+      statement: On the path with neither scope nor connected-only filtering, `hiddenCount().visible` equals the number of nodes surviving the active layer filter in both the 2D and 3D engines.
+      kind: invariant
+      severity: critical
+      verifiability: automated
+    - id: E6-34
+      statement: Every user-visible readout consuming the layer-filter visibility count displays the corrected survivor count in both views, and the story report names all corrected readouts or provides evidence that none consumed the previously incorrect value.
+      kind: behavioral
+      severity: critical
+      verifiability: automated
+    - id: E6-35
+      statement: The completed epic adds no package dependency and no fixture; the existing `root-files` and `module-zero-files` fixtures remain sufficient, including selection through `GITNEBULA_FIXTURE` and loud failure for a missing fixture.
+      kind: structural
+      severity: critical
+      verifiability: automated
+    - id: E6-36
+      statement: The completed epic leaves `analysis.schema.json` byte-for-byte unchanged, the document `schemaVersion` remains `1.0`, and the browser loader, the assembler, the tooltip implementation and its existing unit test are unchanged.
+      kind: structural
+      severity: critical
+      verifiability: automated
+    - id: E6-37
+      statement: The existing visualization unit suite, performance suite, and chrome boundary test continue to pass after the epic changes.
+      kind: integration
+      severity: critical
+      verifiability: automated
+    - id: E6-38
+      statement: A maintainer's observed run confirms that switching views on a real repository map behaves as asserted; this review begins as an unticked item in `docs/dev/epic-6/6.2-viz-boot-e2e/MANUAL_TESTING.md`.
+      kind: human
+      severity: normal
+      verifiability: human
+    - id: E6-39
+      statement: A reviewer unfamiliar with the implementation judges each of the three loader error screens to communicate both a cause and a useful exit; this review begins as an unticked item in `docs/dev/epic-6/6.3-viz-load-failure/MANUAL_TESTING.md`.
+      kind: human
+      severity: normal
+      verifiability: human
+    - id: E6-40
+      statement: The prior manual item about browser scrolling is revisited in `docs/dev/epic-6/6.4-viz-reachability/MANUAL_TESTING.md` and is either checked with named evidence or rewritten to isolate the genuinely subjective remainder after mechanical reachability is verified.
+      kind: human
+      severity: normal
+      verifiability: human
+meta:
+  schemaVersion: 1
+  frozen: true
+  fingerprint: fab2a9b7d4687cd61ccd75bfeb9527f8b0e71a9d04080a66b2c03c2202c1b561
+  createdAt: 2026-09-05T20:58:17.930Z
+  frozenAt: 2026-09-05T21:08:07.127Z
+  provenance:
+    provider: codex
+    model: null
+    providerCliVersion: 0.144.4
+    generatedAt: 2026-09-05T20:58:17.930Z
+  history: []
