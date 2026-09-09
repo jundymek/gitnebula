@@ -163,7 +163,7 @@ development_status:
   # `packages/viz/ui/README.md` in criteria E6-06 and E6-17; no story spec ever
   # asked for it, so three of the contract's eleven failures are that one
   # missing file. Unassigned when written.
-  6.6-viz-ui-readme: ready-for-dev
+  6.6-viz-ui-readme: done
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"
