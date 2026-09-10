@@ -25,6 +25,8 @@
  * handed (AD-5); `boundary.test.ts` holds that line.
  */
 
+import { SCOPE_BAR_BACK_TESTID, SCOPE_BAR_HIDDEN_TESTID } from "./testids.js";
+
 export interface ScopeBarActions {
   /** Leave the active scope. */
   onLeaveScope(): void;
@@ -88,6 +90,10 @@ export function renderScopeBar(actions: ScopeBarActions): ScopeBarHandle {
 
   const hiddenLine = document.createElement("p");
   hiddenLine.className = "scope-bar-hidden";
+  // A readout, not a control: it states how many nodes each filter removed.
+  // `hiddenCount()` is engine-backed, but the composed sentence — cause and
+  // number together, UX-DR14's shape — is assembled here and nowhere else.
+  hiddenLine.dataset.testid = SCOPE_BAR_HIDDEN_TESTID;
 
   const leftLine = document.createElement("p");
   leftLine.className = "scope-bar-left";
@@ -95,6 +101,11 @@ export function renderScopeBar(actions: ScopeBarActions): ScopeBarHandle {
   const back = document.createElement("button");
   back.type = "button";
   back.className = "scope-bar-back";
+  // The one control in this pass. It is here because its *label* names the
+  // scope it returns to — `getReturnScope()` gives the id, but the rendered
+  // offer, and whether it is on screen at all, is chrome's alone. It carries
+  // no `id` today, so its only hook was the styling class.
+  back.dataset.testid = SCOPE_BAR_BACK_TESTID;
   back.addEventListener("click", () => actions.onReturnToScope());
 
   element.append(scopeLine, leave, connected, hiddenLine, leftLine, back);

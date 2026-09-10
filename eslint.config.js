@@ -17,6 +17,13 @@ export default tseslint.config(
       // Generated from analysis.schema.json (AD-9) — the generator owns its
       // formatting, and CI fails on any drift from a fresh regeneration.
       "packages/contract/src/generated/**",
+      // Evidence written by a local `specwitness verify` run: generated
+      // .spec.cjs/.config.cjs files a browser probe hands to Playwright. Already
+      // gitignored (.specwitness/.gitignore), so this is the same case as
+      // marketing/ above — without it the lint is red in a working copy that has
+      // run the verifier and green on a fresh clone. config.yaml, contracts/ and
+      // plans/ stay linted: they are reviewed product artifacts.
+      ".specwitness/runs/**",
     ],
   },
   eslintJs.configs.recommended,

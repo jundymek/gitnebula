@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from "vitest";
 import type { AnalysisDocument } from "@gitnebula/contract";
 
 import { renderPanel, type PanelActions, type PanelHandle } from "./panel.js";
+import { EMPTY_STATE_CLASS } from "./empty-state.js";
+import { PANEL_ROW_TESTID } from "./testids.js";
 import { engineNodeFrom } from "../test-support/engine-nodes.js";
 import {
   loadContractFixture,
@@ -11,6 +13,15 @@ import {
 } from "../test-support/fixtures.js";
 
 const NOW = Date.parse("2026-08-13T12:00:00.000Z");
+
+/**
+ * Story 6.5: the metric rows by their stable hook. The empty-state variant
+ * still composes with `EMPTY_STATE_CLASS` — that class is a **contract**
+ * between the panel and the stylesheet ("an absent value is marked, not merely
+ * worded differently", AC-2 of story 5.5), imported rather than spelled out,
+ * so it is not the kind of styling-only selector this pass removes.
+ */
+const PANEL_ROW = `[data-testid="${PANEL_ROW_TESTID}"]`;
 
 function mountPanel(overrides: Partial<PanelActions> = {}) {
   const handle = renderPanel({
@@ -42,7 +53,7 @@ function text(handle: PanelHandle, selector: string): string {
 }
 
 function rows(handle: PanelHandle): [string, string][] {
-  return [...handle.element.querySelectorAll(".p-row")].map((row) => {
+  return [...handle.element.querySelectorAll(PANEL_ROW)].map((row) => {
     const spans = row.querySelectorAll("span");
     return [spans[0]?.textContent ?? "", spans[1]?.textContent ?? ""];
   });
@@ -95,7 +106,7 @@ describe("panel — opening on a node (AC-1)", () => {
     expect(group.getAttribute("aria-label")).toBe(caption);
 
     // `files` and `loc` describe HEAD, not the window, and stay outside.
-    const grouped = [...group.querySelectorAll(".p-row")].map(
+    const grouped = [...group.querySelectorAll(PANEL_ROW)].map(
       (row) => row.querySelector("span")!.textContent,
     );
     expect(grouped).toEqual([
@@ -159,7 +170,9 @@ describe("panel — the window's empty states (5.5 AC-2, AC-3)", () => {
     const handle = mountPanel();
     open(handle, document_, quiet.id);
 
-    const emptyRows = [...handle.element.querySelectorAll(".p-row.is-empty")];
+    const emptyRows = [
+      ...handle.element.querySelectorAll(`${PANEL_ROW}.${EMPTY_STATE_CLASS}`),
+    ];
     expect(emptyRows).toHaveLength(1);
     expect(emptyRows[0]!.querySelector("span")!.textContent).toBe(
       "last change",
@@ -168,7 +181,7 @@ describe("panel — the window's empty states (5.5 AC-2, AC-3)", () => {
 
     // The distinction is a class the stylesheet can act on, not wording alone:
     // a reader scanning the panel must see it without reading it.
-    const authors = [...handle.element.querySelectorAll(".p-row")].find(
+    const authors = [...handle.element.querySelectorAll(PANEL_ROW)].find(
       (row) => row.querySelector("span")!.textContent === "authors",
     )!;
     expect(authors.className).not.toContain("is-empty");
@@ -199,7 +212,9 @@ describe("panel — the window's empty states (5.5 AC-2, AC-3)", () => {
 
     expect(notice(handle).hidden).toBe(true);
     expect(notice(handle).textContent).toBe("");
-    expect(handle.element.querySelector(".p-row.is-empty")).toBeNull();
+    expect(
+      handle.element.querySelector(`${PANEL_ROW}.${EMPTY_STATE_CLASS}`),
+    ).toBeNull();
   });
 
   it("states a zero-history repository once per panel, not once per row (AC-3)", () => {

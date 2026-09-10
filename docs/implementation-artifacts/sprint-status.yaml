@@ -150,14 +150,20 @@ development_status:
   # cross-wave block.
   #
   # Wave A — disjoint territories (6.1 owns a new directory, 6.5 owns chrome):
-  6.1-viz-ui-suite: backlog
-  6.5-viz-testids-and-debts: backlog
+  6.1-viz-ui-suite: done
+  6.5-viz-testids-and-debts: done
   # Wave B — launched after wave A lands on the epic branch. All three write
   # new spec files into the directory 6.1 creates; none of them touches
   # packages/viz/src.
-  6.2-viz-boot-e2e: backlog
-  6.3-viz-load-failure: backlog
-  6.4-viz-reachability: backlog
+  6.2-viz-boot-e2e: done
+  6.3-viz-load-failure: done
+  6.4-viz-reachability: done
+  # Added 2026-09-08 by the epic/6-assembled-viewer supervisor at closure, on
+  # the maintainer's instruction. The frozen SpecWitness contract requires
+  # `packages/viz/ui/README.md` in criteria E6-06 and E6-17; no story spec ever
+  # asked for it, so three of the contract's eleven failures are that one
+  # missing file. Unassigned when written.
+  6.6-viz-ui-readme: done
 
 milestones:
   M1: "Epic 1 merged to master: contract validates, fixtures load, CI green, spike verdict accepted"

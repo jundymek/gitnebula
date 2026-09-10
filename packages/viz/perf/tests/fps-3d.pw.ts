@@ -15,7 +15,7 @@ import {
   FPS_FLOOR,
   type PhaseStats,
 } from "../src/measure.js";
-import { openViewer } from "../src/page-helpers.js";
+import { openViewer } from "../../harness/page-helpers.js";
 import { writeReport } from "../src/report.js";
 import { FIT_PADDING_PX } from "../../src/engine/constants.js";
 import { HARNESS_HANDLE_KEY } from "../../src/harness-handle.js";

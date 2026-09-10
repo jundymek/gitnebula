@@ -19,6 +19,7 @@ import type {
   StartHereEntry,
   StartHereModel,
 } from "./start-here-model.js";
+import { START_HERE_METRIC_TESTID } from "./testids.js";
 
 export const START_HERE_ID = "start-here";
 const TITLE_ID = "start-here-title";
@@ -149,6 +150,11 @@ function row(entry: StartHereEntry, actions: StartHereActions): HTMLElement {
 
   const metric = document.createElement("span");
   metric.className = "sh-metric";
+  // `metricLabel` is composed from the ranking the start-here model builds —
+  // degree, churn and the analysis window, none of which `GraphEngine`
+  // exposes. The DOM is the only place it exists. The button itself already
+  // carries `data-id` and needs no second hook.
+  metric.dataset.testid = START_HERE_METRIC_TESTID;
   metric.textContent = entry.metricLabel;
 
   button.append(name, path, metric);

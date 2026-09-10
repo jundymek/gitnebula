@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { connectEngine, mountChrome } from "./chrome.js";
 import { SCOPE_BAR_ID } from "./scope-bar.js";
+import { SCOPE_BAR_BACK_TESTID, SCOPE_BAR_HIDDEN_TESTID } from "./testids.js";
 import { CanvasGraphEngine } from "../engine/engine.js";
 import { buildGraph } from "../engine/graph.js";
 import { inScopeIds } from "../engine/scope.js";
@@ -53,6 +54,10 @@ function mount() {
 function firstModuleId(): string {
   return engine.nodes.find((node) => node.kind === "module")!.id;
 }
+
+/** Story 6.5 — the readouts by their stable hook, as in `scope-bar.test.ts`. */
+const HIDDEN_LINE = `[data-testid="${SCOPE_BAR_HIDDEN_TESTID}"]`;
+const BACK_BUTTON = `[data-testid="${SCOPE_BAR_BACK_TESTID}"]`;
 
 function visibleText(bar: HTMLElement, selector: string): string {
   const found = bar.querySelector<HTMLElement>(selector);
@@ -161,7 +166,7 @@ describe("AC-2 — a scope is never invisible and never inescapable", () => {
     });
 
     const bar = root.querySelector<HTMLElement>(`#${SCOPE_BAR_ID}`)!;
-    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+    expect(visibleText(bar, BACK_BUTTON)).toBe(`return to ${focus}`);
   });
 
   it("leaves the scope when the bar's exit is pressed", () => {
@@ -195,11 +200,11 @@ describe("AC-3 — the connected-only toggle and its count", () => {
     expect(engine.getConnectedOnly()).toBe(true);
     const hidden = engine.hiddenCount().byDegree;
     if (hidden > 0) {
-      expect(visibleText(bar, ".scope-bar-hidden")).toBe(
+      expect(visibleText(bar, HIDDEN_LINE)).toBe(
         `${hidden} node${hidden === 1 ? "" : "s"} hidden: no dependencies`,
       );
     } else {
-      expect(visibleText(bar, ".scope-bar-hidden")).toBe("");
+      expect(visibleText(bar, HIDDEN_LINE)).toBe("");
     }
   });
 
@@ -237,7 +242,7 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
 
     expect(engine.getScope()).toBeNull();
     expect(visibleText(bar, ".scope-bar-left")).toContain("left the scope");
-    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+    expect(visibleText(bar, BACK_BUTTON)).toBe(`return to ${focus}`);
   });
 
   it("restores the scope in one click", async () => {
@@ -246,7 +251,7 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     engine.setScope(focus);
     await flyOutOfScope(focus);
 
-    bar.querySelector<HTMLButtonElement>(".scope-bar-back")!.click();
+    bar.querySelector<HTMLButtonElement>(BACK_BUTTON)!.click();
     expect(engine.getScope()).toBe(focus);
   });
 
@@ -261,7 +266,7 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
 
     expect(engine.getScope()).toBeNull();
     expect(visibleText(bar, ".scope-bar-left")).toBe("");
-    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+    expect(visibleText(bar, BACK_BUTTON)).toBe("");
   });
 
   it("does NOT claim a search happened when the leave button was pressed", async () => {
@@ -269,7 +274,7 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     engine.setScope(firstModuleId());
     bar.querySelector<HTMLButtonElement>(".scope-bar-leave")!.click();
 
-    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+    expect(visibleText(bar, BACK_BUTTON)).toBe("");
   });
 
   it("keeps the offer alive across an unrelated filter change", async () => {
@@ -279,10 +284,10 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     const focus = firstModuleId();
     engine.setScope(focus);
     await flyOutOfScope(focus);
-    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+    expect(visibleText(bar, BACK_BUTTON)).toBe(`return to ${focus}`);
 
     engine.setConnectedOnly(true);
-    expect(visibleText(bar, ".scope-bar-back")).toBe(`return to ${focus}`);
+    expect(visibleText(bar, BACK_BUTTON)).toBe(`return to ${focus}`);
   });
 
   it("drops a return offer that points into a document that is gone", async () => {
@@ -293,11 +298,11 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     const focus = firstModuleId();
     engine.setScope(focus);
     await flyOutOfScope(focus);
-    expect(visibleText(bar, ".scope-bar-back")).not.toBe("");
+    expect(visibleText(bar, BACK_BUTTON)).not.toBe("");
 
     engine.load(langgraphShapedDocument());
 
-    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+    expect(visibleText(bar, BACK_BUTTON)).toBe("");
     expect(engine.getReturnScope()).toBeNull();
   });
 
@@ -306,7 +311,71 @@ describe("AC-5 — a search out of the scope states it and offers the way back",
     const focus = firstModuleId();
     engine.setScope(focus);
     await flyOutOfScope(focus);
-    bar.querySelector<HTMLButtonElement>(".scope-bar-back")!.click();
-    expect(visibleText(bar, ".scope-bar-back")).toBe("");
+    bar.querySelector<HTMLButtonElement>(BACK_BUTTON)!.click();
+    expect(visibleText(bar, BACK_BUTTON)).toBe("");
+  });
+});
+
+/**
+ * Story 6.5, AC-6 — the evidence that debt 7b never reached a readout.
+ *
+ * `hiddenCount().visible` was wrong whenever a layer filter was the only
+ * active filter, so the honest question is which readout showed that number.
+ * Traced through chrome, it reaches exactly one:
+ *
+ *   `hiddenCount()` / the `scope` event's `visibleCount`
+ *     -> `store.scopeVisibleCount`
+ *     -> `scopeIsEmpty: state.scopeId !== null && state.scopeVisibleCount === 0`
+ *
+ * and that consumer is guarded by `scopeId !== null`, while the defect fired
+ * only when `scopeId === null`. The wrong value was structurally unreachable.
+ *
+ * The layer filter's own readouts are fed by the `filter` event instead, which
+ * computes `visible` independently as `nodes.length - hiddenByLayerFilter()`
+ * and was always right.
+ *
+ * Both halves are pinned here rather than argued in the PR body: a later
+ * refactor that dropped the `scopeId !== null` guard would turn the old defect
+ * into a visible one with nothing to catch it.
+ */
+describe("6.5 AC-6 — the corrected count reaches the readouts intact", () => {
+  it("does not claim an empty scope when a layer filter hides nodes unscoped", () => {
+    const { bar, chrome } = mount();
+    const layer = engine.nodes[0]!.layer;
+
+    engine.setLayerFilter([layer]);
+
+    // No scope is active, so the scope bar has nothing to say — least of all
+    // that the scope is empty. This guard is what kept debt 7b invisible.
+    expect(engine.getScope()).toBeNull();
+    expect(chrome.getState().scopeId).toBeNull();
+    expect(visibleText(bar, HIDDEN_LINE)).toBe("");
+  });
+
+  it("feeds the layer filter's own readout from the filter event, correctly", () => {
+    const { chrome } = mount();
+    const layer = engine.nodes[0]!.layer;
+
+    engine.setLayerFilter([layer]);
+
+    const hidden = engine.nodes.filter((node) => node.layer !== layer).length;
+    expect(hidden).toBeGreaterThan(0);
+    // The number the reader actually sees for the layer filter. It never came
+    // from `hiddenCount()`, which is why the defect was silent.
+    expect(chrome.getState().filteredOutCount).toBe(hidden);
+  });
+
+  it("agrees with hiddenCount() now that both are correct", () => {
+    mount();
+    const layer = engine.nodes[0]!.layer;
+
+    engine.setLayerFilter([layer]);
+
+    const survivors = engine.nodes.filter(
+      (node) => node.layer === layer,
+    ).length;
+    // The two paths answered different numbers before the fix: the filter
+    // event said `survivors`, `hiddenCount()` said the whole graph.
+    expect(engine.hiddenCount().visible).toBe(survivors);
   });
 });
