@@ -25,7 +25,7 @@
 //
 // Usage: node scripts/specwitness/docs-presence.mjs
 
-import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : null);
 const has = (src, re) => (src === null ? false : re.test(src));
@@ -56,13 +56,32 @@ for (const f of adrs) {
 
 // E6-23, E6-28 -- the two reports this epic produces. Location is not fixed by
 // the contract, so both the docs tree and the suite directory are searched.
+// Recursive since 2026-09-10. It was a single-level readdirSync over three fixed
+// directories, and every per-story report this epic produced lives at
+// docs/dev/epic-6/<story>/README.md -- two levels below the `docs/dev` it looked
+// in, so E6-23 and E6-28 reported "no such report" against reports that exist.
+//
+// Fixing the walk does NOT by itself make those two criteria pass, and that is
+// deliberate: the search terms below are still hand-picked phrases, and the
+// documents that satisfy the criteria use different words. Widening the regexes
+// to match the documents now known to exist would be fitting the instrument to
+// a result already seen -- the one thing a verifier must never do. The walk was
+// wrong on its own terms and is fixed on its own terms; whether those two
+// criteria are met is left to the owner to adjudicate.
 const findReport = (re) => {
-  for (const dir of ["docs", "docs/dev", "packages/viz/ui"]) {
-    if (!existsSync(dir)) continue;
-    for (const f of readdirSync(dir)) {
-      if (!f.endsWith(".md")) continue;
-      const src = read(`${dir}/${f}`);
-      if (has(src, re)) return `${dir}/${f}`;
+  const walk = (dir, out = []) => {
+    if (!existsSync(dir)) return out;
+    for (const name of readdirSync(dir)) {
+      if (name === "node_modules") continue;
+      const p = `${dir}/${name}`;
+      if (statSync(p).isDirectory()) walk(p, out);
+      else if (name.endsWith(".md")) out.push(p);
+    }
+    return out;
+  };
+  for (const dir of ["docs", "packages/viz/ui"]) {
+    for (const f of walk(dir)) {
+      if (has(read(f), re)) return f;
     }
   }
   return null;
